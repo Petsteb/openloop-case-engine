@@ -75,9 +75,9 @@ def test_staff_cannot_confirm_on_behalf_of_the_client():                        
 
 def test_forged_value_with_a_real_quote_is_rejected():                              # CR-1
     from app.extract import verify_quotes
-    text = "EBITDA: 420.000 RON\nCUI: 45123879"
+    text = "EBITDA: 420.000 RON\nCUI: 94123877"
     forged = {"fields": [{"field": "ebitda", "value": "1.000.000 RON", "quote": "EBITDA: 420.000 RON"},
-                         {"field": "cui", "value": "45123879", "quote": ""}]}
+                         {"field": "cui", "value": "94123877", "quote": ""}]}
     assert set(verify_quotes(text, forged)) == {"EBITDA: 420.000 RON", ""}
     good = {"fields": [{"field": "ebitda", "value": "420.000 RON", "quote": "EBITDA: 420.000 RON"}]}
     assert verify_quotes(text, good) == []

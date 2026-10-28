@@ -57,6 +57,15 @@ def test_synthetic_documents_are_internally_consistent():
         assert sum(o["pct"] for o in p["owners"]) == 100, pid
 
 
+def test_trade_register_numbers_follow_the_new_onrc_format():
+    from app import scenario as S
+    numbers = [S.AURORA_J, S._DOINA_J] + [profiles._reg(profiles.PROFILES[k]) for k in profiles.FOUNDED]
+    for n in numbers:   # J + year + 6-digit serial + county + check digit (sum of digits, J counted as 4, mod 10)
+        assert len(n) == 14 and n[0] == "J"
+        assert str((ord("J") % 10 + sum(int(ch) for ch in n[1:-1])) % 10) == n[-1], n
+    assert all(p["cui"].startswith("9") for p in profiles.PROFILES.values())   # unassigned range, not a real firm
+
+
 def test_kyb_review_only_checks_registry_owners_and_taxes():
     case = _run("verde", "kyb_review")
     st = case.state()

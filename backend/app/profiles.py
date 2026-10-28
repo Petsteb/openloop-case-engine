@@ -20,14 +20,14 @@ def _p(first: str, last: str, cnp: str, pct: float = 0) -> dict:
 
 PROFILES: dict[str, dict] = {
     "aurora": {
-        "id": "aurora", "name": "Brutăria Aurora SRL", "legal_name": "BRUTĂRIA AURORA S.R.L.", "cui": "45123879",
+        "id": "aurora", "name": "Brutăria Aurora SRL", "legal_name": "BRUTĂRIA AURORA S.R.L.", "cui": "94123877",
         "client_id": "C-1042", "actor_id": "brutaria-aurora", "email": "andrei.munteanu@brutaria-aurora.example",
         "city": "Cluj-Napoca", "county": "Cluj", "caen": "1071 Fabricarea pâinii",
         "product": "Working-capital loan, 500,000 RON", "templates": ["sme_loan"],
         "story": "Undeclared co-owner, address written two ways, certificate expiring mid-file, insider pattern",
     },
     "verde": {
-        "id": "verde", "name": "Verde Logistic SRL", "legal_name": "VERDE LOGISTIC S.R.L.", "cui": _cui("4187263"),
+        "id": "verde", "name": "Verde Logistic SRL", "legal_name": "VERDE LOGISTIC S.R.L.", "cui": _cui("9187263"),
         "client_id": "C-2210", "email": "office@verde-logistic.example", "city": "Timișoara", "county": "Timiș",
         "street": "Str. Gheorghe Lazăr nr. 24", "postal_code": "300081", "caen": "4941 Transporturi rutiere de mărfuri",
         "loan": 750_000, "new_service": 300_000, "turnover": 6_400_000, "ebitda": 1_250_000, "existing_service": 400_000,
@@ -37,7 +37,7 @@ PROFILES: dict[str, dict] = {
         "story": "Clean file: every check passes without a human",
     },
     "carpatic": {
-        "id": "carpatic", "name": "Carpatic Lemn SRL", "legal_name": "CARPATIC LEMN S.R.L.", "cui": _cui("3926154"),
+        "id": "carpatic", "name": "Carpatic Lemn SRL", "legal_name": "CARPATIC LEMN S.R.L.", "cui": _cui("9926154"),
         "client_id": "C-2311", "email": "contabilitate@carpatic-lemn.example", "city": "Bistrița", "county": "Bistrița-Năsăud",
         "street": "Str. Industriei nr. 9", "postal_code": "420063", "caen": "1610 Tăierea și rindeluirea lemnului",
         "loan": 400_000, "new_service": 150_000, "turnover": 2_900_000, "ebitda": 640_000, "existing_service": 200_000,
@@ -47,7 +47,7 @@ PROFILES: dict[str, dict] = {
         "story": "Outstanding tax debt on the ANAF certificate (HR-08)",
     },
     "delta": {
-        "id": "delta", "name": "Delta Pescăria SRL", "legal_name": "DELTA PESCĂRIA S.R.L.", "cui": _cui("3381927"),
+        "id": "delta", "name": "Delta Pescăria SRL", "legal_name": "DELTA PESCĂRIA S.R.L.", "cui": _cui("9381927"),
         "client_id": "C-2412", "email": "contact@delta-pescaria.example", "city": "Tulcea", "county": "Tulcea",
         "street": "Str. Isaccei nr. 15", "postal_code": "820025", "caen": "4723 Comerț cu amănuntul al peștelui",
         "loan": 200_000, "new_service": 90_000, "turnover": 980_000, "ebitda": 300_000, "existing_service": 60_000,
@@ -58,7 +58,7 @@ PROFILES: dict[str, dict] = {
     },
     "nord": {
         "id": "nord", "name": "Nord Construct Instal SRL", "legal_name": "NORD CONSTRUCT INSTAL S.R.L.",
-        "cui": _cui("4402718"), "client_id": "C-2513", "email": "office@nordconstruct.example", "city": "Suceava",
+        "cui": _cui("9402718"), "client_id": "C-2513", "email": "office@nordconstruct.example", "city": "Suceava",
         "county": "Suceava", "street": "Bd. George Enescu nr. 31", "postal_code": "720231",
         "caen": "4322 Lucrări de instalații sanitare, de încălzire și de aer condiționat",
         "loan": 600_000, "new_service": 180_000, "turnover": 3_700_000, "ebitda": 520_000, "existing_service": 310_000,
@@ -68,7 +68,7 @@ PROFILES: dict[str, dict] = {
         "story": "Debt service coverage 1.06, below the 1.2 minimum (HR-07)",
     },
     "medica": {
-        "id": "medica", "name": "Medica Plus Clinic SRL", "legal_name": "MEDICA PLUS CLINIC S.R.L.", "cui": _cui("3815562"),
+        "id": "medica", "name": "Medica Plus Clinic SRL", "legal_name": "MEDICA PLUS CLINIC S.R.L.", "cui": _cui("9815562"),
         "client_id": "C-2614", "email": "administrativ@medicaplus.example", "city": "Iași", "county": "Iași",
         "street": "Str. Păcurari nr. 102", "postal_code": "700545", "caen": "8622 Activități de asistență medicală specializată",
         "loan": 350_000, "new_service": 110_000, "turnover": 2_100_000, "ebitda": 480_000, "existing_service": 120_000,
@@ -78,8 +78,8 @@ PROFILES: dict[str, dict] = {
         "story": "Application signed by an associate who is not the administrator: a human decides, then a mandate",
     },
     "solaris": {
-        "id": "solaris", "name": "Solaris Agro SRL", "legal_name": "SOLARIS AGRO S.R.L.", "cui": _cui("4129836"),
-        "client_id": "C-2715", "email": "solaris.agro@example.ro", "city": "Fetești", "county": "Ialomița",
+        "id": "solaris", "name": "Solaris Agro SRL", "legal_name": "SOLARIS AGRO S.R.L.", "cui": _cui("9129836"),
+        "client_id": "C-2715", "email": "office@solaris-agro.example", "city": "Fetești", "county": "Ialomița",
         "street": "Str. Călărași nr. 8", "postal_code": "925100", "caen": "0111 Cultivarea cerealelor",
         "loan": 300_000, "new_service": 100_000, "turnover": 1_600_000, "ebitda": 410_000, "existing_service": 90_000,
         "net_profit": 230_000, "onrc_age_days": 45, "admin": _p("VASILE", "DUMITRU", "169120••••••"),
@@ -89,7 +89,7 @@ PROFILES: dict[str, dict] = {
     },
     "atelier": {
         "id": "atelier", "name": "Atelier Croitorie Ana SRL", "legal_name": "ATELIER CROITORIE ANA S.R.L.",
-        "cui": _cui("3672041"), "client_id": "C-2816", "email": "ana@atelier-croitorie.example", "city": "Brașov",
+        "cui": _cui("9672041"), "client_id": "C-2816", "email": "ana@atelier-croitorie.example", "city": "Brașov",
         "county": "Brașov", "street": "Str. Mureșenilor nr. 5", "postal_code": "500030",
         "caen": "1413 Fabricarea altor articole de îmbrăcăminte", "admin": _p("ANA", "MARIN", "283014••••••"),
         "owners": [_p("ANA", "MARIN", "283014••••••", 80), _p("LUCIAN", "MARIN", "180519••••••", 20)],
@@ -111,78 +111,162 @@ def _address(c: dict) -> str:
     return f"{c['street']}, {c['city']}, Județ {c['county']}"
 
 
+FOUNDED = {"verde": 2014, "carpatic": 2009, "delta": 2018, "nord": 2012, "medica": 2016, "solaris": 2011, "atelier": 2020}
+
+
+def _reg(c: dict) -> str:
+    """The company's (synthetic) 14-character trade-register number; serials sit at the top of the range."""
+    return S.onrc_number(FOUNDED[c["id"]], 990000 + int(c["cui"][-3:]), c["county"])
+
+
+def _tribunal(c: dict) -> str:
+    return f"Oficiul Registrului Comerțului de pe lângă Tribunalul {c['county']}"
+
+
 def application(c: dict) -> str:
-    return f"""CERERE DE FINANȚARE — IMM
+    return f"""CERERE DE FINANȚARE — IMM (credit pentru capital de lucru)
+Date generale despre solicitant
 Solicitant: {c['legal_name']}
 CUI: {c['cui']}
-Cod CAEN principal: {c['caen']}
+Număr de ordine în registrul comerțului: {_reg(c)}
 Sediu social: {c['street']}, {c['city']}, jud. {c['county']}
 Cod poștal: {c['postal_code']}
+Activitatea principală: {c['caen']}
+Cifra de afaceri (ultimul an încheiat): {_ron(c['turnover'])}
+Telefon / e-mail: 07•• ••• {c['client_id'][-3:]} / {c['email']}
+Finanțarea solicitată
 Produs solicitat: Credit capital de lucru
 Suma solicitată: {_ron(c['loan'])}
 Perioada: 36 luni
+Garanții propuse: ipotecă mobiliară asupra stocurilor și creanțelor; fideiusiunea asociaților
 Rată anuală estimată credit nou: {_ron(c['new_service'])}
-Persoană de contact: {c['email']}
+Aspecte legale: litigii NU · popriri sau executare silită {'DA' if c.get('tax_debt') else 'NU'} · insolvență NU
+Declar că am luat la cunoștință consultarea Centralei Riscului de Credit (CRC) și a Centralei Incidentelor de Plăți.
 Reprezentant legal / semnatar: {c.get('signatory') or _name(c['admin'])}
 Data cererii: {{issued}}"""
 
 
 def financials(c: dict) -> str:
-    return f"""SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS (formular F10/F20)
+    dep = round(c["ebitda"] * 0.22, -3)
+    interest = round(c["existing_service"] * 0.3, -3)
+    gross = c["ebitda"] - dep - interest
+    tax = max(0, round(gross * 0.16, -3))
+    return f"""SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS (formularele 10 și 20, depuse la ANAF)
+Județul: {c['county']} · Număr din registrul comerțului: {_reg(c)}
 Entitate: {c['legal_name']}
 CUI: {c['cui']}
-Cifra de afaceri netă: {_ron(c['turnover'])}
+Activitatea preponderentă: {c['caen']} · Forma de proprietate: 35
+Contul de profit și pierdere (F20)
+rd. 01 Cifra de afaceri netă: {_ron(c['turnover'])}
+rd. 28 Cheltuieli de exploatare privind amortizarea: {_ron(dep)}
+rd. 55 Profitul din exploatare: {_ron(c['ebitda'] - dep)}
+rd. 68 Cheltuieli privind dobânzile: {_ron(interest)}
+rd. 76 Profitul brut: {_ron(gross)}
+rd. 78 Impozitul pe profit: {_ron(tax)}
+rd. 83 Profit net: {_ron(gross - tax)}
+Indicatori din balanța de verificare la 31.12.2025 (anexă)
 EBITDA: {_ron(c['ebitda'])}
 Serviciul anual al datoriei existente: {_ron(c['existing_service'])}
-Profit net: {_ron(c['net_profit'])}
-Număr mediu de salariați: {max(3, int(c['turnover'] // 250_000))}"""
+Număr mediu de salariați: {max(3, int(c['turnover'] // 250_000))}
+Întocmit: expert contabil (CECCAR) · Administrator: {_name(c['admin'])}"""
+
+
+def _bo_block(c: dict, o: dict) -> str:
+    return (f"Beneficiar real: {_name(o)} — {o['pct']:g}%\n"
+            f"  CNP: {o['cnp']} · cetățenie română · domiciliul în {c['city']}, jud. {c['county']}\n"
+            f"  Descriere: deține {o['pct']:g}% din părțile sociale și drepturile de vot")
 
 
 def ubo_declaration(c: dict) -> str:
-    lines = [f"Beneficiar real: {_name(o)} — {o['pct']:g}%" for o in c["owners"] if o["pct"] >= 25]
-    return ("DECLARAȚIE PRIVIND BENEFICIARUL REAL (Legea nr. 129/2019, art. 56)\n"
-            f"Societate: {c['legal_name']}\nCUI: {c['cui']}\n" + "\n".join(lines)
-            + "\nModalitatea de exercitare a controlului: deținere de părți sociale\nData declarației: {issued}")
+    blocks = "\n".join(_bo_block(c, o) for o in c["owners"] if o["pct"] >= 25)
+    return f"""MINISTERUL JUSTIȚIEI · OFICIUL NAȚIONAL AL REGISTRULUI COMERȚULUI
+{_tribunal(c)}
+Formular nr. 6A — declarație pe proprie răspundere, sub semnătură privată
+DECLARAȚIE PRIVIND BENEFICIARUL REAL (actualizare)
+Societate: {c['legal_name']}
+CUI: {c['cui']}
+Număr de ordine în registrul comerțului: {_reg(c)} · EUID: ROONRC.{_reg(c)}
+Subsemnatul {_name(c['admin'])}, în calitate de reprezentant legal, declar pe propria răspundere, în conformitate cu
+art. 56 din Legea nr. 129/2019 și cunoscând dispozițiile art. 326 Cod penal, că beneficiarii reali sunt:
+{blocks}
+Temei: art. 4 alin. (2) lit. a) pct. 1 din Legea nr. 129/2019 (deținere de părți sociale)
+Persoană desemnată pentru comunicări: {_name(c['admin'])}
+Data declarației: {{issued}}"""
 
 
 def id_card(o: dict) -> str:
-    return S.ID_TEMPLATE.format(first=o["first"], last=o["last"], cnp_masked=o["cnp"], valid_until="12.03.2031")
+    return S.id_text(o["first"], o["last"], o["cnp"])
+
+
+def _associate(o: dict, capital: int) -> str:
+    return (f"Asociat: {o['last']} {o['first']} — {o['pct']:g}%\n"
+            f"  cetățenie română · aport la capital {capital * o['pct'] / 100:g} RON · "
+            f"cota de participare la beneficii și pierderi {o['pct']:g}%")
 
 
 def onrc(c: dict) -> str:
-    owners = "\n".join(f"Asociat: {o['last']} {o['first']} — {o['pct']:g}%" for o in c["owners"])
-    return f"""CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
+    capital = 200 * max(1, len(c["owners"]))
+    owners = "\n".join(_associate(o, capital) for o in c["owners"])
+    status = c.get("registry_status", "ACTIVĂ")
+    facts = "suspendare temporară a activității înregistrată" if status != "ACTIVĂ" else "nu există înregistrări"
+    return f"""MINISTERUL JUSTIȚIEI · OFICIUL NAȚIONAL AL REGISTRULUI COMERȚULUI
+{_tribunal(c)}
+CERTIFICAT CONSTATATOR (de bază)
+Oficiul Național al Registrului Comerțului certifică informațiile referitoare la {c['legal_name']}
+INFORMAȚII DE IDENTIFICARE
 Denumire: {c['legal_name']}
+Număr de ordine în registrul comerțului: {_reg(c)}
+Identificator unic la nivel european (EUID): ROONRC.{_reg(c)}
 Cod unic de înregistrare: {c['cui']}
-Stare firmă: {c.get('registry_status', 'ACTIVĂ')}
+Forma de organizare: societate cu răspundere limitată · durată nelimitată
+Stare firmă: {status}
+SEDIU SOCIAL
 Sediul social: {_address(c)}
 Cod poștal: {c['postal_code']}
-Activitate principală: {c['caen']}
-Administrator: {c['admin']['last']} {c['admin']['first']}
+Act sediu: contract de închiriere nr. {int(c['cui'][-2:]) + 3}/{FOUNDED[c['id']]}, valabil până la 31.12.2028
+CAPITAL SOCIAL: {capital} RON, integral vărsat
+ASOCIAȚI PERSOANE FIZICE
 {owners}
+PERSOANE ÎMPUTERNICITE
+Administrator: {c['admin']['last']} {c['admin']['first']}
+  puteri depline · reprezentare individuală · mandat pe durată nelimitată
+ACTIVITATEA PRINCIPALĂ (CAEN Rev. 2): {c['caen']}
+FAPTE (art. 21 lit. e-h din Legea nr. 26/1990): {facts} · insolvență: nu
+Informațiile au la bază înregistrările existente în registrul comerțului la data eliberării.
 Data eliberării: {{issued}}"""
 
 
 def fiscal(c: dict) -> str:
-    return f"""CERTIFICAT DE ATESTARE FISCALĂ — ANAF
+    debt = c.get("tax_debt")
+    owed = "DA — 38.410 RON (impozit pe profit 21.900 RON, contribuții sociale 16.510 RON)" if debt else "NU"
+    return f"""MINISTERUL FINANȚELOR · AGENȚIA NAȚIONALĂ DE ADMINISTRARE FISCALĂ
+Direcția Generală Regională a Finanțelor Publice (fictiv)
+CERTIFICAT DE ATESTARE FISCALĂ pentru persoane juridice
 Contribuabil: {c['legal_name']}
 CUI: {c['cui']}
+Număr de ordine în registrul comerțului: {_reg(c)}
 Domiciliul fiscal: {_address(c)}
-Obligații fiscale restante: {'DA — 38.410 RON (impozit pe profit, contribuții)' if c.get('tax_debt') else 'NU'}
-Data eliberării: {{issued}}"""
+Perioada de utilizare: 30 de zile de la data eliberării
+Secțiunea A — obligații fiscale restante la data eliberării
+Obligații fiscale restante: {owed}
+Secțiunea D — alte mențiuni: {'nu există o eșalonare la plată aprobată' if debt else 'nu este cazul'}
+Data eliberării: {{issued}}
+Conducătorul organului fiscal emitent (semnătură electronică)"""
 
 
 def address_proof(c: dict) -> str:
     return f"""CONTRACT DE ÎNCHIRIERE — SEDIU SOCIAL (extras)
+Locator: persoană fizică (fictiv) · Locatar: {c['legal_name']}
 Societate: {c['legal_name']}
 CUI: {c['cui']}
 Sediu social: {c['street']}, {c['city']}, jud. {c['county']}
 Cod poștal: {c['postal_code']}
+Durata: până la 31.12.2028
 Data: {{issued}}"""
 
 
 def mandate(c: dict) -> str:
-    return f"""ÎMPUTERNICIRE
+    return f"""ÎMPUTERNICIRE (procură specială sub semnătură privată)
 Societate: {c['legal_name']}
 CUI: {c['cui']}
 Administrator: {c['admin']['last']} {c['admin']['first']}

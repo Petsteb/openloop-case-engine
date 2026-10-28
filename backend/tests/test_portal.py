@@ -35,7 +35,7 @@ def test_real_upload_and_validation():
     files = c.get("/api/demo/sample-files").json()
     onrc = next(f for f in files if f["key"] == "onrc_certificate" and f["variant"] == "ok")
     text = c.get(f"/api/demo/sample-files/{onrc['filename']}").text
-    assert "Cod unic de înregistrare: 45123879" in text
+    assert "Cod unic de înregistrare: 94123877" in text
     r = c.post("/api/cases/demo-1/upload", json={"key": "onrc_certificate", "filename": "onrc.txt", "content_b64": b64(text)})
     assert r.status_code == 200
     assert CASES["demo-1"].state()["reqs"]["R1"]["status"] == "SATISFIED"
@@ -53,7 +53,7 @@ def test_wrong_company_upload_is_quarantined_and_explained():
     assert any(d["status_word"] == "Not accepted" for d in v["documents"])
     assert CASES["demo-1"].state()["reqs"]["R1"]["status"] == "OPEN_WAITING"           # never used as evidence
     assert "Document neacceptat" in v["emails"][-1]["subject"]
-    assert "30528174" not in json.dumps(v)                                            # no other firm's data to the client
+    assert "93052816" not in json.dumps(v)                                            # no other firm's data to the client
 
 
 def test_id_card_for_another_person_is_quarantined():
@@ -136,10 +136,10 @@ def test_quarantined_doc_detail_for_the_bank():
     docs = c.get("/api/cases/demo-1/documents", params={"role": "employee"}).json()
     doc = next(d for d in docs if d["status"] == "quarantined")
     bank = c.get(f"/api/cases/demo-1/documents/{doc['id']}", params={"role": "employee"}).json()
-    assert "30528174" in bank["quarantine_reason"] and bank["validity"] is None
+    assert "93052816" in bank["quarantine_reason"] and bank["validity"] is None
     assert "(upload)" not in bank["name"]
     client = c.get(f"/api/cases/demo-1/documents/{doc['id']}").json()
-    assert "quarantine_reason" not in client and "30528174" not in json.dumps(client["history"])  # text is their own file
+    assert "quarantine_reason" not in client and "93052816" not in json.dumps(client["history"])  # text is their own file
 
 
 def test_an_id_card_sent_before_the_corrected_declaration_is_not_asked_for_again():
