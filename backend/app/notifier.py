@@ -10,6 +10,8 @@ import os
 import smtplib
 from email.message import EmailMessage
 
+from .profiles import profile_of
+
 ENGINE = {"type": "system", "id": "notifier"}
 CLIENT_NAME = "Brutăria Aurora S.R.L."
 CLIENT_ADDRESS = "andrei.munteanu@brutaria-aurora.example"  # fictional; NOTIFY_TO redirects demo mail to a team inbox
@@ -81,7 +83,8 @@ def compose(events: list[dict]) -> dict | None:
                else "Dosar complet: decizia urmează" if ready and not (asks or reminders)
                else "Reamintire: documente necesare" if reminders and not asks
                else "Documente necesare pentru dosarul de finanțare")
-    return {"subject": f"{subject} · {CLIENT_NAME}", "body": "\n".join(lines),
+    client = profile_of(events)
+    return {"subject": f"{subject} · {client['name'].replace(' SRL', ' S.R.L.')}", "body": "\n".join(lines),
             "covers": [e["seq"] for e in todo], "ready": ready}
 
 
@@ -98,13 +101,14 @@ def _send_gmail(to: str, subject: str, body: str) -> str:
     return msg.get("Message-ID") or ""
 
 
-def flush(case) -> dict | None:
-    """Compose and deliver at most one email for the newest client-notifiable events; never raises."""
+def flush(case, mode: str | None = None) -> dict | None:
+    """Compose and deliver at most one email for the newest client-notifiable events; never raises.
+    `mode` overrides EMAIL_MODE (seeding synthetic cases always uses the outbox)."""
     mail = compose(case.ledger.events)
     if mail is None:
         return None
-    mode = os.environ.get("EMAIL_MODE", "outbox")
-    to = os.environ.get("NOTIFY_TO") or CLIENT_ADDRESS
+    mode = mode or os.environ.get("EMAIL_MODE", "outbox")
+    to = os.environ.get("NOTIFY_TO") or profile_of(case.ledger.events).get("email") or CLIENT_ADDRESS
     payload = {**mail, "to": to, "mode": mode, "sha256": hashlib.sha256(mail["body"].encode()).hexdigest()}
     try:
         if mode == "gmail":

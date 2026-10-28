@@ -12,23 +12,35 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Query  # noqa: E402
 from fastapi.responses import PlainTextResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from typing import Literal  # noqa: E402
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from . import case_views, chat, learner, notifier, registry  # noqa: E402
+from . import case_views, chat, learner, messages, notifier, profiles, registry  # noqa: E402
 from . import template as T  # noqa: E402
-from .agent import make_agent  # noqa: E402
-from .engine import Case, _pending, pending_confirmations  # noqa: E402
-from .scenario import CASE_START, SAMPLES, SCENARIO, WRONG_COMPANY, sample_file  # noqa: E402
+from .agent import ScriptedAgent, make_agent  # noqa: E402
+from .engine import Case, _pending, keys_match, pending_confirmations  # noqa: E402
+from .scenario import CASE_START, WRONG_COMPANY  # noqa: E402
+from .store import Store  # noqa: E402
 
-app = FastAPI(title="OpenLoop", version="0.1.0")
+app = FastAPI(title="OpenLoop", version="0.2.0")
 CASES: dict[str, Case] = {}
 AGENT = make_agent()
 LOCK = threading.Lock()  # one writer at a time keeps the hash chain linear (e.g. laptop + projector tabs)
+# Every ledger lives in one SQLite table (production: PostgreSQL on the bank's own servers). OPENLOOP_DB=:memory: in tests.
+STORE = Store(os.environ.get("OPENLOOP_DB") or ROOT / "data" / "openloop.db")
+
+# Synthetic files the queue starts with: (company, template, inbound items delivered), each at a different stage.
+SEEDS = [("verde", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("carpatic", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("delta", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("nord", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("medica", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("solaris", "sme_loan", ["day0-pack", "onrc-cert", "fiscal-cert"]),
+         ("atelier", "kyb_review", ["day0-pack"])]
 
 
 class Inbound(BaseModel):
@@ -71,9 +83,12 @@ def bundle(case: Case) -> dict:
     st = case.state()
     ev = case.ledger.events
     steps = st["trace"]
+    opened, t = ev[0]["payload"], T.TEMPLATES[st["template"]]
     return {
-        "case": {"id": case.id, "title": T.CASE_TITLE, "goal": T.CASE_GOAL, "status": st["status"],
-                 "sim_now": st["now"].isoformat(), "day": (st["now"] - CASE_START).days, "opened_at": CASE_START.isoformat()},
+        "case": {"id": case.id, "title": opened.get("title", T.CASE_TITLE), "goal": opened.get("goal", T.CASE_GOAL),
+                 "status": st["status"], "sim_now": st["now"].isoformat(), "day": (st["now"] - CASE_START).days,
+                 "opened_at": CASE_START.isoformat(), "template": st["template"], "template_title": t["title"],
+                 "company_id": st["profile"]["id"], "company": st["profile"]["name"], "product": st["profile"]["product"]},
         "config": {"agent_mode": AGENT.mode, "agent_status": AGENT.status,
                    "judge_mode": os.environ.get("JUDGE_MODE", "heuristic"),
                    "judge_threshold": T.JUDGE_THRESHOLD, "registry_down": registry.state["down"]},
@@ -99,7 +114,7 @@ def bundle(case: Case) -> dict:
                    "input": s["input"], "output": _text(s["output"]), "gate": s["gate"], "by": s.get("by")}
                   for s in steps],
         "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"],
-                      "internal": "events" in i} for i in SCENARIO],
+                      "internal": "events" in i} for i in case.scenario],
         "learning": {"checks": learner.PROMOTED, "proposals": len(learner.proposals(st))},
         "outbox": [{"seq": e["seq"], "sim_time": e["sim_time"], "status": "sent" if e["type"] == "EMAIL_SENT" else "failed",
                     **{k: e["payload"].get(k) for k in ("to", "subject", "body", "mode", "error")}}
@@ -113,12 +128,124 @@ def _case(case_id: str) -> Case:
     return CASES[case_id]
 
 
+def _advance(case: Case, agent, days: float) -> None:
+    fired = []
+    for ev in case.advance(days):  # each timer goes through the pipeline as it fires...
+        agent.pipeline(case, ev)
+        fired.append(ev)
+    if fired:
+        agent.plan(case, fired)  # ...then one planning step for the whole skip
+
+
+def _seed() -> None:
+    """demo-1 (the scripted bakery demo) plus synthetic files at different stages. Always offline and free:
+    scripted agent, heuristic judge, outbox email, whatever the live configuration is."""
+    CASES["demo-1"] = Case("demo-1", STORE)
+    agent, judge_mode = ScriptedAgent(), os.environ.get("JUDGE_MODE")
+    os.environ["JUDGE_MODE"] = "heuristic"
+    try:
+        for n, (company, template, items) in enumerate(SEEDS, start=2):
+            case = CASES[f"case-{n}"] = Case(f"case-{n}", STORE, template=template, profile_id=company)
+            agent.handle_batch(case, [case.ledger.events[0]])  # the bank asks for the starting documents
+            notifier.flush(case, mode="outbox")
+            for i, item in enumerate(items):
+                if i:
+                    _advance(case, agent, 1)
+                agent.handle_batch(case, case.deliver(item))
+                notifier.flush(case, mode="outbox")
+    finally:
+        if judge_mode is None:
+            os.environ.pop("JUDGE_MODE", None)
+        else:
+            os.environ["JUDGE_MODE"] = judge_mode
+
+
+def _load() -> None:
+    """Reload every stored case on startup; seed a fresh database."""
+    for case_id in STORE.case_ids():
+        events = STORE.events(case_id)
+        if events:
+            CASES[case_id] = Case(case_id, STORE, events=events)
+    if not CASES:
+        _seed()
+    elif "demo-1" not in CASES:
+        CASES["demo-1"] = Case("demo-1", STORE)
+
+
 @app.post("/api/demo/reset")
-def reset_demo():
+def reset_demo(all_cases: bool = Query(False, alias="all")):
+    """Reset demo-1 to its start; ?all=true wipes the database and reseeds every synthetic file."""
     with LOCK:
         registry.state["down"] = False
-        CASES["demo-1"] = Case("demo-1", ROOT / "data" / "ledger")
+        if all_cases:
+            STORE.wipe()
+            CASES.clear()
+            _seed()
+        else:
+            STORE.clear_events("demo-1")
+            CASES["demo-1"] = Case("demo-1", STORE)
         return bundle(CASES["demo-1"])
+
+
+# ----------------------------------------------------------------------------- home: all cases, templates, companies
+class NewCase(BaseModel):
+    template: str = Field(min_length=1, max_length=40)
+    company_id: str = Field(min_length=1, max_length=40)
+
+
+@app.get("/api/version")
+def global_version():
+    """Cheap change detector for the home screens."""
+    return {"cases": len(CASES), "events": sum(len(c.ledger.events) for c in CASES.values())}
+
+
+@app.get("/api/templates")
+def list_templates():
+    return [{k: t[k] for k in ("id", "title", "description", "requirements")} for t in T.TEMPLATES.values()]
+
+
+@app.get("/api/companies")
+def list_companies():
+    """Synthetic client companies (all fictional), with the one problem each file exercises."""
+    return [{k: p[k] for k in ("id", "name", "cui", "city", "county", "product", "story", "templates")}
+            for p in profiles.PROFILES.values()]
+
+
+@app.get("/api/cases")
+def list_cases(role: Literal["client", "employee"] = "employee", company_id: str = "aurora",
+               x_staff_token: str | None = Header(default=None)):
+    """Employee: the work queue, needs-you first. Client: that company's files (identity is simulated in the demo)."""
+    if role == "employee":
+        _require_staff(x_staff_token)
+    cases = [c for c in CASES.values() if role == "employee" or c.profile["id"] == company_id]
+    return sorted((case_views.case_row(c, role) for c in cases), key=case_views.queue_sort_key)
+
+
+@app.post("/api/cases")
+def create_case(body: NewCase):
+    """Open a new file; the agent immediately asks the client for the starting documents."""
+    company = profiles.PROFILES.get(body.company_id)
+    if body.template not in T.TEMPLATES or company is None:
+        raise HTTPException(422, "unknown template or company")
+    if body.template not in company["templates"]:
+        raise HTTPException(422, f"{company['name']} has no synthetic documents for {body.template}")
+    with LOCK:
+        n = 1 + max((int(cid.split("-")[1]) for cid in CASES if cid.split("-")[-1].isdigit()), default=1)
+        case = CASES[f"case-{n}"] = Case(f"case-{n}", STORE, template=body.template, profile_id=body.company_id)
+        AGENT.handle_batch(case, [case.ledger.events[0]])
+        notifier.flush(case)
+        return bundle(case)
+
+
+@app.get("/api/notifications")
+def list_notifications(role: Literal["client", "employee"] = "employee", company_id: str = "aurora",
+                       x_staff_token: str | None = Header(default=None)):
+    """Newest first: actions this role owes and messages for it, across its cases."""
+    if role == "employee":
+        _require_staff(x_staff_token)
+    cases = [c for c in CASES.values() if role == "employee" or c.profile["id"] == company_id]
+    items = [n for c in cases for n in case_views.notifications(c, role)]
+    return sorted(items, key=lambda n: (n["day"], n["seq"]), reverse=True)[:100]
 
 
 @app.get("/api/cases/{case_id}/bundle")
@@ -129,7 +256,7 @@ def get_bundle(case_id: str):
 @app.post("/api/cases/{case_id}/inbound")
 def inbound(case_id: str, body: Inbound):
     case = _case(case_id)
-    if body.item_id not in {i["id"] for i in SCENARIO}:
+    if body.item_id not in {i["id"] for i in case.scenario}:
         raise HTTPException(422, "unknown scenario item")
     with LOCK:
         if body.item_id in case.state()["delivered"]:
@@ -145,12 +272,7 @@ def advance(case_id: str, body: Advance):
     if not 0 < body.days <= 60:
         raise HTTPException(422, "days must be in (0, 60]")
     with LOCK:
-        fired = []
-        for ev in case.advance(body.days):  # each timer goes through the pipeline as it fires...
-            AGENT.pipeline(case, ev)
-            fired.append(ev)
-        if fired:
-            AGENT.plan(case, fired)  # ...then one planning step for the whole skip
+        _advance(case, AGENT, body.days)
         notifier.flush(case)
         return bundle(case)
 
@@ -308,30 +430,100 @@ def upload(case_id: str, body: Upload):
 def upload_sample(case_id: str, body: UploadSample):
     """Demo: upload the prepared synthetic file for a request (variant=wrong_company: another firm's certificate)."""
     case = _case(case_id)
-    sample = sample_file(body.key, body.variant)
+    sample = _sample(case, body.key, body.variant)
     if sample is None:
         raise HTTPException(404, "no sample file for this request")
     filename, template = sample
     return _ingest_upload(case, body.key, filename, template.replace("{issued}", case.now.strftime("%d.%m.%Y")).encode())
 
 
-@app.get("/api/demo/sample-files")
-def sample_files():
-    items = [{"key": k, "label": T.DOC_LABELS.get(k.partition(":")[0], k) + (f" — {k.partition(':')[2]}" if ":" in k else ""),
-              "filename": f, "variant": "ok"} for k, (f, _) in SAMPLES.items()]
+def _sample(case: Case, key: str, variant: str = "ok") -> tuple[str, str] | None:
+    """The company's synthetic file for a request key (names match in any order); or another firm's certificate."""
+    if variant == "wrong_company":
+        return WRONG_COMPANY
+    return next((v for k, v in profiles.samples_for(case.profile["id"]).items() if keys_match(k, key)), None)
+
+
+def _sample_list(case: Case) -> list[dict]:
+    """Keys are spelled like the case's pending requests (e.g. 'id_card:Pop Radu'), so the portal can match exactly."""
+    pending = [r["key"] for r in case.state()["requests"].values() if r["status"] == "PENDING"]
+    items = []
+    for k, (f, _) in profiles.samples_for(case.profile["id"]).items():
+        key = next((p for p in pending if keys_match(p, k)), k)
+        doc_type, _, person = key.partition(":")
+        items.append({"key": key, "label": T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else ""),
+                      "filename": f, "variant": "ok"})
     return items + [{"key": "onrc_certificate", "label": "Trade register certificate (another company: wrong file)",
                      "filename": WRONG_COMPANY[0], "variant": "wrong_company"}]
 
 
-@app.get("/api/demo/sample-files/{filename}")
-def sample_file_content(filename: str):
-    match = next((t for f, t in [*SAMPLES.values(), WRONG_COMPANY] if f == filename), None)
+def _sample_text(case: Case, filename: str) -> PlainTextResponse:
+    match = next((t for f, t in [*profiles.samples_for(case.profile["id"]).values(), WRONG_COMPANY] if f == filename), None)
     if match is None:
         raise HTTPException(404, "unknown sample file")
-    case = CASES.get("demo-1")
-    issued = (case.now if case else CASE_START).strftime("%d.%m.%Y")
-    return PlainTextResponse(match.replace("{issued}", issued), headers={
+    return PlainTextResponse(match.replace("{issued}", case.now.strftime("%d.%m.%Y")), headers={
         "Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/api/cases/{case_id}/sample-files")
+def case_sample_files(case_id: str):
+    return _sample_list(_case(case_id))
+
+
+@app.get("/api/cases/{case_id}/sample-files/{filename}")
+def case_sample_file_content(case_id: str, filename: str):
+    return _sample_text(_case(case_id), filename)
+
+
+@app.get("/api/demo/sample-files")
+def sample_files(case_id: str = "demo-1"):
+    return _sample_list(_case(case_id))
+
+
+@app.get("/api/demo/sample-files/{filename}")
+def sample_file_content(filename: str, case_id: str = "demo-1"):
+    return _sample_text(_case(case_id), filename)
+
+
+# ----------------------------------------------------------------------------- messages between the client and staff
+class MessageIn(BaseModel):
+    role: Literal["client", "employee"]
+    text: str = Field(min_length=1, max_length=2000)
+    author: str | None = Field(default=None, max_length=80)
+    refs: list[dict] = Field(default_factory=list, max_length=20)
+
+
+@app.get("/api/cases/{case_id}/messages")
+def get_messages(case_id: str, role: Literal["client", "employee"] = "client",
+                 x_staff_token: str | None = Header(default=None)):
+    if role == "employee":
+        _require_staff(x_staff_token)
+    return messages.thread(_case(case_id), role)
+
+
+@app.post("/api/cases/{case_id}/messages")
+def post_message(case_id: str, body: MessageIn, x_staff_token: str | None = Header(default=None)):
+    """A client's message also goes through the agent pipeline, like an email (e.g. "a new shareholder joined")."""
+    if body.role == "employee":
+        _require_staff(x_staff_token)
+    case = _case(case_id)
+    with LOCK:
+        try:
+            event = messages.post(case, body.role, body.text, body.author, body.refs)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        if body.role == "client":
+            AGENT.handle_batch(case, [event])
+            notifier.flush(case)
+        return messages.thread(case, body.role)
+
+
+@app.get("/api/cases/{case_id}/mentionables")
+def get_mentionables(case_id: str, role: Literal["client", "employee"] = "client",
+                     x_staff_token: str | None = Header(default=None)):
+    if role == "employee":
+        _require_staff(x_staff_token)
+    return messages.mentionables(_case(case_id), role)
 
 
 @app.post("/api/cases/{case_id}/client-confirm")
@@ -395,7 +587,7 @@ def toggle_registry(body: RegistryToggle):
     return {"down": registry.state["down"]}
 
 
-reset_demo()  # a fresh demo case exists from startup, so the first page load never 404s
+_load()  # stored cases come back after a restart; a fresh database is seeded, so the first page load never 404s
 
 # The React app (web/, built to web/dist) when it has been built; the original static UI otherwise.
 # Every /api route is registered above this catch-all mount.

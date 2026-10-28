@@ -6,3 +6,4 @@ for key in ("AWS_BEARER_TOKEN_BEDROCK", "FEATHERLESS_API_KEY", "GMAIL_APP_PASSWO
 os.environ.setdefault("AGENT_MODE", "scripted")
 os.environ.setdefault("JUDGE_MODE", "heuristic")
 os.environ.setdefault("EMAIL_MODE", "outbox")
+os.environ["OPENLOOP_DB"] = ":memory:"  # never touch the real data/openloop.db

@@ -166,7 +166,7 @@ def overview(case: Case, role: str) -> dict:
         else:
             status_text = "We are checking your file"
     out = {"status_text": status_text, "state": _state(st, pending, open_ex), "day": day, "checks": checks,
-           "open_items": len(pending) + len(open_ex), "company": T.CLIENT_COMPANY, "product": T.PRODUCT}
+           "open_items": len(pending) + len(open_ex), "company": st["profile"]["name"], "product": st["profile"]["product"]}
     if role == "employee" and st["status"] == "ON_HOLD":  # which escalation put the file on hold, with its citation
         held = next(e for e in reversed(case.ledger.events)
                     if e["type"] == "CASE_STATUS" and e["payload"]["status"] == "ON_HOLD")
@@ -516,17 +516,17 @@ def document_detail(case: Case, role: str, doc_id: str) -> dict:
             "used_by": _used_by(st, doc_id),
             "validity": None if status in ("quarantined", "unreadable") else  # never checked, so no validity window
                         {"issued_day": _day(d["issued_at"]), "expires_day": expires, "expired": doc_expired(st, d)},
-            "quarantine_reason": _bank_quarantine_reason(d),
+            "quarantine_reason": _bank_quarantine_reason(d, st["profile"]["cui"]),
             "history": history}
 
 
-def _bank_quarantine_reason(d: dict) -> str | None:
+def _bank_quarantine_reason(d: dict, applicant_cui: str) -> str | None:
     """Bank-only wording: names the other company's tax ID, which the client never sees."""
     if not d.get("quarantined"):
         return None
     if d.get("quarantine_cui"):
         return (f"The tax ID on this document ({d['quarantine_cui']}) belongs to another company, "
-                f"not to the applicant ({T.CASE_CUI}).")
+                f"not to the applicant ({applicant_cui}).")
     return f"Not accepted: {d.get('quarantine_reason', 'quarantined')}."
 
 
@@ -534,3 +534,79 @@ def version(case: Case) -> dict:
     """Cheap change detector for polling: ledger length + current case status."""
     status = next((e["payload"]["status"] for e in reversed(case.ledger.events) if e["type"] == "CASE_STATUS"), "OPEN")
     return {"length": len(case.ledger.events), "status": status}
+
+
+# ----------------------------------------------------------------------------- home screen and notifications
+def _last_seq(case: Case, pred) -> int:
+    return max((e["seq"] for e in case.ledger.events if pred(e)), default=0)
+
+
+def case_row(case: Case, role: str) -> dict:
+    """One line of the home screen. Employee: a work-queue row. Client: one of "my files", client-safe."""
+    from .engine import pending_confirmations
+    role = _role(role)
+    st, ov = case.state(), overview(case, role)
+    t = T.TEMPLATES[st["template"]]
+    opened = next(e for e in case.ledger.events if e["type"] == "CASE_OPENED")
+    open_ex = [x for x in st["exceptions"].values() if x["status"] == "OPEN"]
+    waiting = len(_pending_requests(st)) + len(pending_confirmations(case.ledger.events))
+    other = "employee" if role == "client" else "client"
+    row = {"id": case.id, "title": opened["payload"].get("title", t["title"]), "template": st["template"],
+           "template_title": t["title"], "company_id": st["profile"]["id"], "company": st["profile"]["name"],
+           "product": st["profile"]["product"], "status": st["status"], "state": ov["state"],
+           "status_text": ov["status_text"], "waiting_on_client": waiting, "day": ov["day"],
+           "events": len(case.ledger.events), "last_activity": case.ledger.events[-1]["sim_time"],
+           "last_message_seq": _last_seq(case, lambda e: (e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == other)
+                                         or (role == "client" and e["type"] == "EMAIL_SENT")),
+           "last_action_seq": _last_seq(case, (lambda e: e["type"] in ("DOCUMENT_REQUESTED", "REMINDER_SENT",
+                                                                        "STAFF_CONTACT_CHANGE"))
+                                        if role == "client" else
+                                        (lambda e: e["type"] == "EXCEPTION_RAISED"
+                                         or (e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION")))}
+    if role == "employee":
+        row["open_decisions"] = len(open_ex)
+        row["needs_you"] = len(open_ex) + (1 if st["status"] == "READY_FOR_DECISION" else 0)
+    else:
+        row["needs_you"] = waiting
+    return row
+
+
+def queue_sort_key(row: dict) -> tuple:
+    """Needs-you first, then files waiting on the client, then the rest; newest activity first within a group."""
+    group = 0 if row["needs_you"] else 1 if row["waiting_on_client"] else 2
+    return (group, -datetime.fromisoformat(row["last_activity"]).timestamp(), row["id"])
+
+
+def notifications(case: Case, role: str) -> list[dict]:
+    """What this role should look at in this case: actions it owes and messages it hasn't answered."""
+    from .engine import pending_confirmations
+    role = _role(role)
+    st, company, out = case.state(), case.profile["name"], []
+    base = lambda e, kind, text: {"case_id": case.id, "company": company, "kind": kind, "text": text,
+                                  "seq": e["seq"], "day": _day(e["sim_time"])}
+    by_seq = {e["seq"]: e for e in case.ledger.events}
+    if role == "employee":
+        for x in st["exceptions"].values():
+            if x["status"] == "OPEN":
+                out.append(base(by_seq[x["seq"]], "action", f"Decision needed: {x.get('title') or x['kind']}"))
+        if st["status"] == "READY_FOR_DECISION":
+            ready = max(e["seq"] for e in case.ledger.events
+                        if e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION")
+            out.append(base(by_seq[ready], "action", "File complete: the credit decision is yours"))
+        for e in case.ledger.events:
+            if e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == "client":
+                out.append(base(e, "message", f"Client: {e['payload']['text'][:120]}"))
+    else:
+        seqs = _request_seqs(case)
+        for r in _pending_requests(st):
+            if r["key"] in seqs:
+                out.append(base(by_seq[seqs[r["key"]]], "action", f"Please send: {r['label']}"))
+        for c in pending_confirmations(case.ledger.events):
+            ref = by_seq.get(c["ref_seq"]) or case.ledger.events[-1]
+            out.append(base(ref, "action", "Please answer a question from the bank"))
+        for e in case.ledger.events:
+            if e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == "employee":
+                out.append(base(e, "message", f"{e['payload']['author']}: {e['payload']['text'][:120]}"))
+            elif e["type"] == "EMAIL_SENT":
+                out.append(base(e, "message", f"Email: {e['payload'].get('subject', '')}"))
+    return out
