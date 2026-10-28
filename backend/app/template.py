@@ -11,7 +11,7 @@ DOC_VALIDITY_DAYS = 30        # bank policy for registry / fiscal certificates
 UBO_THRESHOLD_PCT = 25        # beneficial-owner threshold (Law 129/2019, AMLR)
 DSCR_MIN = 1.2
 REMINDER_AFTER_DAYS = 3
-AMLR_REPORT_DAYS = 14         # AMLR Art. 24: report register discrepancies
+AMLR_REPORT_DAYS = 14         # AMLR: report register discrepancies (verify the article number on EUR-Lex)
 JUDGE_THRESHOLD = 0.9         # auto-accept fuzzy matches only at or above this
 
 DOC_LABELS = {
@@ -49,7 +49,7 @@ RULES = {
     "HR-02": "Company must be ACTIVE in the trade register (ONRC lookup).",
     "HR-03": f"Registry and fiscal certificates are valid for {DOC_VALIDITY_DAYS} days from issue (bank policy).",
     "HR-04": f"Every person owning ≥{UBO_THRESHOLD_PCT}% in the trade register must appear, with the same share, "
-             f"in the UBO declaration (Law 129/2019; AMLR Art. 24: report register discrepancies within {AMLR_REPORT_DAYS} days).",
+             f"in the UBO declaration (Law 129/2019; AMLR: report register discrepancies within {AMLR_REPORT_DAYS} days).",
     "HR-05": "Every beneficial owner must have an identity document on file.",
     "HR-06": "Registered-office postal code must match across documents.",
     "HR-07": f"DSCR = EBITDA / (existing + new annual debt service) must be ≥ {DSCR_MIN}.",

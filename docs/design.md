@@ -58,7 +58,7 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
   "exceptions": [
     {"id": "EX-1", "requirement_id": "R2", "status": "OPEN", "severity": "high",
      "title": "Undeclared beneficial owner", "summary": "Trade register lists Radu Pop with 25%; UBO declaration omits him.",
-     "rule": {"id": "HR-04", "text": "Every person with ≥25% ownership must be declared and identified (Law 129/2019; AMLR Art. 24: report register discrepancies within 14 days)."},
+     "rule": {"id": "HR-04", "text": "Every person with ≥25% ownership must be declared and identified (Law 129/2019; AMLR: report register discrepancies within 14 days)."},
      "snippets": [{"doc_id": "doc-onrc", "label": "Trade register certificate", "quote": "..."},
                   {"doc_id": "doc-ubo", "label": "UBO declaration", "quote": "..."}],
      "judge": null,

@@ -531,7 +531,7 @@ def t_send_reminder(case: Case, key: str) -> dict:
 
 def t_start_legal_clock(case: Case, req_id: str) -> dict:
     due = (case.now + timedelta(days=T.AMLR_REPORT_DAYS)).isoformat()
-    _set_timer(case, "legal_deadline", due, "AMLR Art. 24 — report register discrepancy", req_id=req_id)
+    _set_timer(case, "legal_deadline", due, "AMLR — report register discrepancy", req_id=req_id)
     return {"deadline": due[:10], "rule": "HR-04"}
 
 

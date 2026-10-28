@@ -187,7 +187,7 @@
       "summary": "Trade register lists Radu Pop with 25%; UBO declaration omits him.",
       "rule": {
         "id": "HR-04",
-        "text": "Every person with ≥25% ownership must be declared and identified (Law 129/2019; AMLR Art. 24: report register discrepancies within 14 days)."
+        "text": "Every person with ≥25% ownership must be declared and identified (Law 129/2019; AMLR: report register discrepancies within 14 days)."
       },
       "snippets": [
         {
