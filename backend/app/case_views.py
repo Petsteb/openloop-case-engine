@@ -165,8 +165,13 @@ def overview(case: Case, role: str) -> dict:
             status_text = UNDER_REVIEW
         else:
             status_text = "We are checking your file"
-    return {"status_text": status_text, "state": _state(st, pending, open_ex), "day": day, "checks": checks,
-            "open_items": len(pending) + len(open_ex), "company": T.CLIENT_COMPANY, "product": T.PRODUCT}
+    out = {"status_text": status_text, "state": _state(st, pending, open_ex), "day": day, "checks": checks,
+           "open_items": len(pending) + len(open_ex), "company": T.CLIENT_COMPANY, "product": T.PRODUCT}
+    if role == "employee" and st["status"] == "ON_HOLD":  # which escalation put the file on hold, with its citation
+        held = next(e for e in reversed(case.ledger.events)
+                    if e["type"] == "CASE_STATUS" and e["payload"]["status"] == "ON_HOLD")
+        out["hold"] = {"reason": held["payload"].get("reason", ""), "seq": held["seq"], "day": _day(held["sim_time"])}
+    return out
 
 
 def _disputed(st: dict) -> bool:

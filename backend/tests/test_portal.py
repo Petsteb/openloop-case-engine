@@ -97,6 +97,9 @@ def test_contact_change_dispute_raises_a_card_and_can_hold_the_file():
     card = next(x for x in b["exceptions"] if x["kind"] == "client_dispute")
     c.post(f"/api/cases/demo-1/exceptions/{card['id']}/resolve", json={"action_id": "escalate_compliance"})
     assert c.get("/api/cases/demo-1/bundle").json()["case"]["status"] == "ON_HOLD"
+    from app import case_views
+    assert card["id"] in case_views.overview(CASES["demo-1"], "employee")["hold"]["reason"]   # chat can say why
+    assert "hold" not in case_views.overview(CASES["demo-1"], "client")
     assert c.post("/api/cases/demo-1/client-confirm", json={"kind": "contact_change", "answer": "yes"}).status_code == 409
 
 
