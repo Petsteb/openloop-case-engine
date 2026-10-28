@@ -1,0 +1,150 @@
+{"id": "PR-001", "kind": "address", "a": "Al. Nicolae Titulescu nr. 33, Brașov, jud. Brașov", "b": "Aleea Nicolae Titulescu, nr. 33, Brașov, Județ Brașov", "label": "same", "split": "test", "why": "type abbreviated vs full"}
+{"id": "PR-002", "kind": "address", "a": "Str. Aviatorilor nr. 91, Suceava, jud. Suceava", "b": "Calea Aviatorilor, nr. 91, Suceava, Județ Suceava", "label": "different", "split": "test", "why": "Str. vs Calea, same name and number"}
+{"id": "PR-003", "kind": "address", "a": "Str. Barbu Văcărescu nr. 12, București, Sector 4", "b": "Strada Barbu Văcărescu, nr. 12, sect. 4, București", "label": "same", "split": "test", "why": "Bucharest sector formatting"}
+{"id": "PR-004", "kind": "address", "a": "Strada Fabricii, nr. 57, bl. D3, sc. 3, ap. 57, Oradea, Județ Bihor", "b": "Str. Fabricii nr. 57, Oradea", "label": "same", "split": "test", "why": "block / apartment omitted"}
+{"id": "PR-005", "kind": "person", "a": "Ioana-Mădălina Pătrașcu", "b": "IOANA-MĂDĂLINA PĂTRAȘCU", "label": "same", "split": "test", "why": "case / diacritics"}
+{"id": "PR-006", "kind": "address", "a": "Str. Victoriei nr. 29, Craiova, jud. Dolj", "b": "Strada Victoriei, nr. 29, Craiova, Județ Dolj", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-007", "kind": "address", "a": "Strada Nicolae Titulescu 58, Suceava", "b": "Calea Nicolae Titulescu, nr. 58, Suceava, Județ Suceava", "label": "different", "split": "tune", "why": "Str. vs Calea, same name and number"}
+{"id": "PR-008", "kind": "person", "a": "Cătălin Stănescu", "b": "STĂNESCU CĂTĂLIN", "label": "same", "split": "test", "why": "order swap + case / diacritics"}
+{"id": "PR-009", "kind": "address", "a": "Al. Libertății nr. 88, Iași, jud. Iași", "b": "Aleea Libertății 88, Iași", "label": "same", "split": "test", "why": "type abbreviated vs full"}
+{"id": "PR-010", "kind": "person", "a": "Anișoara Țurcanu", "b": "anișoara țurcanu", "label": "same", "split": "test", "why": "case / diacritics"}
+{"id": "PR-011", "kind": "person", "a": "Daniel Lungu", "b": "Mihai Lungu", "label": "different", "split": "test", "why": "same surname, other first name"}
+{"id": "PR-012", "kind": "person", "a": "Marin Ionescu", "b": "IONESCU MARIA", "label": "different", "split": "test", "why": "near first name"}
+{"id": "PR-013", "kind": "address", "a": "Str. Eroilor nr. 20, Cluj-Napoca, jud. Cluj", "b": "Șoseaua Eroilor 20, Cluj-Napoca", "label": "different", "split": "test", "why": "Str. vs Șos., same name and number"}
+{"id": "PR-014", "kind": "address", "a": "Str. Ștefan cel Mare nr. 54, Galați", "b": "Strada Ștefan cel Mare, nr. 54, Galați, Județ Galați", "label": "same", "split": "tune", "why": "county present vs absent"}
+{"id": "PR-015", "kind": "person", "a": "Răzvan Stănescu", "b": "Stanescu Razvan", "label": "same", "split": "tune", "why": "order swap + case / diacritics"}
+{"id": "PR-016", "kind": "person", "a": "Ionuț Șerban", "b": "IONUT SERBAN", "label": "same", "split": "test", "why": "case / diacritics"}
+{"id": "PR-017", "kind": "person", "a": "Ioana Lungu", "b": "Ana Gheorghe", "label": "different", "split": "test", "why": "unrelated people"}
+{"id": "PR-018", "kind": "address", "a": "Strada Fabricii 82, Bacău", "b": "Strada Fabricii, nr. 82, Bacău, Județ Bacău", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-019", "kind": "address", "a": "Bd. Decebal nr. 73, Cluj-Napoca, jud. Cluj", "b": "Bd. Decebal nr. 73A, Cluj-Napoca", "label": "different", "split": "test", "why": "different number"}
+{"id": "PR-020", "kind": "address", "a": "Strada Plopilor 60, Bacău", "b": "Str. Plopilor nr. 60, Sibiu, jud. Sibiu", "label": "different", "split": "tune", "why": "different city"}
+{"id": "PR-021", "kind": "address", "a": "Str. Fagului nr. 7, bl. A2, Cluj-Napoca, jud. Cluj", "b": "Calea Fagului nr. 7, Cluj-Napoca, Județ Cluj", "label": "different", "split": "tune", "why": "Str. vs Calea, same name and number (demo pair)"}
+{"id": "PR-022", "kind": "person", "a": "Cristina Neagu", "b": "Neagu, Cristina", "label": "same", "split": "tune", "why": "surname-comma format"}
+{"id": "PR-023", "kind": "address", "a": "Strada Ștefan cel Mare, nr. 71, bl. A0, sc. 1, ap. 8, Cluj-Napoca, Județ Cluj", "b": "Strada Ștefan cel Mare 71, Cluj-Napoca", "label": "same", "split": "test", "why": "block / apartment omitted"}
+{"id": "PR-024", "kind": "person", "a": "Teodora Țurcanu", "b": "Teodora Turcanu", "label": "same", "split": "test", "why": "case / diacritics"}
+{"id": "PR-025", "kind": "address", "a": "Strada Traian, nr. 70, bl. D3, Craiova, Județ Dolj", "b": "Strada Traian 70, bl. B1, Craiova", "label": "different", "split": "test", "why": "different block"}
+{"id": "PR-026", "kind": "address", "a": "Str. Păcii nr. 22, Iași, jud. Iași", "b": "Strada Păcii 22, Craiova", "label": "different", "split": "test", "why": "different city"}
+{"id": "PR-027", "kind": "person", "a": "Andrei Munteanu", "b": "MUNTEANU ANDREI", "label": "same", "split": "tune", "why": "order swap (demo pair)"}
+{"id": "PR-028", "kind": "address", "a": "Aleea Morii 55, Timișoara", "b": "Al. Moșilor nr. 55, Timișoara", "label": "different", "split": "tune", "why": "near-identical street name"}
+{"id": "PR-029", "kind": "person", "a": "Gabriel Diaconu", "b": "Diaconu Gabriel", "label": "same", "split": "test", "why": "order swap"}
+{"id": "PR-030", "kind": "address", "a": "Bd. Teilor nr. 51, Pitești, cod postal 801364", "b": "Bulevardul Teilor 51, Pitești, cod postal 801385", "label": "different", "split": "test", "why": "different postal code"}
+{"id": "PR-031", "kind": "person", "a": "Maria Gheorghe", "b": "GHEORGHE MARIA", "label": "same", "split": "test", "why": "order swap"}
+{"id": "PR-032", "kind": "address", "a": "Strada Morii, nr. 86, Craiova, Județ Dolj", "b": "Str. Morii nr. 86, Craiova, jud. Dolj", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-033", "kind": "person", "a": "Raluca Enache", "b": "Enachi Raluca", "label": "different", "split": "test", "why": "1-letter surname change"}
+{"id": "PR-034", "kind": "person", "a": "Tudor Gheorghe", "b": "Gheorghe Tudor", "label": "same", "split": "test", "why": "order swap"}
+{"id": "PR-035", "kind": "address", "a": "Strada Mihai Eminescu 5, Timișoara", "b": "Bd. Mihai Eminescu nr. 5, Timișoara", "label": "different", "split": "test", "why": "Str. vs Bd., same name and number"}
+{"id": "PR-036", "kind": "person", "a": "Alina Rusu", "b": "RUS ALINA", "label": "different", "split": "tune", "why": "1-letter surname change"}
+{"id": "PR-037", "kind": "address", "a": "Strada Unirii 82, bl. M5, Arad", "b": "Str. Unirii nr. 82, Arad, jud. Arad", "label": "same", "split": "test", "why": "block / apartment omitted"}
+{"id": "PR-038", "kind": "address", "a": "Strada Decebal 45, Ploiești", "b": "Str. Decebal nr. 45, Ploiești, jud. Prahova", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-039", "kind": "address", "a": "Str. Aviatorilor nr. 96, Pitești", "b": "Strada Aviatorilor, nr. 96, Baia Mare, Județ Maramureș", "label": "different", "split": "tune", "why": "different city"}
+{"id": "PR-040", "kind": "person", "a": "Răzvan Bălan", "b": "răzvan bălan", "label": "same", "split": "tune", "why": "case / diacritics"}
+{"id": "PR-041", "kind": "address", "a": "Șos. Dorobanților nr. 94, Galați, jud. Galați", "b": "Șoseaua Dorobanților 94, Galați", "label": "same", "split": "tune", "why": "type abbreviated vs full"}
+{"id": "PR-042", "kind": "address", "a": "Str. Nicolae Titulescu nr. 18, Cluj-Napoca, cod postal 513160", "b": "Strada Nicolae Titulescu 18, Cluj-Napoca, cod postal 513167", "label": "different", "split": "tune", "why": "different postal code"}
+{"id": "PR-043", "kind": "address", "a": "Strada Ștefan cel Mare 49, Bacău", "b": "Strada Ștefan cel Mare, nr. 49, Bacău, Județ Bacău", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-044", "kind": "person", "a": "Lucian Moldovan", "b": "Moldovean Lucian", "label": "different", "split": "tune", "why": "1-letter surname change"}
+{"id": "PR-045", "kind": "address", "a": "Strada Traian, nr. 30, Suceava, Județ Suceava", "b": "Str. Traian nr. 30, Suceava, jud. Suceava", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-046", "kind": "person", "a": "Roxana Rusu", "b": "RUSU ROXANA", "label": "same", "split": "tune", "why": "order swap"}
+{"id": "PR-047", "kind": "address", "a": "Str. Mihai Eminescu nr. 28, București, Sector 6", "b": "Strada Mihai Eminescu, nr. 28, sect. 6, București", "label": "same", "split": "tune", "why": "Bucharest sector formatting"}
+{"id": "PR-048", "kind": "address", "a": "Str. Independenței nr. 24, Ploiești", "b": "Calea Teilor 24, Ploiești", "label": "different", "split": "tune", "why": "type and street differ"}
+{"id": "PR-049", "kind": "address", "a": "Bulevardul Gării, nr. 80, Cluj-Napoca, Județ Cluj", "b": "Bd. Gării nr. 8, Cluj-Napoca", "label": "different", "split": "tune", "why": "different number"}
+{"id": "PR-050", "kind": "address", "a": "Calea Horea, nr. 36, Craiova, Județ Dolj", "b": "Calea Horea nr. 36, Craiova, jud. Dolj", "label": "same", "split": "tune", "why": "diacritics / case"}
+{"id": "PR-051", "kind": "person", "a": "MUNTEANU Ioana", "b": "Ioana Munteanu", "label": "same", "split": "tune", "why": "order swap"}
+{"id": "PR-052", "kind": "person", "a": "Elena Mocanu", "b": "Raluca Gheorghe", "label": "different", "split": "tune", "why": "unrelated people"}
+{"id": "PR-053", "kind": "address", "a": "Str. Mihai Eminescu nr. 11, București, Sector 1", "b": "Strada Mihai Eminescu, nr. 11, sect. 1, București", "label": "same", "split": "test", "why": "Bucharest sector formatting"}
+{"id": "PR-054", "kind": "address", "a": "Strada Teilor, nr. 75, bl. D3, Târgu Mureș, Județ Mureș", "b": "Strada Teilor 75, bl. A2, Târgu Mureș", "label": "different", "split": "tune", "why": "different block"}
+{"id": "PR-055", "kind": "address", "a": "Craiova, Strada Avram Iancu 17", "b": "Str. Avram Iancu nr. 17, Craiova, jud. Dolj", "label": "same", "split": "test", "why": "reordered"}
+{"id": "PR-056", "kind": "address", "a": "Calea Aviatorilor nr. 37, Suceava, jud. Suceava", "b": "Calea Aviației, nr. 37, Suceava, Județ Suceava", "label": "different", "split": "test", "why": "near-identical street name"}
+{"id": "PR-057", "kind": "address", "a": "Strada Decebal 79, Iași", "b": "Al. Plopilor nr. 79, Iași", "label": "different", "split": "test", "why": "type and street differ"}
+{"id": "PR-058", "kind": "address", "a": "Bulevardul Republicii, nr. 33, Bacău, Județ Bacău", "b": "Bd. Republicii nr. 133, Bacău, jud. Bacău", "label": "different", "split": "test", "why": "different number"}
+{"id": "PR-059", "kind": "person", "a": "Alexandru Gheorghe", "b": "Alexandra Gheorghe", "label": "different", "split": "tune", "why": "near first name"}
+{"id": "PR-060", "kind": "address", "a": "Timișoara, Strada Libertății 76", "b": "Str. Libertății nr. 76, Timișoara", "label": "same", "split": "tune", "why": "reordered"}
+{"id": "PR-061", "kind": "address", "a": "Strada Victoriei, nr. 98, Craiova, Județ Dolj", "b": "Bd. Victoriei nr. 98, Craiova, jud. Dolj", "label": "different", "split": "tune", "why": "Str. vs Bd., same name and number"}
+{"id": "PR-062", "kind": "address", "a": "Calea Victoriei nr. 35, București, Sector 4", "b": "Calea Victoriei 35, Sector 4, Bucuresti", "label": "same", "split": "tune", "why": "Bucharest sector formatting"}
+{"id": "PR-063", "kind": "person", "a": "Elena Mocanu", "b": "Ioana Mocanu", "label": "different", "split": "test", "why": "same surname, other first name"}
+{"id": "PR-064", "kind": "address", "a": "Str. Gării nr. 38, Constanța", "b": "Calea Gării, nr. 38, Constanța, Județ Constanța", "label": "different", "split": "tune", "why": "Str. vs Calea, same name and number"}
+{"id": "PR-065", "kind": "address", "a": "Strada Fagului, nr. 11, bl. B1, sc. 1, ap. 56, Timișoara, Județ Timiș", "b": "Str. Fagului nr. 11, Timișoara, jud. Timiș", "label": "same", "split": "tune", "why": "block / apartment omitted"}
+{"id": "PR-066", "kind": "address", "a": "Calea Teilor, nr. 35, Craiova, Județ Dolj", "b": "Calea Tilei nr. 35, Craiova", "label": "different", "split": "tune", "why": "near-identical street name"}
+{"id": "PR-067", "kind": "address", "a": "Str. Dorobanților nr. 86, București, Sector 2", "b": "Strada Dorobanților 86, Sector 4, București", "label": "different", "split": "test", "why": "different sector"}
+{"id": "PR-068", "kind": "person", "a": "Ioana Mocanu", "b": "MOCANU SIMONA", "label": "different", "split": "tune", "why": "same surname, other first name"}
+{"id": "PR-069", "kind": "person", "a": "Ștefan Pătrașcu", "b": "stefan patrascu", "label": "same", "split": "tune", "why": "case / diacritics"}
+{"id": "PR-070", "kind": "address", "a": "Strada Mihai Eminescu 32, Oradea", "b": "Str. Mihai Eminescu nr. 32, Baia Mare", "label": "different", "split": "tune", "why": "different city"}
+{"id": "PR-071", "kind": "address", "a": "Str. Horea nr. 35, Suceava", "b": "Strada Horea, nr. 35, Suceava, Județ Suceava", "label": "same", "split": "tune", "why": "county present vs absent"}
+{"id": "PR-072", "kind": "address", "a": "Strada Școlii 53, Arad", "b": "Calea Păcii nr. 53, Arad", "label": "different", "split": "test", "why": "type and street differ"}
+{"id": "PR-073", "kind": "address", "a": "Calea Mihai Viteazu 72, Suceava", "b": "Calea Mihai Eminescu, nr. 72, Suceava, Județ Suceava", "label": "different", "split": "test", "why": "near-identical street name"}
+{"id": "PR-074", "kind": "address", "a": "Str. Avram Iancu nr. 9, Oradea", "b": "Strada Avram Iancu, nr. 9, Oradea, Județ Bihor", "label": "same", "split": "test", "why": "county present vs absent"}
+{"id": "PR-075", "kind": "person", "a": "Stancu Simona", "b": "Simona Stanciu", "label": "different", "split": "test", "why": "1-letter surname change"}
+{"id": "PR-076", "kind": "person", "a": "Ruxandra Pătrașcu", "b": "ruxandra patrascu", "label": "same", "split": "tune", "why": "case / diacritics"}
+{"id": "PR-077", "kind": "address", "a": "Str. Libertății nr. 85, Cluj-Napoca", "b": "Str. Libertății nr. 85, Cluj-Napoca, jud. Cluj", "label": "same", "split": "test", "why": "county present vs absent"}
+{"id": "PR-078", "kind": "person", "a": "Alina Preda", "b": "PREDU ALINA", "label": "different", "split": "tune", "why": "1-letter surname change"}
+{"id": "PR-079", "kind": "address", "a": "Strada Decebal, nr. 18, Timișoara, Județ Timiș", "b": "Str. Decebal nr. 18, Oradea, jud. Bihor", "label": "different", "split": "test", "why": "different city"}
+{"id": "PR-080", "kind": "address", "a": "Strada Lalelelor 10, bl. A2, Pitești", "b": "Strada Lalelelor, nr. 10, Pitești, Județ Argeș", "label": "same", "split": "tune", "why": "block / apartment omitted"}
+{"id": "PR-081", "kind": "person", "a": "Anișoara Bălan", "b": "ANISOARA BALAN", "label": "same", "split": "tune", "why": "case / diacritics"}
+{"id": "PR-082", "kind": "person", "a": "Daniel Gheorghe", "b": "GHEORGHE DANIELA", "label": "different", "split": "tune", "why": "near first name"}
+{"id": "PR-083", "kind": "person", "a": "Roxana Diaconu", "b": "DIACONU ROXANA", "label": "same", "split": "tune", "why": "order swap"}
+{"id": "PR-084", "kind": "address", "a": "Bd. Republicii nr. 51, Târgu Mureș", "b": "Bulevardul Republicii, nr. 51, Targu Mures, Judet Mures", "label": "same", "split": "tune", "why": "diacritics / case"}
+{"id": "PR-085", "kind": "address", "a": "Brașov, Strada Victoriei 25", "b": "Str. Victoriei nr. 25, Brașov, jud. Brașov", "label": "same", "split": "test", "why": "reordered"}
+{"id": "PR-086", "kind": "person", "a": "Ruxandra Drăgan", "b": "DRAGAN RUXANDRA", "label": "same", "split": "tune", "why": "order swap + case / diacritics"}
+{"id": "PR-087", "kind": "address", "a": "Str. Unirii nr. 50, Ploiești", "b": "Strada Unirii, nr. 50, Ploiești, Județ Prahova", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-088", "kind": "address", "a": "Str. Nicolae Titulescu nr. 55, Constanța", "b": "Aleea Nicolae Titulescu 55, Constanța", "label": "different", "split": "tune", "why": "Str. vs Al., same name and number"}
+{"id": "PR-089", "kind": "address", "a": "Str. Unirii nr. 10, Baia Mare", "b": "Strada Unirea 10, Baia Mare", "label": "different", "split": "tune", "why": "near-identical street name"}
+{"id": "PR-090", "kind": "address", "a": "Str. Crinului nr. 89, Craiova, jud. Dolj", "b": "Strada Crinului 89, Bacău", "label": "different", "split": "test", "why": "different city"}
+{"id": "PR-091", "kind": "address", "a": "Bd. Splai Mureș nr. 19, Baia Mare, jud. Maramureș", "b": "Bulevardul Splai Mureș 19, Baia Mare", "label": "same", "split": "test", "why": "type abbreviated vs full"}
+{"id": "PR-092", "kind": "address", "a": "Strada Republicii 79, Oradea", "b": "Str. Republicii nr. 79, Oradea, jud. Bihor", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-093", "kind": "address", "a": "Str. Unirii nr. 13, Târgu Mureș, jud. Mureș", "b": "Strada Unirii 13, Târgu Mureș", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-094", "kind": "address", "a": "Al. Traian nr. 26, Iași, jud. Iași", "b": "Aleea Traian 26, Iași", "label": "same", "split": "tune", "why": "type abbreviated vs full"}
+{"id": "PR-095", "kind": "person", "a": "Ruxandra Șerban", "b": "RUXANDRA ȘERBAN", "label": "same", "split": "tune", "why": "case / diacritics"}
+{"id": "PR-096", "kind": "person", "a": "Ion Cojocaru", "b": "Cojocaru, Ion", "label": "same", "split": "test", "why": "surname-comma format"}
+{"id": "PR-097", "kind": "person", "a": "Marin Alexandru", "b": "Alexandru Marian", "label": "different", "split": "tune", "why": "1-letter surname change"}
+{"id": "PR-098", "kind": "person", "a": "Andrei Stoica", "b": "Stoica, Andrei", "label": "same", "split": "test", "why": "surname-comma format"}
+{"id": "PR-099", "kind": "address", "a": "Strada Școlii, nr. 86, Iași, Județ Iași", "b": "Bd. Horea nr. 86, Iași", "label": "different", "split": "test", "why": "type and street differ"}
+{"id": "PR-100", "kind": "address", "a": "Str. Fabrica de Glucoză nr. 70, București, Sector 3", "b": "Strada Fabrica de Glucoză 70, Sector 1, București", "label": "different", "split": "tune", "why": "different sector"}
+{"id": "PR-101", "kind": "address", "a": "Strada Libertății 16, Sibiu", "b": "STR. LIBERTATII NR. 16, SIBIU", "label": "same", "split": "test", "why": "diacritics / case"}
+{"id": "PR-102", "kind": "address", "a": "Str. Mihai Eminescu nr. 84, București, Sector 5", "b": "Strada Mihai Eminescu 84, Sector 4, București", "label": "different", "split": "tune", "why": "different sector"}
+{"id": "PR-103", "kind": "address", "a": "Al. Livezilor nr. 15, Craiova, jud. Dolj", "b": "Aleea Livezilor 15, Craiova", "label": "same", "split": "tune", "why": "type abbreviated vs full"}
+{"id": "PR-104", "kind": "address", "a": "Calea Bucegi nr. 21, Constanța", "b": "Calea Bucegi, nr. 21, Constanța, Județ Constanța", "label": "same", "split": "test", "why": "county present vs absent"}
+{"id": "PR-105", "kind": "address", "a": "Galați, Strada Libertății 76", "b": "Str. Libertății nr. 76, Galați, jud. Galați", "label": "same", "split": "tune", "why": "reordered"}
+{"id": "PR-106", "kind": "address", "a": "Str. Școlii nr. 29, Galați", "b": "Str. Scolii nr. 29, Galati", "label": "same", "split": "test", "why": "diacritics / case"}
+{"id": "PR-107", "kind": "person", "a": "Ionuț Țurcanu", "b": "Ionut Turcanu", "label": "same", "split": "test", "why": "case / diacritics"}
+{"id": "PR-108", "kind": "address", "a": "Str. Libertății nr. 32, bl. A2, Brașov, jud. Brașov", "b": "Strada Libertății, nr. 32, Brașov, Județ Brașov", "label": "same", "split": "tune", "why": "block / apartment omitted"}
+{"id": "PR-109", "kind": "address", "a": "Str. Unirii nr. 88, Brașov", "b": "Str. Unirii nr. 88, Brașov, jud. Brașov", "label": "same", "split": "test", "why": "formatting variant"}
+{"id": "PR-110", "kind": "person", "a": "Valentin Bălan", "b": "Balan Valentin", "label": "same", "split": "tune", "why": "order swap + case / diacritics"}
+{"id": "PR-111", "kind": "address", "a": "Calea Mihai Eminescu 36, Arad", "b": "Calea Mihai Eminescu, nr. 46, Arad, Județ Arad", "label": "different", "split": "test", "why": "different number"}
+{"id": "PR-112", "kind": "person", "a": "Alina Constantin", "b": "Andrei Constantin", "label": "different", "split": "tune", "why": "same surname, other first name"}
+{"id": "PR-113", "kind": "address", "a": "Str. Gării nr. 53, bl. D3, Bacău", "b": "Str. Gării nr. 53, Bacău, jud. Bacău", "label": "same", "split": "test", "why": "block / apartment omitted"}
+{"id": "PR-114", "kind": "address", "a": "Str. Dorobanților nr. 35, Iași, jud. Iași", "b": "Strada Dorobanților, nr. 35A, Iași, Județ Iași", "label": "different", "split": "tune", "why": "different number"}
+{"id": "PR-115", "kind": "address", "a": "Strada Ștefan cel Mare, nr. 86, Brașov, Județ Brașov", "b": "Calea Ștefan cel Mare nr. 86, Brașov", "label": "different", "split": "test", "why": "Str. vs Calea, same name and number"}
+{"id": "PR-116", "kind": "address", "a": "Str. Decebal nr. 2, Constanța, jud. Constanța", "b": "Bulevardul Aviatorilor, nr. 2, Constanța, Județ Constanța", "label": "different", "split": "tune", "why": "type and street differ"}
+{"id": "PR-117", "kind": "person", "a": "Mihai Dumitrescu", "b": "DUMITRESCU MIHAELA", "label": "different", "split": "tune", "why": "near first name"}
+{"id": "PR-118", "kind": "person", "a": "Dobre Elena", "b": "DOBRA ELENA", "label": "different", "split": "tune", "why": "1-letter surname change"}
+{"id": "PR-119", "kind": "address", "a": "Str. Victoriei nr. 21, Craiova", "b": "Strada Victoriei Noi, nr. 21, Craiova, Județ Dolj", "label": "different", "split": "tune", "why": "near-identical street name"}
+{"id": "PR-120", "kind": "address", "a": "Strada Morii, nr. 42, Târgu Mureș, Județ Mureș", "b": "STR. MORII NR. 42, TARGU MURES, JUD. MURES", "label": "same", "split": "test", "why": "diacritics / case"}
+{"id": "PR-121", "kind": "address", "a": "Strada Teilor 96, Ploiești", "b": "Str. Teilor nr. 96, Ploiești, jud. Prahova", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-122", "kind": "address", "a": "Șos. Decebal nr. 47, Baia Mare, jud. Maramureș", "b": "Șoseaua Decebal, nr. 47, Baia Mare, Județ Maramureș", "label": "same", "split": "test", "why": "type abbreviated vs full"}
+{"id": "PR-123", "kind": "address", "a": "Bulevardul Fagului, nr. 89, Iași, Județ Iași", "b": "BULEVARDUL FAGULUI, NR. 89, IASI, JUDET IASI", "label": "same", "split": "test", "why": "diacritics / case"}
+{"id": "PR-124", "kind": "address", "a": "Calea Unirii, nr. 11, Constanța, Județ Constanța", "b": "Calea Unirii nr. 13, Constanța, jud. Constanța", "label": "different", "split": "tune", "why": "different number"}
+{"id": "PR-125", "kind": "person", "a": "Mihai Neagu", "b": "NEAGU MIHAI", "label": "same", "split": "tune", "why": "order swap"}
+{"id": "PR-126", "kind": "person", "a": "Ștefan Lungu", "b": "Ștefana Lungu", "label": "different", "split": "tune", "why": "near first name"}
+{"id": "PR-127", "kind": "address", "a": "Bulevardul Avram Iancu 48, Craiova", "b": "Bd. Avram Iancu nr. 48, Craiova", "label": "same", "split": "tune", "why": "diacritics / case"}
+{"id": "PR-128", "kind": "person", "a": "Florin Neagu", "b": "Cristina Gheorghe", "label": "different", "split": "test", "why": "unrelated people"}
+{"id": "PR-129", "kind": "address", "a": "Str. Mihai Eminescu nr. 37, București, Sector 1", "b": "Strada Mihai Eminescu 37, Sector 3, București", "label": "different", "split": "test", "why": "different sector"}
+{"id": "PR-130", "kind": "person", "a": "Cristian Stoica", "b": "Tudor Stoica", "label": "different", "split": "tune", "why": "same surname, other first name"}
+{"id": "PR-131", "kind": "address", "a": "Șos. Eroilor nr. 37, Galați, jud. Galați", "b": "Șoseaua Eroilor 37, Galați", "label": "same", "split": "tune", "why": "type abbreviated vs full"}
+{"id": "PR-132", "kind": "person", "a": "Popa Elena", "b": "Elena Pop", "label": "different", "split": "test", "why": "1-letter surname change"}
+{"id": "PR-133", "kind": "person", "a": "Florin Vasilescu", "b": "VASILESCU FLORINA", "label": "different", "split": "test", "why": "near first name"}
+{"id": "PR-134", "kind": "person", "a": "BARBU MARIA", "b": "Maria Barba", "label": "different", "split": "test", "why": "1-letter surname change"}
+{"id": "PR-135", "kind": "person", "a": "Ion Constantin", "b": "CONSTANTIN IOANA", "label": "different", "split": "test", "why": "near first name"}
+{"id": "PR-136", "kind": "address", "a": "Str. Independenței nr. 7, Suceava, jud. Suceava", "b": "Strada Independenței 7, Suceava", "label": "same", "split": "tune", "why": "formatting variant"}
+{"id": "PR-137", "kind": "address", "a": "Str. Dorobanților nr. 86, bl. A0, sc. 3, ap. 56, Galați", "b": "Str. Dorobanților nr. 86, Galați, jud. Galați", "label": "same", "split": "tune", "why": "block / apartment omitted"}
+{"id": "PR-138", "kind": "person", "a": "Cristian Cojocaru", "b": "COJOCARU CRISTINA", "label": "different", "split": "test", "why": "near first name"}
+{"id": "PR-139", "kind": "person", "a": "Elena Toma", "b": "Elena Tomu", "label": "different", "split": "test", "why": "1-letter surname change"}
+{"id": "PR-140", "kind": "person", "a": "Ioana-Mădălina Șerban", "b": "ȘERBAN IOANA-MĂDĂLINA", "label": "same", "split": "test", "why": "order swap + case / diacritics"}
+{"id": "PR-141", "kind": "address", "a": "Strada Independenței, nr. 19, Craiova, Județ Dolj", "b": "STR. INDEPENDENTEI NR. 19, CRAIOVA", "label": "same", "split": "tune", "why": "diacritics / case"}
+{"id": "PR-142", "kind": "address", "a": "Strada Livezilor 18, Ploiești", "b": "Strada Livezilor, nr. 81, Ploiești, Județ Prahova", "label": "different", "split": "tune", "why": "different number"}
+{"id": "PR-143", "kind": "person", "a": "Alexandru Munteanu", "b": "MUNTEANU ALEXANDRU", "label": "same", "split": "test", "why": "order swap"}
+{"id": "PR-144", "kind": "person", "a": "Vlad Diaconu", "b": "DIACONU VLAD", "label": "same", "split": "test", "why": "order swap"}
+{"id": "PR-145", "kind": "address", "a": "Bd. Crinului nr. 89, Ploiești", "b": "Bulevardul Crinului 91, Ploiești", "label": "different", "split": "tune", "why": "different number"}
+{"id": "PR-146", "kind": "address", "a": "Str. Fabrica de Glucoză nr. 84, București, Sector 3", "b": "Strada Fabrica de Glucoză, nr. 84, sect. 3, București", "label": "same", "split": "tune", "why": "Bucharest sector formatting"}
+{"id": "PR-147", "kind": "address", "a": "Calea Horea, nr. 36, Pitești, Județ Argeș", "b": "Calea Horea Cloșca nr. 36, Pitești", "label": "different", "split": "test", "why": "near-identical street name"}
+{"id": "PR-148", "kind": "address", "a": "Strada Victoriei, nr. 83, Baia Mare, Județ Maramureș", "b": "Str. Victoriei nr. 183, Baia Mare, jud. Maramureș", "label": "different", "split": "test", "why": "different number"}
+{"id": "PR-149", "kind": "address", "a": "Str. Aviatorilor nr. 80, Arad", "b": "Calea Aviatorilor, nr. 80, Arad, Județ Arad", "label": "different", "split": "test", "why": "Str. vs Calea, same name and number"}
+{"id": "PR-150", "kind": "address", "a": "Calea Mihai Eminescu, nr. 71, Timișoara, Județ Timiș", "b": "Calea Mihai Eminescu nr. 81, Timișoara", "label": "different", "split": "test", "why": "different number"}

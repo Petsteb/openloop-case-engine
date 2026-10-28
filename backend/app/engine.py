@@ -445,8 +445,9 @@ def _evaluate(st: dict, req_id: str) -> dict:
                     "same street, number, city and postal code; only the street type differs", "evidence": ev,
                     "details": {"learned_check": learned["id"]}}
         j = judge("address", a, b)
-        if j["top"] == "same_address" and j["p_top"] >= j["threshold"]:
-            return {"status": "SATISFIED", "reason": f"Postal codes match; judge: same address p={j['p_top']}",
+        if j["auto_accept"]:
+            return {"status": "SATISFIED", "reason": f"Postal codes match; judge and similarity check agree: same address "
+                    f"(p={j['p_top']}, {j['second_opinion']['p_same']})",
                     "evidence": ev, "details": {"judge": j}}
         return {"status": "NEEDS_REVIEW", "reason": f"Postal codes match but judge is unsure "
                 f"(same {j['probs'].get('same_address')} / different {j['probs'].get('different_address')}, "
@@ -480,8 +481,9 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the signatory is not the administrator ({ruling['id']}); "
                     "a signed mandate is required", "evidence": ev, "details": {"kind": "signatory_differs"}}
         j = judge("person", s, adm)
-        if j["top"] == "same_person" and j["p_top"] >= j["threshold"]:
-            return {"status": "SATISFIED", "reason": f"Signatory = administrator (judge p={j['p_top']})", "evidence": ev,
+        if j["auto_accept"]:
+            return {"status": "SATISFIED", "reason": f"Signatory = administrator (judge p={j['p_top']}, similarity "
+                    f"{j['second_opinion']['p_same']})", "evidence": ev,
                     "details": {"judge": j}}
         return {"status": "NEEDS_REVIEW", "reason": f"Signatory vs administrator unclear (p_same={j['probs'].get('same_person')})",
                 "evidence": ev, "details": {"kind": "signatory_uncertain", "judge": j, "snippets": ev}}
@@ -590,7 +592,8 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     judge_view = None
     if d.get("judge"):
         judge_view = {"question": d["judge"]["question"], "probs": d["judge"]["probs"], "threshold": d["judge"]["threshold"],
-                      "source": d["judge"]["source"], "a": d["judge"]["a"], "b": d["judge"]["b"]}
+                      "source": d["judge"]["source"], "a": d["judge"]["a"], "b": d["judge"]["b"],
+                      "second_opinion": d["judge"].get("second_opinion")}
     case.emit("EXCEPTION_RAISED", AGENT, {
         "id": ex_id, "requirement_id": req_id, "kind": kind, "severity": severity, "title": title,
         "summary": summary or req["reason"], "rule": {"id": rule_id, "text": T.RULES[rule_id]},

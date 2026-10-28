@@ -72,7 +72,9 @@ def test_employee_issue_view_is_complete():
     assert {"id", "requirement_id", "title", "summary", "rule_id", "status", "notes", "judge"} <= set(ubo)
     assert ubo["summary"] and ubo["rule_id"] == "HR-04" and ubo["status"] == "open"
     addr = next(i for i in out if i["requirement_id"] == "R3")
-    assert addr["rule_id"] == "JQ-01" and addr["judge"]["probs"] and addr["judge"]["threshold"] == T.JUDGE_THRESHOLD
+    assert addr["rule_id"] == "JQ-01" and addr["judge"]["probs"]
+    assert addr["judge"]["threshold"] in (T.JUDGE_THRESHOLD, T.HEURISTIC_THRESHOLD)
+    assert addr["judge"]["second_opinion"]["threshold"] == T.HEURISTIC_THRESHOLD
     assert ubo["judge"] is None and ubo["notes"] == []
     # status filter, and a resolved issue keeps its ruling
     ScriptedAgent().handle(case, case.resolve(addr["id"], "same_address"))

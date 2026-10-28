@@ -1,0 +1,345 @@
+{
+ "heuristic": {
+  "thresholds": [
+   0.5,
+   0.6,
+   0.7,
+   0.8,
+   0.85,
+   0.9,
+   0.95,
+   0.99
+  ],
+  "n": {
+   "tune": 75,
+   "test": 75
+  },
+  "per_threshold": {
+   "0.5": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 57,
+     "auto_accept_rate": 0.76,
+     "false_approvals": 19,
+     "manual_review_rate": 0.24,
+     "accuracy_of_accepted": 0.6667
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 58,
+     "auto_accept_rate": 0.7733,
+     "false_approvals": 20,
+     "manual_review_rate": 0.2267,
+     "accuracy_of_accepted": 0.6552
+    }
+   },
+   "0.6": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 48,
+     "auto_accept_rate": 0.64,
+     "false_approvals": 12,
+     "manual_review_rate": 0.36,
+     "accuracy_of_accepted": 0.75
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 51,
+     "auto_accept_rate": 0.68,
+     "false_approvals": 14,
+     "manual_review_rate": 0.32,
+     "accuracy_of_accepted": 0.7255
+    }
+   },
+   "0.7": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 41,
+     "auto_accept_rate": 0.5467,
+     "false_approvals": 7,
+     "manual_review_rate": 0.4533,
+     "accuracy_of_accepted": 0.8293
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 44,
+     "auto_accept_rate": 0.5867,
+     "false_approvals": 8,
+     "manual_review_rate": 0.4133,
+     "accuracy_of_accepted": 0.8182
+    }
+   },
+   "0.8": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 31,
+     "auto_accept_rate": 0.4133,
+     "false_approvals": 0,
+     "manual_review_rate": 0.5867,
+     "accuracy_of_accepted": 1.0
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 31,
+     "auto_accept_rate": 0.4133,
+     "false_approvals": 0,
+     "manual_review_rate": 0.5867,
+     "accuracy_of_accepted": 1.0
+    }
+   },
+   "0.85": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 28,
+     "auto_accept_rate": 0.3733,
+     "false_approvals": 0,
+     "manual_review_rate": 0.6267,
+     "accuracy_of_accepted": 1.0
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 27,
+     "auto_accept_rate": 0.36,
+     "false_approvals": 0,
+     "manual_review_rate": 0.64,
+     "accuracy_of_accepted": 1.0
+    }
+   },
+   "0.9": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 28,
+     "auto_accept_rate": 0.3733,
+     "false_approvals": 0,
+     "manual_review_rate": 0.6267,
+     "accuracy_of_accepted": 1.0
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 26,
+     "auto_accept_rate": 0.3467,
+     "false_approvals": 0,
+     "manual_review_rate": 0.6533,
+     "accuracy_of_accepted": 1.0
+    }
+   },
+   "0.95": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 28,
+     "auto_accept_rate": 0.3733,
+     "false_approvals": 0,
+     "manual_review_rate": 0.6267,
+     "accuracy_of_accepted": 1.0
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 26,
+     "auto_accept_rate": 0.3467,
+     "false_approvals": 0,
+     "manual_review_rate": 0.6533,
+     "accuracy_of_accepted": 1.0
+    }
+   },
+   "0.99": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 0,
+     "auto_accept_rate": 0.0,
+     "false_approvals": 0,
+     "manual_review_rate": 1.0,
+     "accuracy_of_accepted": null
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 0,
+     "auto_accept_rate": 0.0,
+     "false_approvals": 0,
+     "manual_review_rate": 1.0,
+     "accuracy_of_accepted": null
+    }
+   }
+  },
+  "chosen": 0.8,
+  "test_at_chosen": {
+   "n": 75,
+   "auto_accepted": 31,
+   "auto_accept_rate": 0.4133,
+   "false_approvals": 0,
+   "manual_review_rate": 0.5867,
+   "accuracy_of_accepted": 1.0
+  },
+  "mode": "heuristic"
+ },
+ "featherless": {
+  "thresholds": [
+   0.5,
+   0.6,
+   0.7,
+   0.8,
+   0.85,
+   0.9,
+   0.95,
+   0.99
+  ],
+  "n": {
+   "tune": 75,
+   "test": 75
+  },
+  "per_threshold": {
+   "0.5": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.6": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.7": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.8": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.85": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.9": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 4,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9048
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.95": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 41,
+     "auto_accept_rate": 0.5467,
+     "false_approvals": 3,
+     "manual_review_rate": 0.4533,
+     "accuracy_of_accepted": 0.9268
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 42,
+     "auto_accept_rate": 0.56,
+     "false_approvals": 3,
+     "manual_review_rate": 0.44,
+     "accuracy_of_accepted": 0.9286
+    }
+   },
+   "0.99": {
+    "tune": {
+     "n": 75,
+     "auto_accepted": 41,
+     "auto_accept_rate": 0.5467,
+     "false_approvals": 3,
+     "manual_review_rate": 0.4533,
+     "accuracy_of_accepted": 0.9268
+    },
+    "test": {
+     "n": 75,
+     "auto_accepted": 41,
+     "auto_accept_rate": 0.5467,
+     "false_approvals": 2,
+     "manual_review_rate": 0.4533,
+     "accuracy_of_accepted": 0.9512
+    }
+   }
+  },
+  "chosen": null,
+  "test_at_chosen": null,
+  "mode": "featherless",
+  "model": "featherless-ai/gemma-4-26B-A4B-classifier",
+  "calls": {
+   "live": 0,
+   "cached": 150,
+   "failed": 0
+  }
+ }
+}

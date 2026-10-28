@@ -12,7 +12,8 @@ UBO_THRESHOLD_PCT = 25        # beneficial-owner threshold (Law 129/2019, AMLR)
 DSCR_MIN = 1.2
 REMINDER_AFTER_DAYS = 3
 AMLR_REPORT_DAYS = 14         # AMLR: report register discrepancies (verify the article number on EUR-Lex)
-JUDGE_THRESHOLD = 0.9         # auto-accept fuzzy matches only at or above this
+JUDGE_THRESHOLD = 0.9         # classifier (Featherless) must reach this...
+HEURISTIC_THRESHOLD = 0.8     # ...and the independent similarity check this (calibrated: 0 false approvals)
 
 DOC_LABELS = {
     "application": "Loan application",
@@ -63,8 +64,10 @@ RULES = {
     "HR-06": "Registered-office postal code must match across documents.",
     "HR-07": f"DSCR = EBITDA / (existing + new annual debt service) must be ≥ {DSCR_MIN}.",
     "HR-08": "Fiscal certificate must show no outstanding tax obligations.",
-    "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if p ≥ {JUDGE_THRESHOLD}.",
-    "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if p ≥ {JUDGE_THRESHOLD}.",
+    "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if the classifier (p ≥ {JUDGE_THRESHOLD}) "
+             f"and an independent similarity check (p ≥ {HEURISTIC_THRESHOLD}) agree.",
+    "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if the classifier "
+             f"(p ≥ {JUDGE_THRESHOLD}) and an independent similarity check (p ≥ {HEURISTIC_THRESHOLD}) agree.",
     "SR-01": "An employee changed the client's contact details and then started a credit action for the same client "
              "within 48 hours, without client confirmation.",
     "GATE-01": "Only actions allowed by the current case state may run.",
