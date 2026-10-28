@@ -111,78 +111,162 @@ def _address(c: dict) -> str:
     return f"{c['street']}, {c['city']}, Județ {c['county']}"
 
 
+FOUNDED = {"verde": 2014, "carpatic": 2009, "delta": 2018, "nord": 2012, "medica": 2016, "solaris": 2011, "atelier": 2020}
+
+
+def _reg(c: dict) -> str:
+    """The company's (synthetic) 14-character trade-register number; serials sit at the top of the range."""
+    return S.onrc_number(FOUNDED[c["id"]], 990000 + int(c["cui"][-3:]), c["county"])
+
+
+def _tribunal(c: dict) -> str:
+    return f"Oficiul Registrului Comerțului de pe lângă Tribunalul {c['county']}"
+
+
 def application(c: dict) -> str:
-    return f"""CERERE DE FINANȚARE — IMM
+    return f"""CERERE DE FINANȚARE — IMM (credit pentru capital de lucru)
+Date generale despre solicitant
 Solicitant: {c['legal_name']}
 CUI: {c['cui']}
-Cod CAEN principal: {c['caen']}
+Număr de ordine în registrul comerțului: {_reg(c)}
 Sediu social: {c['street']}, {c['city']}, jud. {c['county']}
 Cod poștal: {c['postal_code']}
+Activitatea principală: {c['caen']}
+Cifra de afaceri (ultimul an încheiat): {_ron(c['turnover'])}
+Telefon / e-mail: 07•• ••• {c['client_id'][-3:]} / {c['email']}
+Finanțarea solicitată
 Produs solicitat: Credit capital de lucru
 Suma solicitată: {_ron(c['loan'])}
 Perioada: 36 luni
+Garanții propuse: ipotecă mobiliară asupra stocurilor și creanțelor; fideiusiunea asociaților
 Rată anuală estimată credit nou: {_ron(c['new_service'])}
-Persoană de contact: {c['email']}
+Aspecte legale: litigii NU · popriri sau executare silită {'DA' if c.get('tax_debt') else 'NU'} · insolvență NU
+Declar că am luat la cunoștință consultarea Centralei Riscului de Credit (CRC) și a Centralei Incidentelor de Plăți.
 Reprezentant legal / semnatar: {c.get('signatory') or _name(c['admin'])}
 Data cererii: {{issued}}"""
 
 
 def financials(c: dict) -> str:
-    return f"""SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS (formular F10/F20)
+    dep = round(c["ebitda"] * 0.22, -3)
+    interest = round(c["existing_service"] * 0.3, -3)
+    gross = c["ebitda"] - dep - interest
+    tax = max(0, round(gross * 0.16, -3))
+    return f"""SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS (formularele 10 și 20, depuse la ANAF)
+Județul: {c['county']} · Număr din registrul comerțului: {_reg(c)}
 Entitate: {c['legal_name']}
 CUI: {c['cui']}
-Cifra de afaceri netă: {_ron(c['turnover'])}
+Activitatea preponderentă: {c['caen']} · Forma de proprietate: 35
+Contul de profit și pierdere (F20)
+rd. 01 Cifra de afaceri netă: {_ron(c['turnover'])}
+rd. 28 Cheltuieli de exploatare privind amortizarea: {_ron(dep)}
+rd. 55 Profitul din exploatare: {_ron(c['ebitda'] - dep)}
+rd. 68 Cheltuieli privind dobânzile: {_ron(interest)}
+rd. 76 Profitul brut: {_ron(gross)}
+rd. 78 Impozitul pe profit: {_ron(tax)}
+rd. 83 Profit net: {_ron(gross - tax)}
+Indicatori din balanța de verificare la 31.12.2025 (anexă)
 EBITDA: {_ron(c['ebitda'])}
 Serviciul anual al datoriei existente: {_ron(c['existing_service'])}
-Profit net: {_ron(c['net_profit'])}
-Număr mediu de salariați: {max(3, int(c['turnover'] // 250_000))}"""
+Număr mediu de salariați: {max(3, int(c['turnover'] // 250_000))}
+Întocmit: expert contabil (CECCAR) · Administrator: {_name(c['admin'])}"""
+
+
+def _bo_block(c: dict, o: dict) -> str:
+    return (f"Beneficiar real: {_name(o)} — {o['pct']:g}%\n"
+            f"  CNP: {o['cnp']} · cetățenie română · domiciliul în {c['city']}, jud. {c['county']}\n"
+            f"  Descriere: deține {o['pct']:g}% din părțile sociale și drepturile de vot")
 
 
 def ubo_declaration(c: dict) -> str:
-    lines = [f"Beneficiar real: {_name(o)} — {o['pct']:g}%" for o in c["owners"] if o["pct"] >= 25]
-    return ("DECLARAȚIE PRIVIND BENEFICIARUL REAL (Legea nr. 129/2019, art. 56)\n"
-            f"Societate: {c['legal_name']}\nCUI: {c['cui']}\n" + "\n".join(lines)
-            + "\nModalitatea de exercitare a controlului: deținere de părți sociale\nData declarației: {issued}")
+    blocks = "\n".join(_bo_block(c, o) for o in c["owners"] if o["pct"] >= 25)
+    return f"""MINISTERUL JUSTIȚIEI · OFICIUL NAȚIONAL AL REGISTRULUI COMERȚULUI
+{_tribunal(c)}
+Formular nr. 6A — declarație pe proprie răspundere, sub semnătură privată
+DECLARAȚIE PRIVIND BENEFICIARUL REAL (actualizare)
+Societate: {c['legal_name']}
+CUI: {c['cui']}
+Număr de ordine în registrul comerțului: {_reg(c)} · EUID: ROONRC.{_reg(c)}
+Subsemnatul {_name(c['admin'])}, în calitate de reprezentant legal, declar pe propria răspundere, în conformitate cu
+art. 56 din Legea nr. 129/2019 și cunoscând dispozițiile art. 326 Cod penal, că beneficiarii reali sunt:
+{blocks}
+Temei: art. 4 alin. (2) lit. a) pct. 1 din Legea nr. 129/2019 (deținere de părți sociale)
+Persoană desemnată pentru comunicări: {_name(c['admin'])}
+Data declarației: {{issued}}"""
 
 
 def id_card(o: dict) -> str:
-    return S.ID_TEMPLATE.format(first=o["first"], last=o["last"], cnp_masked=o["cnp"], valid_until="12.03.2031")
+    return S.id_text(o["first"], o["last"], o["cnp"])
+
+
+def _associate(o: dict, capital: int) -> str:
+    return (f"Asociat: {o['last']} {o['first']} — {o['pct']:g}%\n"
+            f"  cetățenie română · aport la capital {capital * o['pct'] / 100:g} RON · "
+            f"cota de participare la beneficii și pierderi {o['pct']:g}%")
 
 
 def onrc(c: dict) -> str:
-    owners = "\n".join(f"Asociat: {o['last']} {o['first']} — {o['pct']:g}%" for o in c["owners"])
-    return f"""CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
+    capital = 200 * max(1, len(c["owners"]))
+    owners = "\n".join(_associate(o, capital) for o in c["owners"])
+    status = c.get("registry_status", "ACTIVĂ")
+    facts = "suspendare temporară a activității înregistrată" if status != "ACTIVĂ" else "nu există înregistrări"
+    return f"""MINISTERUL JUSTIȚIEI · OFICIUL NAȚIONAL AL REGISTRULUI COMERȚULUI
+{_tribunal(c)}
+CERTIFICAT CONSTATATOR (de bază)
+Oficiul Național al Registrului Comerțului certifică informațiile referitoare la {c['legal_name']}
+INFORMAȚII DE IDENTIFICARE
 Denumire: {c['legal_name']}
+Număr de ordine în registrul comerțului: {_reg(c)}
+Identificator unic la nivel european (EUID): ROONRC.{_reg(c)}
 Cod unic de înregistrare: {c['cui']}
-Stare firmă: {c.get('registry_status', 'ACTIVĂ')}
+Forma de organizare: societate cu răspundere limitată · durată nelimitată
+Stare firmă: {status}
+SEDIU SOCIAL
 Sediul social: {_address(c)}
 Cod poștal: {c['postal_code']}
-Activitate principală: {c['caen']}
-Administrator: {c['admin']['last']} {c['admin']['first']}
+Act sediu: contract de închiriere nr. {int(c['cui'][-2:]) + 3}/{FOUNDED[c['id']]}, valabil până la 31.12.2028
+CAPITAL SOCIAL: {capital} RON, integral vărsat
+ASOCIAȚI PERSOANE FIZICE
 {owners}
+PERSOANE ÎMPUTERNICITE
+Administrator: {c['admin']['last']} {c['admin']['first']}
+  puteri depline · reprezentare individuală · mandat pe durată nelimitată
+ACTIVITATEA PRINCIPALĂ (CAEN Rev. 2): {c['caen']}
+FAPTE (art. 21 lit. e-h din Legea nr. 26/1990): {facts} · insolvență: nu
+Informațiile au la bază înregistrările existente în registrul comerțului la data eliberării.
 Data eliberării: {{issued}}"""
 
 
 def fiscal(c: dict) -> str:
-    return f"""CERTIFICAT DE ATESTARE FISCALĂ — ANAF
+    debt = c.get("tax_debt")
+    owed = "DA — 38.410 RON (impozit pe profit 21.900 RON, contribuții sociale 16.510 RON)" if debt else "NU"
+    return f"""MINISTERUL FINANȚELOR · AGENȚIA NAȚIONALĂ DE ADMINISTRARE FISCALĂ
+Direcția Generală Regională a Finanțelor Publice (fictiv)
+CERTIFICAT DE ATESTARE FISCALĂ pentru persoane juridice
 Contribuabil: {c['legal_name']}
 CUI: {c['cui']}
+Număr de ordine în registrul comerțului: {_reg(c)}
 Domiciliul fiscal: {_address(c)}
-Obligații fiscale restante: {'DA — 38.410 RON (impozit pe profit, contribuții)' if c.get('tax_debt') else 'NU'}
-Data eliberării: {{issued}}"""
+Perioada de utilizare: 30 de zile de la data eliberării
+Secțiunea A — obligații fiscale restante la data eliberării
+Obligații fiscale restante: {owed}
+Secțiunea D — alte mențiuni: {'nu există o eșalonare la plată aprobată' if debt else 'nu este cazul'}
+Data eliberării: {{issued}}
+Conducătorul organului fiscal emitent (semnătură electronică)"""
 
 
 def address_proof(c: dict) -> str:
     return f"""CONTRACT DE ÎNCHIRIERE — SEDIU SOCIAL (extras)
+Locator: persoană fizică (fictiv) · Locatar: {c['legal_name']}
 Societate: {c['legal_name']}
 CUI: {c['cui']}
 Sediu social: {c['street']}, {c['city']}, jud. {c['county']}
 Cod poștal: {c['postal_code']}
+Durata: până la 31.12.2028
 Data: {{issued}}"""
 
 
 def mandate(c: dict) -> str:
-    return f"""ÎMPUTERNICIRE
+    return f"""ÎMPUTERNICIRE (procură specială sub semnătură privată)
 Societate: {c['legal_name']}
 CUI: {c['cui']}
 Administrator: {c['admin']['last']} {c['admin']['first']}
