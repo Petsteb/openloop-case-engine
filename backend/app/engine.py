@@ -3,7 +3,8 @@
 Tools are the only way the agent touches a case. Every action tool passes the gate,
 and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate verdict).
 """
-from datetime import datetime, timedelta
+import re
+from datetime import datetime, timedelta, timezone
 
 from . import extract, extractors, learner, registry, rules, sequence
 from . import template as T
@@ -44,7 +45,8 @@ def reduce(events: list[dict]) -> dict:
                 doc = {**p, "received_at": e["sim_time"], "seq": e["seq"]}
                 st["docs"][p["id"]] = doc
                 for req in st["requests"].values():
-                    if (req["status"] == "PENDING" and not p.get("quarantined")  # a rejected upload fulfils nothing
+                    if (req["status"] == "PENDING" and not p.get("quarantined") and not p.get("unreadable")
+                            # a rejected or not-yet-readable upload fulfils nothing
                             and keys_match(req["key"], doc_key(doc))):
                         req["status"] = "FULFILLED"
             case "SCENARIO_DELIVERED":
@@ -83,6 +85,47 @@ def reduce(events: list[dict]) -> dict:
     return st
 
 
+CUI_RE = re.compile(r"(?:CUI|Cod unic de înregistrare)\s*:\s*(?:RO)?\s*(\d{2,10})", re.I)
+DATE_RE = re.compile(r"Data(?: eliberării| declarației| cererii)?\s*:\s*(\d{2})\.(\d{2})\.(\d{4})")
+
+
+def _issued_from_text(text: str) -> datetime | None:
+    m = DATE_RE.search(text or "")
+    if not m:
+        return None
+    day, month, year = (int(g) for g in m.groups())
+    return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
+
+
+def _quarantine_reason(doc_type: str, person: str, text: str) -> str | None:
+    """Another company's document, or an ID card for another person, is never used as evidence."""
+    m = CUI_RE.search(text or "")
+    if m and m.group(1) != T.CASE_CUI:
+        return "it shows another company's tax ID"  # the other firm's number stays out of every summary
+    if doc_type == "id_card" and person:
+        last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
+        first = re.search(r"^Prenume\s*:\s*(.+)$", text or "", re.M)
+        if last and first and not rules.same_name_exact(f"{first.group(1)} {last.group(1)}", person):
+            return "it is an identity card for another person"
+    return None
+
+
+def pending_confirmations(events: list[dict]) -> list[dict]:
+    """What the client must confirm in the portal: the latest unanswered staff contact change, and bureau consent."""
+    answered = {e["payload"].get("ref_seq") for e in events if e["type"] in ("CLIENT_CONFIRMATION", "CLIENT_DISPUTE")}
+    out = []
+    changes = [e for e in events if e["type"] == "STAFF_CONTACT_CHANGE" and e["seq"] not in answered]
+    if changes:
+        c = changes[-1]
+        field, new = c["payload"].get("field", "contact details"), c["payload"].get("new")
+        out.append({"kind": "contact_change", "ref_seq": c["seq"],
+                    "text": f"We updated your {field}{f' to {new}' if new else ''}. Did you request this change?"})
+    if not any(e["type"] == "CLIENT_CONSENT" for e in events):
+        out.append({"kind": "credit_check_consent", "ref_seq": None,
+                    "text": "We need your consent to check your company's credit history with the Credit Bureau."})
+    return out
+
+
 def _internal_summary(spec: dict) -> str:
     p, who = spec["payload"], spec["actor"].get("id", "?")
     if spec["type"] == "STAFF_CONTACT_CHANGE":
@@ -106,7 +149,8 @@ def keys_match(a: str, b: str) -> bool:
 
 
 def latest_doc(st: dict, doc_type: str) -> dict | None:
-    docs = [d for d in st["docs"].values() if d["type"] == doc_type and not d.get("quarantined")]
+    docs = [d for d in st["docs"].values()
+            if d["type"] == doc_type and not d.get("quarantined") and not d.get("unreadable")]
     return max(docs, key=lambda d: (d["issued_at"], d["seq"])) if docs else None
 
 
@@ -223,11 +267,71 @@ class Case:
             payload = {"id": doc_id, **doc}
             noun = "Email" if doc["type"] == "email" else "Document"
             received.append(self.emit("DOCUMENT_RECEIVED", CLIENT, payload, f"{noun} received: {doc['name']}"))
-            for t in self.state()["timers"].values():  # the document arrived: its reminder is moot
-                if t["kind"] == "reminder" and t["status"] == "PENDING" and keys_match(t.get("key", ""), doc_key(payload)):
-                    self.emit("TIMER_CANCELLED", ENGINE, {"id": t["id"], "reason": "Document received"},
-                              f"Timer cancelled: {t['label']}")
+            self._cancel_reminders(payload)
         return received
+
+    def _cancel_reminders(self, payload: dict) -> None:
+        for t in self.state()["timers"].values():  # the document arrived: its reminder is moot
+            if t["kind"] == "reminder" and t["status"] == "PENDING" and keys_match(t.get("key", ""), doc_key(payload)):
+                self.emit("TIMER_CANCELLED", ENGINE, {"id": t["id"], "reason": "Document received"},
+                          f"Timer cancelled: {t['label']}")
+
+    def receive_upload(self, key: str, filename: str, text: str, pdf: dict | None = None) -> dict:
+        """A client upload from the portal. Wrong company or wrong person: kept, but quarantined (fulfils nothing).
+        A PDF is stored as received-but-unreadable until it is read (no extraction in the demo)."""
+        doc_type, _, person = key.partition(":")
+        name = T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else "")
+        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": f"{name} (upload)", "text": text,
+                   "issued_at": (_issued_from_text(text) or self.now).isoformat(), "source": "upload",
+                   "filename": filename, **({"person": person} if person else {})}
+        reason = _quarantine_reason(doc_type, person, text)
+        if reason:
+            payload.update(quarantined=True, quarantine_reason=reason)
+            if (m := CUI_RE.search(text or "")) and m.group(1) != T.CASE_CUI:
+                payload["quarantine_cui"] = m.group(1)  # for the bank's viewer only
+        elif pdf:
+            payload.update(unreadable=True, **pdf)
+        summary = (f"Upload not accepted: {name} ({reason})" if reason else
+                   f"PDF uploaded, waiting for manual reading: {name}" if pdf else f"Document uploaded by client: {name}")
+        ev = self.emit("DOCUMENT_RECEIVED", CLIENT, payload, summary)
+        if not (reason or pdf):
+            self._cancel_reminders(payload)
+        return ev
+
+    def client_confirm(self, kind: str, answer: str) -> dict:
+        """The client answers a portal confirmation; 'no' to a staff contact change raises a card for the bank."""
+        item = next((c for c in pending_confirmations(self.ledger.events) if c["kind"] == kind), None)
+        if item is None:
+            raise ValueError("nothing to confirm")
+        if kind == "credit_check_consent":
+            return self.emit("CLIENT_CONSENT", CLIENT, {"scope": "credit_bureau", "granted": answer == "yes",
+                                                       "channel": "portal"},
+                             f"Client {'gave' if answer == 'yes' else 'refused'} consent for the credit bureau check")
+        change = next(e for e in self.ledger.events if e["seq"] == item["ref_seq"])
+        payload = {"client_id": change["payload"]["client_id"], "channel": "portal", "ref_seq": change["seq"]}
+        if answer == "yes":
+            ev = self.emit("CLIENT_CONFIRMATION", CLIENT, payload, "Client confirmed the contact change in the portal")
+            for x in self.state()["exceptions"].values():
+                if x["kind"] == "sequence_insider" and x["status"] == "OPEN" and x.get("first_seq") == change["seq"]:
+                    self.emit("EXCEPTION_ANNOTATED", ENGINE, {"id": x["id"], "note": f"Client confirmed this change in "
+                              f"the portal (#{ev['seq']}), after the credit action"}, f"Note added to {x['id']}")
+            return ev
+        ev = self.emit("CLIENT_DISPUTE", CLIENT, payload, "Client says they did not request the contact change")
+        ex_id = self._next_id("EX", "exceptions")
+        staff, field = change["actor"].get("id"), change["payload"].get("field", "contact details")
+        self.emit("EXCEPTION_RAISED", ENGINE, {
+            "id": ex_id, "requirement_id": "MON", "kind": "client_dispute", "severity": "high",
+            "title": "Client says they did not request the contact change",
+            "summary": f"Employee {staff} changed the client's {field} (#{change['seq']}); the client disputes it in the "
+                       f"portal (#{ev['seq']}).",
+            "rule": {"id": "SR-01", "text": T.RULES["SR-01"]},
+            "snippets": [{"doc_id": None, "label": f"Ledger #{change['seq']}", "quote": change["summary"]},
+                         {"doc_id": None, "label": f"Ledger #{ev['seq']}", "quote": ev["summary"]}],
+            "judge": None, "first_seq": change["seq"], "then_seq": ev["seq"],
+            "actions": [{"id": "escalate_compliance", "label": "Put on hold and escalate to compliance"},
+                        {"id": "acknowledge", "label": "Acknowledge: the change was legitimate"}]},
+            f"{ex_id} raised: client disputes a staff contact change")
+        return ev
 
     def advance(self, days: float):
         """Generator: fires due timers in order (the caller lets the agent react to each), then lands on the target."""
@@ -257,7 +361,7 @@ class Case:
         ev = self.emit("EXCEPTION_RESOLVED", ANALYST, {"id": exception_id, "action_id": action_id, "note": note,
                                                        "requirement_id": ex["requirement_id"]},
                        f"Analyst resolved {exception_id}: {action_id}")
-        if ex["kind"] == "sequence_insider" and action_id == "escalate_compliance":
+        if ex["kind"] in ("sequence_insider", "client_dispute") and action_id == "escalate_compliance":
             self.emit("CASE_STATUS", ENGINE, {"status": "ON_HOLD", "reason": f"Escalated to compliance ({exception_id})"},
                       f"File on hold: {exception_id} escalated to compliance")
         return ev

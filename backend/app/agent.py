@@ -61,6 +61,8 @@ class ScriptedAgent(BaseAgent):
     def pipeline(self, case: Case, trigger: dict) -> None:
         p = trigger["payload"]
         if trigger["type"] == "DOCUMENT_RECEIVED":
+            if p.get("quarantined") or p.get("unreadable"):
+                return  # never evidence: another company's / person's file, or a PDF nobody has read yet
             self._email(case, p) if p["type"] == "email" else self._document(case, p)
         elif trigger["type"] == "TIMER_FIRED":
             self._timer(case, p)
