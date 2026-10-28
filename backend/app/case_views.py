@@ -62,9 +62,11 @@ CLIENT_RULE_TEXT: dict[str, str] = {
     "GATE-02": "Only a person at the bank can decide on your credit; the assistant never approves a loan.",
     "GATE-03": "We do not ask you for the same document twice while we are still waiting for it.",
     "SR-01": "Access to your file is limited and logged to keep your data safe.",
+    "SR-02": "If you tell us you did not ask for a change to your details, the bank reviews it and contacts you.",
 }
 
-CLIENT_EVENT_TYPES = ("DOCUMENT_RECEIVED", "DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS")
+CLIENT_EVENT_TYPES = ("DOCUMENT_RECEIVED", "DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS",
+                      "CLIENT_CONFIRMATION", "CLIENT_DISPUTE", "CLIENT_CONSENT")
 EMPLOYEE_HIDDEN_EVENT_TYPES = ("AGENT_STEP", "CHAT_TURN")   # the trace goes through explain_step; chat is audit only
 CLIENT_HIDDEN_EXCEPTION_KINDS = ("sequence_insider",)
 CLIENT_EVENT_FALLBACK = {"DOCUMENT_RECEIVED": "A document was received", "DOCUMENT_REQUESTED": "The bank asked you for a document",
@@ -101,6 +103,16 @@ def _client_case_event(status) -> str:
     return {"READY_FOR_DECISION": "Your file is complete and waiting for the bank's credit decision",
             "ON_HOLD": UNDER_REVIEW,
             "OPEN": "Your file is open again while the bank completes its checks"}.get(status, "Your file status changed")
+
+
+def _client_answer_event(e: dict) -> str:
+    """The client's own portal answers, in their words (the ledger summaries are written for the bank)."""
+    if e["type"] == "CLIENT_CONFIRMATION":
+        return "You confirmed the change to your contact details"
+    if e["type"] == "CLIENT_DISPUTE":
+        return "You told us you did not request the change to your contact details. Our team will contact you."
+    return ("You gave consent for the credit history check" if e["payload"].get("granted")
+            else "You did not give consent for the credit history check")
 
 
 def _check_ids() -> set[str]:
@@ -214,6 +226,7 @@ def _timeline_all(case: Case, role: str, since_day=None, until_day=None, types=N
             continue
         if role == "client":
             what = (_client_case_event(e["payload"].get("status")) if t == "CASE_STATUS"
+                    else _client_answer_event(e) if t.startswith("CLIENT_")
                     else _client_safe(e["summary"], CLIENT_EVENT_FALLBACK[t]))
         else:
             what = e["summary"]
@@ -446,7 +459,8 @@ def _client_history(rows: list[dict]) -> list[dict]:
         if r["type"] not in CLIENT_HISTORY_TYPES:
             continue
         if r["type"] == "DOCUMENT_RECEIVED":
-            what = ("Not accepted: it seems to belong to another company" if r["what"].startswith("Received but not")
+            what = ("Not accepted: it seems to be for another person" if "another person" in r["what"]
+                    else "Not accepted: it seems to belong to another company" if r["what"].startswith("Received but not")
                     else "Replaced by your newer upload" if r["what"].startswith("Superseded")
                     else "Received")
         else:
@@ -487,8 +501,20 @@ def document_detail(case: Case, role: str, doc_id: str) -> dict:
             "fields": fields, "rejected": list((ext or {}).get("payload", {}).get("unverified_quotes", [])),
             "injection_lines": list((ext or {}).get("payload", {}).get("injection_lines", [])),
             "used_by": _used_by(st, doc_id),
-            "validity": {"issued_day": _day(d["issued_at"]), "expires_day": expires, "expired": doc_expired(st, d)},
+            "validity": None if status in ("quarantined", "unreadable") else  # never checked, so no validity window
+                        {"issued_day": _day(d["issued_at"]), "expires_day": expires, "expired": doc_expired(st, d)},
+            "quarantine_reason": _bank_quarantine_reason(d),
             "history": history}
+
+
+def _bank_quarantine_reason(d: dict) -> str | None:
+    """Bank-only wording: names the other company's tax ID, which the client never sees."""
+    if not d.get("quarantined"):
+        return None
+    if d.get("quarantine_cui"):
+        return (f"The tax ID on this document ({d['quarantine_cui']}) belongs to another company, "
+                f"not to the applicant ({T.CASE_CUI}).")
+    return f"Not accepted: {d.get('quarantine_reason', 'quarantined')}."
 
 
 def version(case: Case) -> dict:

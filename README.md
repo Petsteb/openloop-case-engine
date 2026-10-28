@@ -62,6 +62,10 @@ Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and 
 11. **Outbox**: the client got one Romanian email per step: documents needed, reminders, file complete. Never anything internal.
 12. **Verify ledger**: the hash chain is intact, including every chat turn and email.
 
+**Two-screen moments.** Open the customer portal (`/client/`) beside the bank screen; both update live.
+- **After step 2:** on the portal, click "I consent" on the credit-check question. Then use "Try a wrong file (demo)": the upload shows "Not accepted", the client gets a Romanian email, and the bank's document viewer shows why (another company's tax ID).
+- **At step 9:** on the portal, answer "No, I didn't" to the contact-change question. This opens a second card for the bank (SR-02), and the client sees "Our team will contact you".
+
 ## Modes
 | Env | Values | Notes |
 |---|---|---|

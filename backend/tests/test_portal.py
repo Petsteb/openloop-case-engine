@@ -94,6 +94,28 @@ def test_contact_change_dispute_raises_a_card_and_can_hold_the_file():
     assert c.post("/api/cases/demo-1/client-confirm", json={"kind": "contact_change", "answer": "yes"}).status_code == 409
 
 
+def test_dispute_has_its_own_rule_and_a_client_visible_trace():
+    c.post("/api/demo/reset")
+    post("staff-phone-change")
+    v = c.post("/api/cases/demo-1/client-confirm", json={"kind": "contact_change", "answer": "no"}).json()
+    card = next(x for x in c.get("/api/cases/demo-1/bundle").json()["exceptions"] if x["kind"] == "client_dispute")
+    assert card["rule"]["id"] == "SR-02" and "credit action" not in card["rule"]["text"]
+    assert "nu ați solicitat" in v["emails"][-1]["body"]                                  # survives a reload
+    assert any("did not request the change" in t["what"] for t in v["timeline"])
+
+
+def test_quarantined_doc_detail_for_the_bank():
+    start()
+    c.post("/api/cases/demo-1/upload-sample", json={"key": "onrc_certificate", "variant": "wrong_company"})
+    docs = c.get("/api/cases/demo-1/documents", params={"role": "employee"}).json()
+    doc = next(d for d in docs if d["status"] == "quarantined")
+    bank = c.get(f"/api/cases/demo-1/documents/{doc['id']}", params={"role": "employee"}).json()
+    assert "30528174" in bank["quarantine_reason"] and bank["validity"] is None
+    assert "(upload)" not in bank["name"]
+    client = c.get(f"/api/cases/demo-1/documents/{doc['id']}").json()
+    assert "quarantine_reason" not in client and "30528174" not in json.dumps(client["history"])  # text is their own file
+
+
 def test_consent_is_recorded_once():
     c.post("/api/demo/reset")
     v = c.post("/api/cases/demo-1/client-confirm", json={"kind": "credit_check_consent", "answer": "yes"}).json()

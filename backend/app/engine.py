@@ -281,7 +281,7 @@ class Case:
         A PDF is stored as received-but-unreadable until it is read (no extraction in the demo)."""
         doc_type, _, person = key.partition(":")
         name = T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else "")
-        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": f"{name} (upload)", "text": text,
+        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
                    "issued_at": (_issued_from_text(text) or self.now).isoformat(), "source": "upload",
                    "filename": filename, **({"person": person} if person else {})}
         reason = _quarantine_reason(doc_type, person, text)
@@ -324,7 +324,7 @@ class Case:
             "title": "Client says they did not request the contact change",
             "summary": f"Employee {staff} changed the client's {field} (#{change['seq']}); the client disputes it in the "
                        f"portal (#{ev['seq']}).",
-            "rule": {"id": "SR-01", "text": T.RULES["SR-01"]},
+            "rule": {"id": "SR-02", "text": T.RULES["SR-02"]},
             "snippets": [{"doc_id": None, "label": f"Ledger #{change['seq']}", "quote": change["summary"]},
                          {"doc_id": None, "label": f"Ledger #{ev['seq']}", "quote": ev["summary"]}],
             "judge": None, "first_seq": change["seq"], "then_seq": ev["seq"],
