@@ -44,8 +44,8 @@ Each task is independent. Take them in order and stop at freeze.
 - [x] Backend tasks 1–4, 9, 12 + docs (`docs/design.md` → "API additions (v2)")
 - [x] React bank screen merged into `main`; two code reviews fixed
 - [x] Customer portal + document viewer backend (spec: `docs/superpowers/specs/2026-10-28-client-portal-design.md`)
-- [ ] Portal UI (`/client/`) + Documents tab (UI session, in progress)
-- [ ] Full live + offline run in the browser; fix integration issues
+- [x] Portal UI (`/client/`) + Documents tab (UI session; a last fix batch is in progress)
+- [x] Full live + offline two-screen run in the browser; integration fixes pushed
 - [ ] Deck + 3-min video script (`docs/pitch/`), using the `research/` folder for sources
 - [ ] 08:00 freeze: commit `web/dist`, tag `v1.0-freeze`; rehearse ×2; record; submit by 10:30
 

@@ -13,13 +13,13 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a certificate that expires while the file waits;
 - a client email that arrives at the wrong moment.
 
-## Status for Theo (updated 29 Oct, 00:30)
-**Works on `main`** (95 backend tests pass):
-- **Bank screen** (React, `web/`): requirements, triage cards, agent trace, case chat, client outbox, ledger check.
-- **The whole demo script below**, either live (Claude on Bedrock + Featherless judge) or fully offline.
-- **Customer portal + employee document viewer:** the backend is done (uploads, sample files, wrong-company quarantine, client confirmations, documents list/detail with per-file history). The UI is being built tonight (`web/src/client/`, Documents tab).
+## Status for Theo (updated 29 Oct, 01:00)
+**Works on `main`** (98 backend tests pass):
+- **Bank screen** (React, `web/`): requirements, triage cards, agent trace, case chat, client outbox, ledger check, document viewer with per-file history.
+- **Customer portal** (`/client/`): status, uploads (incl. a wrong-company demo file), confirmations, bank messages, documents, chat. It updates live next to the bank screen.
+- **The whole demo script below**, browser-tested both live (Claude on Bedrock + Featherless judge) and fully offline.
 
-**Still being done tonight by Petru + 2 Claude sessions:** the portal/viewer UI, then a live + offline integration run, then the deck and video script (last).
+**Still being done tonight by Petru + 2 Claude sessions:** a last UI fix batch, then the deck and video script.
 
 **Not done yet: what you can pick up** (details in `docs/TASKS.md`):
 1. **E2E tests** of the real UI with Playwright: the demo script, the portal upload, no console errors.
