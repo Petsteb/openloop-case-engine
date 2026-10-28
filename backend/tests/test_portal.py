@@ -142,6 +142,22 @@ def test_quarantined_doc_detail_for_the_bank():
     assert "quarantine_reason" not in client and "30528174" not in json.dumps(client["history"])  # text is their own file
 
 
+def test_an_id_card_sent_before_the_corrected_declaration_is_not_asked_for_again():
+    c.post("/api/demo/reset")
+    post("day0-pack")
+    post("onrc-cert")
+    for x in c.get("/api/cases/demo-1/bundle").json()["exceptions"]:
+        act = "same_address" if x["kind"] == "address_uncertain" else "confirm_discrepancy"
+        c.post(f"/api/cases/demo-1/exceptions/{x['id']}/resolve", json={"action_id": act})
+    pending = lambda: [r["key"] for r in CASES["demo-1"].state()["requests"].values() if r["status"] == "PENDING"]
+    radu = next(k for k in pending() if "Radu" in k)
+    c.post("/api/cases/demo-1/upload-sample", json={"key": radu})
+    assert not any("Radu" in k for k in pending())
+    for key in [k for k in pending() if k != "fiscal_certificate"]:   # then the declaration and Elena's ID
+        c.post("/api/cases/demo-1/upload-sample", json={"key": key})
+    assert CASES["demo-1"].state()["reqs"]["R2"]["status"] == "SATISFIED" and not any("id_card" in k for k in pending())
+
+
 def test_consent_is_recorded_once():
     c.post("/api/demo/reset")
     v = c.post("/api/cases/demo-1/client-confirm", json={"kind": "credit_check_consent", "answer": "yes"}).json()

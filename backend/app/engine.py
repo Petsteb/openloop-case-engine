@@ -538,12 +538,12 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "SATISFIED", "reason": f"Analyst dismissed the discrepancy ({ruling['id']}); owners have IDs",
                     "evidence": [], "details": {"analyst_override": ruling["id"], "decided_by": "analyst"}}
         if ruling and ruling["resolution"]["action_id"] == "confirm_discrepancy":
-            return {"status": "OPEN_WAITING", "reason": f"Discrepancy confirmed by analyst ({ruling['id']}); "
-                    "waiting for corrected UBO declaration + IDs", "evidence": [],
-                    "details": {"kind": "awaiting_corrected_declaration",
-                                "owners_without_id": rules.owners_without_id(
-                                    [o for o in X[onrc['id']].get('register_owners', []) if o['pct'] >= T.UBO_THRESHOLD_PCT]
-                                    if have(onrc) else [], ids)}}
+            missing = rules.owners_without_id([o for o in X[onrc['id']].get('register_owners', [])
+                                               if o['pct'] >= T.UBO_THRESHOLD_PCT] if have(onrc) else [], ids)
+            # the missing names are part of the reason, so an ID arriving first is recorded (no stale re-request)
+            return {"status": "OPEN_WAITING", "reason": f"Discrepancy confirmed by analyst ({ruling['id']}); waiting for "
+                    "a corrected UBO declaration" + (f" and IDs for {', '.join(n.title() for n in missing)}" if missing else ""),
+                    "evidence": [], "details": {"kind": "awaiting_corrected_declaration", "owners_without_id": missing}}
         if not have(onrc):
             missing_ids = rules.owners_without_id([o for o in declared if o["pct"] >= T.UBO_THRESHOLD_PCT], ids)
             labels = [T.DOC_LABELS["onrc_certificate"]] + [f"ID — {n}" for n in missing_ids]
