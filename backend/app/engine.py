@@ -5,7 +5,7 @@ and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate v
 """
 from datetime import datetime, timedelta
 
-from . import extract, registry, rules
+from . import extract, extractors, registry, rules
 from . import template as T
 from .judge import judge
 from .ledger import Ledger
@@ -77,7 +77,7 @@ def reduce(events: list[dict]) -> dict:
             case "CASE_STATUS":
                 st["status"] = p["status"]
             case "AGENT_STEP":
-                st["trace"].append({"seq": e["seq"], "sim_time": e["sim_time"], **p})
+                st["trace"].append({"seq": e["seq"], "sim_time": e["sim_time"], "by": e["actor"].get("id"), **p})
     return st
 
 
@@ -277,7 +277,7 @@ def t_get_document(case: Case, doc_id: str) -> dict:
 
 def t_extract_fields(case: Case, doc_id: str) -> dict:
     doc = case.state()["docs"][doc_id]
-    ex = extract.extract_scripted(doc["type"], doc["text"])
+    ex, extractor = extractors.extract(doc["type"], doc["text"])
     unverified = extract.verify_quotes(doc["text"], ex)
     if unverified:  # a field whose quote is not in the document can never be used as evidence
         ex["fields"] = [f for f in ex["fields"] if f["quote"] not in unverified]
@@ -286,9 +286,13 @@ def t_extract_fields(case: Case, doc_id: str) -> dict:
                 ex[k] = [o for o in ex[k] if o["quote"] not in unverified]
     injections = extract.scan_injection(doc["text"])
     case.emit("FIELDS_EXTRACTED", AGENT, {"doc_id": doc_id, "extraction": ex, "unverified_quotes": unverified,
-                                          "injection_lines": injections},
-              f"Extracted {len(ex['fields'])} fields from {doc['name']} (quotes verified: {not unverified})")
-    out = {f["field"]: f["value"] for f in ex["fields"]}
+                                          "injection_lines": injections, "extractor": extractor},
+              f"Extracted {len(ex['fields'])} fields from {doc['name']} via {extractor}"
+              + (f"; rejected {len(unverified)} field(s) whose quote is not in the document" if unverified else
+                 "; all quotes verified"))
+    out = {"extractor": extractor, **{f["field"]: f["value"] for f in ex["fields"]}}
+    if unverified:
+        out["rejected_unverified_quotes"] = unverified
     for k in ("declared_owners", "register_owners"):
         if k in ex:
             out[k] = [f"{o['name']} {o['pct']:g}%" for o in ex[k]]

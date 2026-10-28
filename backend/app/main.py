@@ -74,7 +74,8 @@ def bundle(case: Case) -> dict:
         },
         "events": [{k: e[k] for k in ("seq", "type", "sim_time", "actor", "summary", "hash", "prev_hash")} for e in ev],
         "trace": [{"seq": s["seq"], "sim_time": s["sim_time"], "reason": s["reason"], "tool": s["tool"],
-                   "input": s["input"], "output": _text(s["output"]), "gate": s["gate"]} for s in steps],
+                   "input": s["input"], "output": _text(s["output"]), "gate": s["gate"], "by": s.get("by")}
+                  for s in steps],
         "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"]} for i in SCENARIO],
     }
 
@@ -106,8 +107,7 @@ def inbound(case_id: str, body: Inbound):
     with LOCK:
         if body.item_id in case.state()["delivered"]:
             raise HTTPException(409, "scenario item already delivered")
-        for event in case.deliver(body.item_id):
-            AGENT.handle(case, event)
+        AGENT.handle_batch(case, case.deliver(body.item_id))  # pipeline per document, one planning step per click
         return bundle(case)
 
 
@@ -117,8 +117,12 @@ def advance(case_id: str, body: Advance):
     if not 0 < body.days <= 60:
         raise HTTPException(422, "days must be in (0, 60]")
     with LOCK:
-        for fired in case.advance(body.days):
-            AGENT.handle(case, fired)
+        fired = []
+        for ev in case.advance(body.days):  # each timer goes through the pipeline as it fires...
+            AGENT.pipeline(case, ev)
+            fired.append(ev)
+        if fired:
+            AGENT.plan(case, fired)  # ...then one planning step for the whole skip
         return bundle(case)
 
 
@@ -132,7 +136,7 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
             event = case.resolve(exception_id, body.action_id, body.note)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
-        AGENT.handle(case, event)
+        AGENT.handle_batch(case, [event])
         return bundle(case)
 
 

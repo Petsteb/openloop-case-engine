@@ -29,6 +29,9 @@ DOC_LABELS = {
 # Documents whose validity window is enforced (HR-03).
 EXPIRING_DOCS = {"onrc_certificate", "fiscal_certificate"}
 
+# Which document AI reads which document type ("bring your own document AI"); see extractors.py.
+EXTRACTOR_ROUTES = {"financial_statement": "bank_docai", "*": "builtin"}
+
 REQUIREMENTS = [
     {"id": "R1", "title": "Company active in trade register",
      "needs": ["onrc_certificate"], "rule_ids": ["HR-01", "HR-02", "HR-03"]},
