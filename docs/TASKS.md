@@ -8,7 +8,8 @@ The night plan is `docs/superpowers/plans/2026-10-28-openloop-final-14h.md`. Its
 - client emails;
 - learning loop.
 
-Petru is finishing the React UI in another session. Featherless calibration is running.
+The React bank screen is merged and the Featherless calibration is done (`backend/eval/calibration.json`). Still in
+progress: the customer portal UI and the Documents tab.
 
 **Ground rules**
 - One branch per task. Run `cd backend && python -m pytest -q` before every push; the demo-flow test is the contract that the live demo works.
@@ -39,9 +40,14 @@ Each task is independent. Take them in order and stop at freeze.
    - **Speed:** warm the Featherless cache by running the demo once before recording, so the cache file gets committed.
 5. **Rehearsal support (08:00–10:00):** run the offline-mode recording as the backup video, and keep a clean browser profile at 1440×900.
 
-## Petru + Claude (main session)
+## Petru + Claude (two sessions)
 - [x] Backend tasks 1–4, 9, 12 + docs (`docs/design.md` → "API additions (v2)")
-- [ ] Merge `a-backend` with the UI branch; full live + offline run; fix integration issues
-- [ ] 02:00 checkpoint: decide on the optional `/client` page
+- [x] React bank screen merged into `main`; two code reviews fixed
+- [x] Customer portal + document viewer backend (spec: `docs/superpowers/specs/2026-10-28-client-portal-design.md`)
+- [ ] Portal UI (`/client/`) + Documents tab (UI session, in progress)
+- [ ] Full live + offline run in the browser; fix integration issues
 - [ ] Deck + 3-min video script (`docs/pitch/`), using the `research/` folder for sources
 - [ ] 08:00 freeze: commit `web/dist`, tag `v1.0-freeze`; rehearse ×2; record; submit by 10:30
+
+For E2E task 1, add the portal flow too: upload the correct sample file (the request disappears), upload the wrong-company
+sample (it shows "Not accepted" and the bank sees the reason), and answer "no" to a contact change (a card opens on the bank screen).
