@@ -81,6 +81,36 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
 - **`judge`**, when present: `{"question": "...", "probs": {"same_address": 0.86, "different_address": 0.14}, "threshold": 0.9}`
 - **`gate` in trace:** `ALLOW` | `DENY: <rule id>` | `-` (read-only tools)
 
+### API additions (v2, all additive)
+- **`POST /api/cases/{case_id}/chat`**
+  - **Body:** `{"role": "client" | "employee", "message": "1–1000 chars", "history": [{"role": "user" | "assistant", "content": "..."}]}`, with at most 10 history items.
+  - **Returns:**
+    ```json
+    {"answer": "Text with [#42] / [doc-3] markers",
+     "citations": [{"kind": "event" | "doc", "ref": "#42" | "doc-3", "label": "event summary or document name"}],
+     "tools_used": [{"tool": "get_timeline", "input": {}}],
+     "mode": "bedrock" | "offline"}
+    ```
+  - **Read-only:** the chat appends one `CHAT_TURN` event to the ledger and changes nothing else.
+  - **Client role:** never receives internal review details.
+- **`case.status`:** may also be `ON_HOLD` (show as "On hold", brick red). It is set when an insider-pattern card is escalated to compliance.
+- **`exceptions[]` with `kind: "sequence_insider"`** (rule `SR-01`):
+  - `requirement_id` is `"MON"`, meaning monitoring, not one of R1–R6.
+  - Each `snippets[]` entry has `doc_id: null` and `label: "Ledger #<seq>"`, and its quote is the event summary.
+  - Actions: `escalate_compliance`, `legitimate`.
+  - Extra fields: `first_seq`, `then_seq`.
+- **`trace[].by`:** who acted.
+  - `"pipeline"`: code, always runs.
+  - `"claude"`: Bedrock planner.
+  - `"planner"`: scripted planner.
+  - `"safety-net"`: code, after Claude.
+- **`scenario[].internal`:** `true` for bank-internal events (staff actions), as opposed to client uploads. Suggested label prefix: "Internal: …".
+- **`outbox[]`, newest first:** `{"seq", "sim_time", "status": "sent" | "failed", "to", "subject", "body", "mode": "outbox" | "gmail", "error"}`. These are client emails, in Romanian.
+- **`config.agent_status`:** `"ok"` or `"fallback (<Error>)"`.
+- **New event types in `events[]`:**
+  - **Hide from the timeline rail; show in the Ledger tab only:** `CHAT_TURN`, `EMAIL_SENT`, `EMAIL_FAILED`.
+  - **Bank-internal; show in the Ledger tab:** `STAFF_CONTACT_CHANGE`, `CREDIT_ACTION`, `CLIENT_CONFIRMATION`.
+
 ## Rulings made under time pressure (MVP, 80 min)
 - The controller (Claude) writes the backend inline; one subagent builds the frontend in parallel against this contract; one review at the end. Cost if wrong: less per-task review, so the bugs get caught later.
 - Commits go straight to `main` in a new repo; the user asked for one shared repo. Cost if wrong: switching to branches later is trivial.
