@@ -158,7 +158,7 @@ Keep the custom tokens above as well.
     - **Header row** (hairline below): "Needs your decision" (attn dot), a severity outline pill in `--tone`, and `EX-1` in mono on the right.
     - **Body:**
       - the title in display type, 24–32px, -0.03em, at most 28ch;
-      - "why" in `--ink-2`, at most 64ch;
+      - "why" in `--ink-2`, using the full panel width with no character cap; it only wraps when the panel is narrow;
       - **meta properties**, Linear-style: a grid of muted 12px labels over 13px values. They are Check (`R2` plus title), Rule (`HR-04`), Deadline ("AMLR report in 14 days" in conflict, only while that timer is pending) and Raised (day and time).
     - **Comparison, "on file" vs "new":** always two slips, the **on-file document on the left** and the **newly received document on the right**, separated by a dashed vertical rule with a small mono "vs". They stack on narrow screens.
       - Each slip: radius 8px, a `--bg` fill, 1px `--line`. The **new** slip's border is `--attn` mixed at 55% with `--line`.
@@ -170,7 +170,7 @@ Keep the custom tokens above as well.
         - lines that **differ** or are **missing** get a 2px `--tone` bar on the left (no background tint), `<mark>` on the differing words, and a mono 11px note in `--tone` ("declared as 70%", "not in the declaration");
         - matching lines stay in `--ink-2`; gap lines are italic muted.
       - The data needs `role` (`onfile`/`new`) per document. Derive it from received times: the document that triggered the check is "new"; the older document it's compared with is "on file".
-    - **"What already matches":** a row of ✓ facts in muted text, e.g. "Postal code 400127 in both".
+    - **Only differences by default.** Matching lines (e.g. "Elena Munteanu 30%" in both) and the "what already matches" ✓ facts ("Postal code 400127 in both") are hidden behind a "Show what already matches" text toggle (`aria-expanded`), so the panel shows only what needs a decision.
     - **Judge confidence:** thin tracks with a dashed threshold tick and the label "Needed to accept automatically: 90%".
     - **Agent note:** a flat `--surface-2` row with a 1px border and an 8px radius, "✳ Agent" in attn, the text, and the time in mono.
     - **Rule:** the rule ID as a mono chip, with the rule text muted.
