@@ -13,8 +13,6 @@ from email.message import EmailMessage
 from .profiles import profile_of
 
 ENGINE = {"type": "system", "id": "notifier"}
-CLIENT_NAME = "Brutăria Aurora S.R.L."
-CLIENT_ADDRESS = "andrei.munteanu@brutaria-aurora.example"  # fictional; NOTIFY_TO redirects demo mail to a team inbox
 NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED", "CLIENT_DISPUTE"}
 RO_LABELS = {
     "application": "Cererea de finanțare",
@@ -108,7 +106,7 @@ def flush(case, mode: str | None = None) -> dict | None:
     if mail is None:
         return None
     mode = mode or os.environ.get("EMAIL_MODE", "outbox")
-    to = os.environ.get("NOTIFY_TO") or profile_of(case.ledger.events).get("email") or CLIENT_ADDRESS
+    to = os.environ.get("NOTIFY_TO") or profile_of(case.ledger.events)["email"]  # NOTIFY_TO: demo mail to a team inbox
     payload = {**mail, "to": to, "mode": mode, "sha256": hashlib.sha256(mail["body"].encode()).hexdigest()}
     try:
         if mode == "gmail":

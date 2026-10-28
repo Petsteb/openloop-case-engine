@@ -85,7 +85,7 @@ def bundle(case: Case) -> dict:
     steps = st["trace"]
     opened, t = ev[0]["payload"], T.TEMPLATES[st["template"]]
     return {
-        "case": {"id": case.id, "title": opened.get("title", T.CASE_TITLE), "goal": opened.get("goal", T.CASE_GOAL),
+        "case": {"id": case.id, "title": opened.get("title", t["title"]), "goal": opened.get("goal", t["goal"]),
                  "status": st["status"], "sim_now": st["now"].isoformat(), "day": (st["now"] - CASE_START).days,
                  "opened_at": CASE_START.isoformat(), "template": st["template"], "template_title": t["title"],
                  "company_id": st["profile"]["id"], "company": st["profile"]["name"], "product": st["profile"]["product"]},
@@ -539,13 +539,16 @@ def client_confirm(case_id: str, body: Confirm):
         return _client_view(case)
 
 
-def _learning_case() -> Case:
-    return _case("demo-1")
+def _rulings() -> tuple[dict, list[Case]]:
+    """Analyst rulings (precedents) from every case, tagged with their case, plus the cases they came from."""
+    cases = [c for c in list(CASES.values()) if c.state()["precedents"]]
+    precedents = [{**p, "exception_id": f"{c.id}/{p['exception_id']}"} for c in cases for p in c.state()["precedents"]]
+    return {"precedents": precedents}, cases
 
 
 @app.get("/api/learning")
 def learning_state():
-    return {"proposals": learner.proposals(_learning_case().state()), "checks": learner.PROMOTED}
+    return {"proposals": learner.proposals(_rulings()[0]), "checks": learner.PROMOTED}
 
 
 @app.post("/api/learning/proposals/{proposal_id}/backtest")
@@ -561,17 +564,18 @@ def learning_promote(proposal_id: str, body: Promote, x_staff_token: str | None 
     """Maker-checker: 409 when the promoter is one of the analysts whose rulings created the proposal.
     Identity here is the typed name (no login in the demo); production takes it from the bank's SSO."""
     _require_staff(x_staff_token)
-    case = _learning_case()
     with LOCK:
+        rulings, cases = _rulings()
         try:
-            check = learner.promote(case.state(), proposal_id, body.by)
+            check = learner.promote(rulings, proposal_id, body.by)
         except KeyError:
             raise HTTPException(404, "unknown proposal")
         except PermissionError as exc:
             raise HTTPException(409, str(exc))
-        case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
-                  {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
-                  f"Learned check {check['id']} promoted by {check['promoted_by']}")
+        for case in cases:  # the promotion is recorded in every file whose ruling supported it
+            case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
+                      {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
+                      f"Learned check {check['id']} promoted by {check['promoted_by']}")
     return {"check": check}
 
 

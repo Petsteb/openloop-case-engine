@@ -14,7 +14,6 @@ from .scenario import CASE_START, materialise
 
 ENGINE = {"type": "system", "id": "engine"}
 AGENT = {"type": "agent", "id": "case-agent"}
-CLIENT = {"type": "client", "id": "brutaria-aurora"}  # the demo bakery; other cases use Case.client
 ANALYST = {"type": "analyst", "id": "analyst-1"}
 
 ACTION_TOOLS = {"request_document", "send_reminder", "escalate_to_analyst", "start_legal_clock",
@@ -106,7 +105,7 @@ def _issued_from_text(text: str) -> datetime | None:
     return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
 
 
-def _quarantine_reason(doc_type: str, person: str, text: str, cui: str = T.CASE_CUI) -> str | None:
+def _quarantine_reason(doc_type: str, person: str, text: str, cui: str) -> str | None:
     """Another company's document, or an ID card for another person, is never used as evidence."""
     m = CUI_RE.search(text or "")
     if m and m.group(1) != cui:
