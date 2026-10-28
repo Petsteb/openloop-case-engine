@@ -13,11 +13,31 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a certificate that expires while the file waits;
 - a client email that arrives at the wrong moment.
 
+## Status for Theo (updated 29 Oct, 00:30)
+**Works on `main`** (95 backend tests pass):
+- **Bank screen** (React, `web/`): requirements, triage cards, agent trace, case chat, client outbox, ledger check.
+- **The whole demo script below**, either live (Claude on Bedrock + Featherless judge) or fully offline.
+- **Customer portal + employee document viewer:** the backend is done (uploads, sample files, wrong-company quarantine, client confirmations, documents list/detail with per-file history). The UI is being built tonight (`web/src/client/`, Documents tab).
+
+**Still being done tonight by Petru + 2 Claude sessions:** the portal/viewer UI, then a live + offline integration run, then the deck and video script (last).
+
+**Not done yet: what you can pick up** (details in `docs/TASKS.md`):
+1. **E2E tests** of the real UI with Playwright: the demo script, the portal upload, no console errors.
+2. **Model benchmark:** Opus vs Sonnet vs Haiku 5.5 as planner and chat (speed, correctness, leaks) → `docs/pitch/benchmark.md`.
+3. **Deploy** a public URL (Dockerfile + Render/Railway/Fly). Use `AGENT_MODE=scripted` unless the keys are platform secrets.
+4. **Tuning:** prompts in `agent.py`/`chat.py`; warm the Featherless cache before recording.
+5. **Backup video:** record one run in offline mode as insurance.
+
+**Resume our context:** `docs/handoff/` has a short handoff from each Claude session and their redacted transcripts, so you can `claude --resume` them (see `docs/handoff/sessions/README.md`).
+
+**Rules:** never commit `.env` (keys come privately); run the tests before every push; feature freeze is at 08:00 and we submit by 10:30.
+
 ## Run it (one command, no API keys)
 ```bash
 pip install -r requirements.txt
+cd web && npm ci && npm run build && cd ..   # React UI; without it the older static UI in frontend/ is served
 python -m uvicorn app.main:app --app-dir backend --port 8000
-# open http://localhost:8000
+# bank screen: http://localhost:8000    customer portal: http://localhost:8000/client/
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
 
