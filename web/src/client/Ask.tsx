@@ -87,7 +87,7 @@ export function Ask({ caseId, known, track, onCite }: Props) {
               {m.who === 'ai' && !m.error ? renderAnswer(m.text, m.citations ?? [], known, onCite) : m.text}
             </div>
           ))}
-          {pending ? <div className="pt-msg ai pt-typing" aria-label="Answering"><i /><i /><i /></div> : null}
+          {pending ? <div className="pt-msg ai pt-typing" role="status"><span className="sr-only">Answering…</span><i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div> : null}
         </div>
       ) : (
         <p className="pt-chat-intro">Ask anything about your file. Answers use only what is in your file, and point to where it came from.</p>

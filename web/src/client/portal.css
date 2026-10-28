@@ -80,6 +80,7 @@
 .pt-card-title { font-family: var(--display); font-size: 20px; font-weight: 500; letter-spacing: -.015em; line-height: 1.25; overflow-wrap: anywhere; }
 .pt-card-title.is-q { font-size: 19px; }
 .pt-card .pt-eyebrow { font-size: 12.5px; margin-bottom: 2px; }
+.pt-eyebrow-day { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .pt-why { font-size: 15px; color: var(--ink-2); line-height: 1.5; max-width: 62ch; }
 .pt-when { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .pt-why, .pt-when, .pt-note, .pt-next-text, .pt-card-title, .pt-chat-intro, .pt-all-set { text-wrap: pretty; }

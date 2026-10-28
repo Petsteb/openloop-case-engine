@@ -38,7 +38,8 @@ export function DemoDock({ bundle, busy, onInbound, onAdvance, onReset }: Props)
     <div className="dock" role="toolbar" aria-label="Demo controls">
       <span className="dock-label">Demo</span>
       <div className="menu-wrap">
-        <Btn size="sm" variant="primary" disabled={!next || !!busy} loading={busy === 'inbound'} title={next ? `Send: ${label(next.label)}` : 'Every scripted event was sent'}
+        {/* the label switches between "Next client event" and "Next internal event": E2E tests select data-testid="dock-next" */}
+        <Btn size="sm" variant="primary" data-testid="dock-next" disabled={!next || !!busy} loading={busy === 'inbound'} title={next ? `Send: ${label(next.label)}` : 'Every scripted event was sent'}
           onClick={() => next && onInbound(next.id, label(next.label))}>
           {!next ? 'All events sent' : next.internal ? 'Next internal event' : 'Next client event'}
         </Btn>

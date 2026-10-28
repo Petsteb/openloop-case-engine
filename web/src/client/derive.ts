@@ -1,5 +1,5 @@
 /* Pure helpers for the portal: the client copy filter, state and progress derivation, and request/document matching. */
-import type { ClientDocument, ClientView, Confirmation, MissingDocument, PortalState } from './types'
+import type { ClientDocument, ClientView, Confirmation, MissingDocument, PortalState, TimelineItem } from './types'
 
 export const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
 
@@ -23,6 +23,15 @@ export const docType = (key: string) => key.split(':')[0]
 export const whyFor = (m: MissingDocument) =>
   safe(m.why, WHY_FALLBACK[docType(m.key)] ?? 'We need it to finish checking your file.')
 
+/** Lower-case name words in a stable order: "Pop Radu" and "Radu Pop" give the same string (as the backend matches them). */
+const nameWords = (s: string) => s.toLowerCase().split(/\s+/).filter(Boolean).sort().join(' ')
+/** Same request key, whatever the name order: "id_card:Pop Radu" (register spelling) = "id_card:Radu Pop" (sample spelling). */
+export function sameKey(a: string, b: string): boolean {
+  const [ta, pa = ''] = String(a).split(':')
+  const [tb, pb = ''] = String(b).split(':')
+  return ta === tb && nameWords(pa) === nameWords(pb)
+}
+
 /** The short name used on the header's next-step button: "fiscal certificate", "Elena Munteanu's identity card". */
 export function shortLabel(m: MissingDocument): string {
   const [type, person] = m.key.split(':')
@@ -43,6 +52,18 @@ export function portalState(v: ClientView): PortalState {
   if (arr(v.missing_documents).length) return 'needs_you'
   if (t.includes('review') || arr(v.issues).some((i) => /under review/i.test(i.what))) return 'under_review'
   return 'in_progress'
+}
+
+/** The client's latest "No, I didn't" answer, from the server's timeline (so the notice survives a reload). */
+export function latestDispute(v: ClientView): TimelineItem | undefined {
+  return arr(v.timeline).filter((e) => e.type === 'CLIENT_DISPUTE').sort((a, b) => b.seq - a.seq)[0]
+}
+
+/** The pill's tone. It follows `overview.state`, with one override: a complete file with a question still open
+ *  (e.g. credit-bureau consent, which stays pending by design) must not read "Complete" next to that question.
+ *  The override can only lower "complete" to "needs_you"; it never makes a file look complete. */
+export function pillState(state: PortalState, missing: number, confirmations: number): PortalState {
+  return state === 'complete' && missing === 0 && confirmations > 0 ? 'needs_you' : state
 }
 
 export const STATE_PILL: Record<PortalState, string> = {
@@ -90,20 +111,28 @@ export function progressSteps(v: ClientView, docs: ClientDocument[]): Step[] {
 }
 
 /* ---------- requests and documents ---------- */
-const docNum = (d: ClientDocument) => Number(/(\d+)$/.exec(d.id)?.[1] ?? 0)
+const docNum = (d: ClientDocument) => Number(/(\d+)$/.exec(String(d.id ?? ''))?.[1] ?? 0)
 
 /** The newest document of the request's type received since it was asked for. While the request is still pending,
  *  its status says why: "quarantined" (not accepted) or "unreadable" (a PDF waiting for manual reading). */
+/** Is this document for the request's person? ID cards are named "Identity card — <person>"; other types have no person. */
+function forPerson(person: string | undefined, d: ClientDocument): boolean {
+  if (!person) return true
+  const words = nameWords(person).split(' ')
+  const name = String(d.name ?? '').toLowerCase()
+  return words.every((w) => name.includes(w))
+}
+
 export function latestFor(m: MissingDocument, docs: ClientDocument[]): ClientDocument | undefined {
-  const mine = docs.filter((d) => d.type === docType(m.key) && (d.received_day ?? -Infinity) >= m.requested_day)
+  const person = m.key.split(':')[1]
+  const mine = docs.filter((d) => d.type === docType(m.key) && forPerson(person, d) && (d.received_day ?? -Infinity) >= m.requested_day)
   return mine.sort((a, b) => ((b.received_day ?? 0) - (a.received_day ?? 0)) || (docNum(b) - docNum(a)))[0]
 }
 
 /** An earlier copy of this exact document (same type, same person for ID cards) that has expired. */
 export function expiredFor(m: MissingDocument, docs: ClientDocument[]): boolean {
   const [type, person] = m.key.split(':')
-  return docs.some((d) => d.status === 'expired' && d.type === type
-    && (!person || d.name.toLowerCase().includes(person.toLowerCase())))
+  return docs.some((d) => d.status === 'expired' && d.type === type && forPerson(person, d))
 }
 
 /** Pending requests, newest first. */

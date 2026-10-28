@@ -107,7 +107,7 @@ function HoldBanner({ bundle, busy, onRelease, onOpenLedger }: {
   const [note, setNote] = useState('')
   const input = useRef<HTMLInputElement | null>(null)
   useEffect(() => { if (confirming) input.current?.focus() }, [confirming])
-  // a client dispute reuses rule SR-01, so it is told apart by its kind first
+  // a client dispute has its own rule (SR-02; older servers reused SR-01), so it is told apart by its kind first
   const dispute = x?.kind === 'client_dispute'
   const insider = !dispute && (x?.kind === 'sequence_insider' || x?.rule?.id === 'SR-01')
   const ruleId = x?.rule?.id ? String(x.rule.id) : insider ? 'SR-01' : null

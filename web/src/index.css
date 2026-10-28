@@ -525,6 +525,9 @@ a.btn { text-decoration: none; }
 .doc-paper mark.hl-inj { background: color-mix(in srgb, var(--conflict) 18%, transparent); text-decoration: line-through; text-decoration-color: var(--conflict); }
 .doc-flag { --tone: var(--conflict); font-size: 14px; color: var(--ink-2); border-left: 2px solid var(--tone); padding-left: 12px; }
 .doc-flag.review { --tone: var(--review); }
+/* quarantined: the reason sits under the title, before the properties (the first thing the analyst reads) */
+.doc-quar { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; overflow-wrap: anywhere; }
+.doc-quar strong { font-weight: 600; color: var(--conflict); }
 .doc-fields { display: grid; grid-template-columns: minmax(110px, 36%) minmax(0, 1fr); margin: 0; font-size: 13px; min-width: 0; }
 .doc-fields > div { display: contents; }
 .doc-fields dt { color: var(--muted); padding: 5px 0; border-top: 1px solid var(--line); }

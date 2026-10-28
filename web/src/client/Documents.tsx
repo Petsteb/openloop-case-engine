@@ -31,7 +31,7 @@ function History({ detail }: { detail: DetailState | undefined }) {
     return <p className="pt-hist-msg"><Icon name="spinner" size={14} className="spin" />Loading history…</p>
   }
   if (detail === 'unavailable') return <p className="pt-hist-msg">History is not available for this document yet.</p>
-  if (detail === 'error') return <p className="pt-hist-msg">The history could not be loaded. Please try again.</p>
+  if (detail === 'error') return <p className="pt-hist-msg">The history could not be loaded. Close and open it again to retry.</p>
   const items = Array.isArray(detail.history) ? detail.history : []
   if (!items.length) return <p className="pt-hist-msg">No history yet.</p>
   return (

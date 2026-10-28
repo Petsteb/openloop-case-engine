@@ -2,8 +2,10 @@ import { dayText, plural, type DocRow } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
 
 function dates(b: Bundle, r: DocRow): string {
-  const iss = r.issuedDay !== null ? dayText(b, r.issuedDay) : ''
   const rec = r.receivedDay !== null ? dayText(b, r.receivedDay) : ''
+  // a quarantined or unread document was never checked: its issue date is unverified and it has no validity window
+  if (r.status === 'quarantined' || r.status === 'unreadable') return rec ? `Received ${rec}. Validity not checked` : 'Validity not checked'
+  const iss = r.issuedDay !== null ? dayText(b, r.issuedDay) : ''
   if (iss && rec && iss === rec) return `Issued and received ${rec}`
   if (iss && rec) return `Issued ${iss}, received ${rec}`
   if (rec) return `Received ${rec}`

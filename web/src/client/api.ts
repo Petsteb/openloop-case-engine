@@ -69,7 +69,8 @@ export const clientConfirm = (id: string, kind: ConfirmKind, answer: 'yes' | 'no
 export const chat = (id: string, message: string, history: ChatHistoryItem[]) =>
   call<ChatResponse>('POST', `${c(id)}/chat`, { role: 'client', message, history: history.slice(-10) })
 
-export const MAX_UPLOAD_BYTES = 1024 * 1024
+/** The server's limit (backend `_ingest_upload`: more than 1,000,000 bytes is refused). */
+export const MAX_UPLOAD_BYTES = 1_000_000
 export const UPLOAD_EXT = /\.(txt|pdf)$/i
 
 /** Reads a file as base64 (FileReader.readAsDataURL, then the `data:...;base64,` prefix is stripped). */
@@ -91,11 +92,13 @@ export function failureText(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 0) return 'We can’t reach the bank right now. Please try again in a moment.'
     if (e.status === 409) return 'This was already answered. Your file is up to date.'
-    if (e.status === 413) return 'That file is larger than 1 MB. Please choose a smaller one.'
+    if (e.status === 413 || (e.status === 422 && /larger than/i.test(e.message))) return 'That file is larger than 1 MB. Please choose a smaller one.'
     if (e.status === 422) {
       if (/pending|not requested|not waiting/i.test(e.message)) return 'We are not waiting for this document any more.'
+      if (/utf-?8/i.test(e.message)) return 'Please save the text file as UTF-8 and try again.'
       return 'We couldn’t accept this file. Please send a .txt or .pdf file up to 1 MB.'
     }
+    if (e.status === 404 && /no sample file/i.test(e.message)) return 'No sample file is prepared for this document.'
   }
   return 'Something went wrong. Please try again.'
 }

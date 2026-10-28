@@ -3,12 +3,13 @@ import { toast } from 'sonner'
 import * as api from './api'
 import { ApiError, isUnavailable } from './api'
 import { Ask } from './Ask'
+import { PortalBoundary } from './Boundary'
 import { DocSheet, Documents, type DetailState } from './Documents'
 import { Icon } from './Icon'
 import { Messages, mailId } from './Messages'
 import { ConfirmCard, DisputeNotice, RequestCard, type CardState } from './Needs'
 import {
-  arr, plural, portalState, progressSteps, safe, shortLabel, sortRequests, STATE_PILL, type Step,
+  arr, latestDispute, pillState, plural, portalState, progressSteps, safe, sameKey, shortLabel, sortRequests, STATE_PILL, type Step,
 } from './derive'
 import type { Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
@@ -76,7 +77,7 @@ const IDLE_TEXT: Record<PortalState, string> = {
 }
 
 export function Portal() {
-  const { view, docs, error, refresh, track, mutate, caseId } = useClientView('demo-1')
+  const { view, docs, error, refresh, track, mutate, caseId, gen } = useClientView('demo-1')
   const [theme, toggleTheme] = useTheme()
   if (!view) {
     return (
@@ -93,9 +94,12 @@ export function Portal() {
       </div>
     )
   }
+  // a demo reset (the ledger got shorter) remounts the page: no notes, chat or open rows from the previous run
   return (
-    <FileView view={view} docs={docs} error={error} caseId={caseId} theme={theme} toggleTheme={toggleTheme}
-      track={track} mutate={mutate} refresh={refresh} />
+    <PortalBoundary key={gen}>
+      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} theme={theme} toggleTheme={toggleTheme}
+        track={track} mutate={mutate} refresh={refresh} />
+    </PortalBoundary>
   )
 }
 
@@ -112,14 +116,14 @@ interface FileProps {
 }
 
 const toggleIn = (s: Set<string>, id: string) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }
-const docNo = (id: string) => Number(id.replace(/\D/g, '')) || 0
+const docNo = (id: string) => Number(String(id ?? '').replace(/\D/g, '')) || 0
 
 function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate, refresh }: FileProps) {
   const [cards, setCards] = useState<Record<string, CardState>>({})
   const [ghosts, setGhosts] = useState<Record<string, MissingDocument>>({})
   const [busyKey, setBusyKey] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState<string | null>(null)
-  const [disputed, setDisputed] = useState(false)
+  const [confirming, setConfirming] = useState<{ kind: string; answer: 'yes' | 'no' } | null>(null)
+  const [hiddenDispute, setHiddenDispute] = useState<number | null>(null)   // "Hide this message" (this page only)
   const [samples, setSamples] = useState<SampleFile[] | null>(null)
   const [openMail, setOpenMail] = useState<Set<string>>(() => new Set())
   const [openDocs, setOpenDocs] = useState<Set<string>>(() => new Set())
@@ -182,9 +186,11 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
     docs: new Set(docList.map((d) => d.id)),
   }), [view.timeline, missing, confirmations, docList])
 
+  // the request may spell a name in register order ("Pop Radu") and the sample in ID order ("Radu Pop"): the server
+  // matches either way, and the upload always sends the request's own key
   const sampleFor = (key: string) => ({
-    ok: !!samples?.some((s) => s.key === key && (s.variant ?? 'ok') === 'ok'),
-    wrong: key === 'onrc_certificate' && !!samples?.some((s) => s.key === key && s.variant === 'wrong_company'),
+    ok: !!samples?.some((s) => sameKey(s.key, key) && (s.variant ?? 'ok') === 'ok'),
+    wrong: key === 'onrc_certificate' && !!samples?.some((s) => sameKey(s.key, key) && s.variant === 'wrong_company'),
   })
 
   const setCard = (key: string, s: CardState | null) => setCards((m) => {
@@ -215,8 +221,11 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
       }
     } catch (e) {
       setCard(req.key, null)
-      if (isUnavailable(e)) toast('Uploads open soon in this demo')
+      const noSample = e instanceof ApiError && e.status === 404 && /no sample file/i.test(e.message)
+      if (isUnavailable(e) && !noSample) toast('Uploads open soon in this demo')
       else toast.error(api.failureText(e))
+      // e.g. 422 "not requested": the bank already has it, so this page is behind; catch up now
+      if (e instanceof ApiError && (e.status === 409 || e.status === 422 || noSample)) void refresh()
     } finally {
       setBusyKey(null)
     }
@@ -229,12 +238,12 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   /* ---------- confirmations ---------- */
   const onAnswer = async (kind: ConfirmKind, answer: 'yes' | 'no') => {
     if (confirming) return
-    setConfirming(kind)
+    setConfirming({ kind, answer })
     try {
       await mutate(() => api.clientConfirm(caseId, kind, answer))
-      if (kind === 'contact_change' && answer === 'no') setDisputed(true)
-      else if (kind === 'contact_change') toast('Thank you. We noted that you made this change.')
-      else toast(answer === 'yes' ? 'Thank you. The bank can now check your company’s credit history.' : 'Understood. The bank may ask you again later.')
+      // "No" to a contact change needs no toast: the server's timeline now has the dispute, and the notice is built from it
+      if (kind === 'credit_check_consent') toast(answer === 'yes' ? 'Thank you. The bank can now check your company’s credit history.' : 'Understood. The bank may ask you again later.')
+      else if (answer === 'yes') toast('Thank you. We noted that you made this change.')
     } catch (e) {
       if (isUnavailable(e)) toast('Confirmations open soon in this demo')
       else {
@@ -246,8 +255,17 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
     }
   }
 
+  /* ---------- documents: opening a row or the sheet again retries a history that failed to load ---------- */
+  const forgetFailed = (id: string) => {
+    if (details[id]?.d === 'error') setDetails((m) => { const n = { ...m }; delete n[id]; return n })
+  }
+  const toggleDoc = (id: string) => {
+    if (!openDocs.has(id)) forgetFailed(id)
+    setOpenDocs((s) => toggleIn(s, id))
+  }
+
   /* ---------- citations from the chat ---------- */
-  const openDoc = (id: string) => setSheet(id)
+  const openDoc = (id: string) => { forgetFailed(id); setSheet(id) }
   const onCite = (c: Citation) => {
     const ref = String(c.ref).replace(/^#/, '')
     if (c.kind === 'doc' || /^doc-\d+$/.test(ref)) {
@@ -283,8 +301,13 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   /* ---------- the one next action ---------- */
   const first = requests.find((r) => !ghosts[r.key])
   const busy = busyKey !== null
+  const pill = pillState(state, missing.length, confirmations.length)
+  const dispute = latestDispute(view)
+  const showDispute = !!dispute && hiddenDispute !== dispute.seq
   let nextText: string
-  if (missing.length && confirmations.length) nextText = `Please send ${plural(missing.length, 'document', 'documents')} and answer ${plural(confirmations.length, 'question', 'questions')}.`
+  // complete, but a question is still open (credit-bureau consent stays pending by design): never "Complete" next to it
+  if (pill !== state) nextText = `Your documents are complete. ${confirmations.length === 1 ? 'One question left.' : `${confirmations.length} questions left.`}`
+  else if (missing.length && confirmations.length) nextText = `Please send ${plural(missing.length, 'document', 'documents')} and answer ${plural(confirmations.length, 'question', 'questions')}.`
   else if (missing.length) nextText = missing.length === 1 ? 'Please send us one document.' : `Please send us ${missing.length} documents.`
   else if (confirmations.length) nextText = confirmations.length === 1 ? 'Please answer one question from the bank.' : `Please answer ${confirmations.length} questions from the bank.`
   else nextText = IDLE_TEXT[state]
@@ -314,7 +337,7 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
             {product ? <p className="pt-product">{product}</p> : null}
           </div>
           <div className="pt-head-side">
-            <StatusPill state={state} />
+            <StatusPill state={pill} />
             <span className="pt-day">Day {view.overview?.day ?? 0} of your file</span>
           </div>
         </header>
@@ -337,7 +360,7 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
         <main className="pt-grid">
           <section className="pt-sec pt-a-need" aria-labelledby="h-need">
             <h2 id="h-need" className="pt-h2">What we need from you{needCount ? <span className="pt-count">{needCount}</span> : null}</h2>
-            {requests.length || confirmations.length || disputed ? (
+            {requests.length || confirmations.length || showDispute ? (
               <div className="pt-cards">
                 {requests.map((r) => (
                   <RequestCard key={r.key} req={r} docs={docList} state={cards[r.key]} ghost={!!ghosts[r.key]}
@@ -345,10 +368,10 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
                     onFile={onFile} onSample={onSample} onInvalid={(m) => toast.error(m)}
                     registerInput={(k, el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k) }} />
                 ))}
-                {disputed ? <DisputeNotice onDismiss={() => setDisputed(false)} /> : null}
+                {showDispute && dispute ? <DisputeNotice item={dispute} onDismiss={() => setHiddenDispute(dispute.seq)} /> : null}
                 {confirmations.map((c, i) => (
-                  <ConfirmCard key={`${c.kind}-${c.ref_seq ?? i}`} c={c} pending={confirming === c.kind} busy={confirming !== null}
-                    flash={flash === `conf:${c.kind}`} onAnswer={(k, a) => void onAnswer(k, a)} />
+                  <ConfirmCard key={`${c.kind}-${c.ref_seq ?? i}`} c={c} pending={confirming?.kind === c.kind ? confirming.answer : null}
+                    busy={confirming !== null} flash={flash === `conf:${c.kind}`} onAnswer={(k, a) => void onAnswer(k, a)} />
                 ))}
               </div>
             ) : (
@@ -368,7 +391,7 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
             <section className="pt-sec pt-a-docs" aria-labelledby="h-docs">
               <h2 id="h-docs" className="pt-h2">Your documents<span className="pt-count">{docList.length}</span></h2>
               <Documents docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
-                flash={flash} onToggle={(id) => setOpenDocs((s) => toggleIn(s, id))} onView={openDoc} />
+                flash={flash} onToggle={toggleDoc} onView={openDoc} />
             </section>
           ) : null}
 

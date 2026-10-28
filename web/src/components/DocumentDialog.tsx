@@ -4,6 +4,7 @@ import {
 } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
 import { useDocDetail } from '@/hooks/useDocs'
+import { Boundary } from './Btn'
 import { Icon } from './Icon'
 import { StatusWord } from './StatusWord'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet'
@@ -14,6 +15,15 @@ const EXTRACTOR_NAME: Record<string, string> = { builtin: 'Built-in parser', ban
 function linkDocs(text: string, onOpenDoc: (id: string) => void): ReactNode[] {
   return text.split(/\b(doc-\d+)\b/g).map((p, i) => (/^doc-\d+$/.test(p)
     ? <button key={i} type="button" className="cite" onClick={() => onOpenDoc(p)}>{p}</button> : p))
+}
+
+/** The server's bank wording, as one sentence: "Not accepted: it is an identity card for another person." reads
+ *  "It is an identity card for another person." (the heading above it already says the document was refused). */
+function quarantineText(r: string | null): string {
+  const s = String(r ?? '').trim().replace(/^not accepted:\s*/i, '')
+  if (!s) return ''
+  const t = s.charAt(0).toUpperCase() + s.slice(1)
+  return /[.!?]$/.test(t) ? t : `${t}.`
 }
 
 function fieldTitle(fs: DocViewField[]) {
@@ -41,10 +51,14 @@ function Body({ bundle, v, loading, onOpenDoc, onOpenLedger, onSelectRequirement
 }) {
   const clock = caseClock(bundle)
   const received = v.receivedAt !== null ? clock.fWhen(v.receivedAt) : v.receivedDay !== null ? sentence(dayText(bundle, v.receivedDay)) : ''
-  const issued = v.issuedDay !== null ? sentence(dayText(bundle, v.issuedDay)) : ''
   const val = v.validity
   const quarantined = v.status === 'quarantined'
   const unreadable = v.status === 'unreadable'
+  // a rejected or unread document was never checked: the server sends `validity: null` for it (a bundle-built view has
+  // null for "no expiry" instead, so only the server's null means "not checked")
+  const notChecked = quarantined || unreadable || (v.origin === 'server' && val === null)
+  const issued = !notChecked && v.issuedDay !== null ? sentence(dayText(bundle, v.issuedDay)) : ''
+  const reason = quarantineText(v.quarantineReason)
   const fields = v.fields.filter((f) => f.value || f.quote)
   const allOk = fields.length > 0 && fields.every((f) => f.verified !== false)
   const unplaced = v.text ? docSegments(v.text, v.fields, v.injections).unplaced : []
@@ -62,13 +76,18 @@ function Body({ bundle, v, loading, onOpenDoc, onOpenLedger, onSelectRequirement
         </div>
         <SheetTitle>{v.name}</SheetTitle>
         <SheetDescription className="sr-only">The full document, the checks that use it and its history in the ledger.</SheetDescription>
+        {quarantined ? (
+          <div className="doc-flag conflict doc-quar" role="note">
+            <strong>Quarantined. Nothing was extracted from it.</strong>
+            {reason ? <span>{reason}</span> : null}
+          </div>
+        ) : null}
         {v.origin !== 'missing' ? (
           <dl className="props doc-props">
             {issued ? <div><dt>Issued</dt><dd>{issued}</dd></div> : null}
             {received ? <div><dt>Received</dt><dd>{received}</dd></div> : null}
             <div><dt>Validity</dt><dd>
-              {/* a rejected or unread document was never checked, whatever window the server computes */}
-              {quarantined || unreadable ? <span className="muted">Not checked</span> : val && val.expiresDay !== null ? (
+              {notChecked ? <span className="muted">Not checked</span> : val && val.expiresDay !== null ? (
                 <span className={'vchip' + (val.expired ? ' is-expired' : '')} title={`Day ${val.expiresDay} of the case`}>
                   <i aria-hidden="true" />{val.expired ? `Expired ${dayText(bundle, val.expiresDay).replace(/^day \d+, /, '')}` : `Valid until ${dayText(bundle, val.expiresDay).replace(/^day \d+, /, '')}`}
                 </span>
@@ -87,9 +106,6 @@ function Body({ bundle, v, loading, onOpenDoc, onOpenLedger, onSelectRequirement
         <>
           <section className="doc-sec" aria-label="Document text">
             <h3>Document</h3>
-            {quarantined ? (
-              <p className="doc-flag conflict">Quarantined{v.quarantineReason ? `: ${v.quarantineReason.replace(/\.$/, '')}` : ''}. Nothing was extracted from it.</p>
-            ) : null}
             {unreadable ? <p className="doc-flag review">This file needs manual reading. Nothing was extracted from it automatically.</p> : null}
             {loading ? <p className="muted small" role="status">Opening the document…</p>
               : v.text !== null ? <Paper v={v as DocView & { text: string }} />
@@ -180,6 +196,17 @@ function Body({ bundle, v, loading, onOpenDoc, onOpenLedger, onSelectRequirement
   )
 }
 
+/** The viewer's fallback after a render error: still a titled dialog (Radix needs a title), with a plain note. */
+function ViewerFailed({ name }: { name: string }) {
+  return (
+    <header className="doc-head">
+      <SheetTitle>{name}</SheetTitle>
+      <SheetDescription className="sr-only">This document could not be shown.</SheetDescription>
+      <p className="unavailable">This document could not be shown. Close the sheet; the rest of the case is unaffected.</p>
+    </header>
+  )
+}
+
 /**
  * The document viewer: a right-side sheet opened from evidence quotes, decision-card slips, `doc-N` chat citations
  * and the Docs tab. Reads `GET /documents/{id}?role=employee`; without that endpoint it is built from the bundle.
@@ -200,19 +227,30 @@ export function DocumentViewer({ bundle, caseId, docId, rows, onClose, onOpenDoc
   const id = docId ?? last
   const { detail, loading } = useDocDetail(caseId, docId, bundle)
   let v: DocView | null = null
+  let failed = false
   if (id) {
     const row = rows.find((r) => r.id === id)
-    if (detail) v = docViewFromApi(bundle, detail, row)
-    else {
-      const f = docViewFromBundle(bundle, id)
-      v = f.origin === 'missing' && row ? { ...f, ...row, origin: 'case' } : f
+    try {
+      if (detail) v = docViewFromApi(bundle, detail, row)
+      else {
+        const f = docViewFromBundle(bundle, id)
+        v = f.origin === 'missing' && row ? { ...f, ...row, origin: 'case' } : f
+      }
+    } catch (e) {   // odd document data must not take the case screen down
+      console.error('[viewer]', e)
+      failed = true
     }
   }
   return (
     <Sheet open={!!docId} onOpenChange={(o) => { if (!o) onClose() }}>
       <SheetContent side="right" className="ol-sheet doc-sheet">
-        {v ? <Body key={v.id} bundle={bundle} v={v} loading={loading && !!docId}
-          onOpenDoc={onOpenDoc} onOpenLedger={onOpenLedger} onSelectRequirement={onSelectRequirement} /> : <SheetTitle className="sr-only">Document</SheetTitle>}
+        {/* an error in one document's data stays inside the sheet: the case screen and the close button keep working */}
+        {v ? (
+          <Boundary key={v.id} name="viewer" fallback={<ViewerFailed name={String(v.name || v.id || 'Document')} />}>
+            <Body key={v.id} bundle={bundle} v={v} loading={loading && !!docId}
+              onOpenDoc={onOpenDoc} onOpenLedger={onOpenLedger} onSelectRequirement={onSelectRequirement} />
+          </Boundary>
+        ) : failed ? <ViewerFailed name={id ?? 'Document'} /> : <SheetTitle className="sr-only">Document</SheetTitle>}
       </SheetContent>
     </Sheet>
   )

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Toaster } from '@/components/ui/sonner'
 import '@/index.css'
 import './portal.css'
+import { PortalBoundary } from './Boundary'
 import { initialTheme, Portal } from './Portal'
 
 // Set the theme before the first paint (the bank screen's stored choice, else the system setting).
@@ -19,7 +20,7 @@ document.addEventListener('pointerover', (e) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Portal />
+    <PortalBoundary><Portal /></PortalBoundary>
     <Toaster position="bottom-center" />
   </StrictMode>,
 )

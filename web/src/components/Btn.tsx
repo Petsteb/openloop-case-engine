@@ -20,13 +20,13 @@ export function Btn({ variant = 'secondary', size = 'md', loading = false, class
 }
 
 /** Keeps one broken panel from blanking the whole screen on the projector. */
-export class Boundary extends Component<{ name: string; children: ReactNode }, { failed: boolean }> {
+export class Boundary extends Component<{ name: string; children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() { return { failed: true } }
   componentDidCatch(error: Error, info: ErrorInfo) { console.error(`[${this.props.name}]`, error, info.componentStack) }
   render() {
     if (this.state.failed) {
-      return <p className="unavailable">This part of the screen could not be shown. The rest of the case is unaffected.</p>
+      return this.props.fallback ?? <p className="unavailable">This part of the screen could not be shown. The rest of the case is unaffected.</p>
     }
     return this.props.children
   }

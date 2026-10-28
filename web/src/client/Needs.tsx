@@ -1,8 +1,8 @@
 import { useRef, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
 import { MAX_UPLOAD_BYTES, UPLOAD_EXT } from './api'
-import { confirmFallback, expiredFor, latestFor, plural, safe, whyFor } from './derive'
-import type { ClientDocument, Confirmation, ConfirmKind, MissingDocument } from './types'
+import { confirmFallback, docType, expiredFor, latestFor, plural, safe, whyFor } from './derive'
+import type { ClientDocument, Confirmation, ConfirmKind, MissingDocument, TimelineItem } from './types'
 
 export type CardState = 'uploading' | 'received' | 'rejected'
 
@@ -44,9 +44,14 @@ export function RequestCard({ req, docs, state, ghost, flash, sample, busy, onFi
     e.target.value = ''   // picking the same file again must fire change
     if (!f) return
     if (!UPLOAD_EXT.test(f.name)) return onInvalid('Please choose a .txt or .pdf file.')
+    if (f.size === 0) return onInvalid('That file is empty. Please choose another one.')
     if (f.size > MAX_UPLOAD_BYTES) return onInvalid('That file is larger than 1 MB. Please choose a smaller one.')
     onFile(req, f)
   }
+  // an ID card is refused when it is for another person; any other document when it belongs to another company
+  const rejectedText = docType(req.key) === 'id_card'
+    ? 'Not accepted: this identity card seems to be for another person. Please upload the right one.'
+    : 'Not accepted: this document seems to belong to another company. Please upload yours.'
 
   return (
     <article className={`pt-card${ghost ? ' is-done' : ''}${flash ? ' pt-flash' : ''}`} data-key={req.key} aria-busy={state === 'uploading' || undefined}>
@@ -61,7 +66,7 @@ export function RequestCard({ req, docs, state, ghost, flash, sample, busy, onFi
       ) : null}
       {rejected && !ghost ? (
         <p className="pt-note tone-conflict" role="status"><Icon name="alert" size={15} />
-          <span>Not accepted: this document seems to belong to another company. Please upload yours.</span></p>
+          <span>{rejectedText}</span></p>
       ) : null}
       {unreadable && !rejected ? (
         <p className="pt-note" role="status"><Icon name="clock" size={15} /><span>Received, waiting for manual reading. You can also send a .txt copy.</span></p>
@@ -77,11 +82,11 @@ export function RequestCard({ req, docs, state, ghost, flash, sample, busy, onFi
             <div className="pt-actions">
               <input ref={(el) => { input.current = el; registerInput(req.key, el) }} type="file" accept=".txt,.pdf,text/plain,application/pdf"
                 className="sr-only" tabIndex={-1} aria-hidden="true" onChange={pick} />
-              <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
+              <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()} aria-label={`Upload file: ${label}`}>
                 <Icon name="upload" size={14} />Upload file
               </button>
               {sample.ok ? (
-                <button type="button" className="btn quiet" disabled={busy} onClick={() => onSample(req, 'ok')}>Use sample file</button>
+                <button type="button" className="btn quiet" disabled={busy} onClick={() => onSample(req, 'ok')} aria-label={`Use sample file: ${label}`}>Use sample file</button>
               ) : null}
             </div>
             <p className="pt-hint">.txt or .pdf, up to 1 MB.</p>
@@ -97,7 +102,8 @@ export function RequestCard({ req, docs, state, ghost, flash, sample, busy, onFi
 
 interface ConfirmProps {
   c: Confirmation
-  pending: boolean
+  /** the answer being sent for this card (its button shows the spinner), else null */
+  pending: 'yes' | 'no' | null
   busy: boolean
   flash: boolean
   onAnswer: (kind: ConfirmKind, answer: 'yes' | 'no') => void
@@ -115,11 +121,12 @@ export function ConfirmCard({ c, pending, busy, flash, onAnswer }: ConfirmProps)
       </div>
       <div className="pt-card-foot">
         <div className="pt-actions">
-          <button type="button" className="btn" disabled={busy} aria-busy={pending || undefined} onClick={() => onAnswer(kind, 'yes')}>
-            {pending ? <Icon name="spinner" size={14} className="spin" /> : null}
+          <button type="button" className="btn" disabled={busy} aria-busy={pending === 'yes' || undefined} onClick={() => onAnswer(kind, 'yes')}>
+            {pending === 'yes' ? <Icon name="spinner" size={14} className="spin" /> : null}
             {consent ? 'I consent' : 'Yes, I made this change'}
           </button>
-          <button type="button" className="btn quiet" disabled={busy} onClick={() => onAnswer(kind, 'no')}>
+          <button type="button" className="btn quiet" disabled={busy} aria-busy={pending === 'no' || undefined} onClick={() => onAnswer(kind, 'no')}>
+            {pending === 'no' ? <Icon name="spinner" size={14} className="spin" /> : null}
             {consent ? 'Not now' : 'No, I didn’t'}
           </button>
         </div>
@@ -128,14 +135,16 @@ export function ConfirmCard({ c, pending, busy, flash, onAnswer }: ConfirmProps)
   )
 }
 
-/** Shown after "No, I didn't": the dispute went to the bank. */
-export function DisputeNotice({ onDismiss }: { onDismiss: () => void }) {
+const DISPUTE_FALLBACK = 'You told us you did not request the change to your contact details. Our team will contact you.'
+
+/** After "No, I didn't": built from the server's CLIENT_DISPUTE timeline item, so it is still there after a reload. */
+export function DisputeNotice({ item, onDismiss }: { item: TimelineItem; onDismiss: () => void }) {
   return (
-    <article className="pt-card pt-dispute" role="status">
+    <article className="pt-card pt-dispute" role="status" data-dispute={item.seq}>
       <div className="pt-card-main">
-        <p className="pt-eyebrow tone-conflict"><Icon name="shield" size={14} />Change reported</p>
-        <h3 className="pt-card-title is-q">Thank you for telling us. Our team will contact you.</h3>
-        <p className="pt-why">We have alerted the bank. Until we call, please don’t share any codes sent to the new number.</p>
+        <p className="pt-eyebrow tone-conflict"><Icon name="shield" size={14} />Change reported<span className="pt-eyebrow-day">Day {item.day}</span></p>
+        <h3 className="pt-card-title is-q">{safe(item.what, DISPUTE_FALLBACK)}</h3>
+        <p className="pt-why">Until we call, please don’t share any codes sent to the new number.</p>
       </div>
       <div className="pt-card-foot">
         <button type="button" className="pt-link" onClick={onDismiss}>Hide this message</button>
