@@ -56,7 +56,9 @@ export const plain = (s: unknown) => String(s ?? '')
   .replace(new RegExp(`\\b(R\\d+|MON)\\s*(?:→|->)\\s*(${CODES})\\b`, 'g'), (_m, r: string, c: string) => `${r} now ${CODE_WORDS[c]}`)
   .replace(new RegExp(`\\bis (${CODES})\\b`, 'g'), (_m, c: string) => (c === 'NEEDS_REVIEW' ? 'needs review' : `is ${CODE_WORDS[c]}`))
   .replace(new RegExp(`\\b(${CODES})\\b`, 'g'), (m) => CODE_WORDS[m])
-  .replace(/\bACTIVĂ\b/g, 'active')
+  .replace(/\bACTIVĂ(?=\s|$)/g, 'active')
+  .replace(/\s*\(quotes verified: True\)/g, ', every quote verified')
+  .replace(/\s*\(quotes verified: False\)/g, ', some quotes could not be verified')
 export const cleanTitle = (s: unknown) => tidy(String(s ?? '')
   .replace(/\s*&\s*/g, ' and ')
   .replace(/\s*≥\s*/g, ' of at least ')
@@ -115,6 +117,7 @@ export function statusLine(b: Bundle): { tone: Tone; text: string } {
   if (isOnHold(b)) return { tone: 'hold', text: 'On hold. The file was escalated to compliance.' }
   if (isComplete(b)) return { tone: 'done', text: 'File complete. The credit decision is yours.' }
   const reqs = arr(b.requirements)
+  if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: 'Waiting for the client to send the application pack' }
   const bad = reqs.filter((r) => isAttention(kindOf(r.status)))
   if (bad.length) {
     const r = bad[0]
@@ -122,7 +125,7 @@ export function statusLine(b: Bundle): { tone: Tone; text: string } {
   }
   const waits = [...new Set(reqs.filter((r) => r.status === 'OPEN_WAITING')
     .flatMap((r) => String(r.reason || '').replace(/^waiting for:?\s*/i, '').split(/[;,]\s*(?![^()]*\))/))
-    .map((s) => s.replace(/\s*\([^)]*\)\s*/g, ' ').trim()).filter((s) => s && !/discrepancy confirmed/i.test(s)))]
+    .map((s) => tidy(s.replace(/^\s*waiting for:?\s*/i, '').replace(/\s*\([^)]*\)\s*/g, ' ').trim())).filter((s) => s && !/discrepancy confirmed/i.test(s)))]
   if (waits.length) {
     let list = waits.slice(0, 3).join(', ')
     if (waits.length > 3) list += ` and ${waits.length - 3} more`
@@ -382,7 +385,7 @@ export function deadlines(b: Bundle): Deadline[] {
 
 /* ================= activity feed ================= */
 export interface FeedItem { key: string; t: number; real: number; text: string; who: string; blocked: boolean; seq: number }
-const FEED_SKIP = new Set(['AGENT_STEP', 'SCENARIO_DELIVERED', 'CLOCK_ADVANCED', 'CHAT_TURN'])
+const FEED_SKIP = new Set(['AGENT_STEP', 'SCENARIO_DELIVERED', 'CLOCK_ADVANCED', 'CHAT_TURN', 'TIMER_SET'])
 export function feedItems(b: Bundle): FeedItem[] {
   const disp = displayTimes(b)
   const out: FeedItem[] = []
