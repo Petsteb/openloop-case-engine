@@ -20,14 +20,14 @@ def _p(first: str, last: str, cnp: str, pct: float = 0) -> dict:
 
 PROFILES: dict[str, dict] = {
     "aurora": {
-        "id": "aurora", "name": "Brutăria Aurora SRL", "legal_name": "BRUTĂRIA AURORA S.R.L.", "cui": "45123879",
+        "id": "aurora", "name": "Brutăria Aurora SRL", "legal_name": "BRUTĂRIA AURORA S.R.L.", "cui": "94123877",
         "client_id": "C-1042", "actor_id": "brutaria-aurora", "email": "andrei.munteanu@brutaria-aurora.example",
         "city": "Cluj-Napoca", "county": "Cluj", "caen": "1071 Fabricarea pâinii",
         "product": "Working-capital loan, 500,000 RON", "templates": ["sme_loan"],
         "story": "Undeclared co-owner, address written two ways, certificate expiring mid-file, insider pattern",
     },
     "verde": {
-        "id": "verde", "name": "Verde Logistic SRL", "legal_name": "VERDE LOGISTIC S.R.L.", "cui": _cui("4187263"),
+        "id": "verde", "name": "Verde Logistic SRL", "legal_name": "VERDE LOGISTIC S.R.L.", "cui": _cui("9187263"),
         "client_id": "C-2210", "email": "office@verde-logistic.example", "city": "Timișoara", "county": "Timiș",
         "street": "Str. Gheorghe Lazăr nr. 24", "postal_code": "300081", "caen": "4941 Transporturi rutiere de mărfuri",
         "loan": 750_000, "new_service": 300_000, "turnover": 6_400_000, "ebitda": 1_250_000, "existing_service": 400_000,
@@ -37,7 +37,7 @@ PROFILES: dict[str, dict] = {
         "story": "Clean file: every check passes without a human",
     },
     "carpatic": {
-        "id": "carpatic", "name": "Carpatic Lemn SRL", "legal_name": "CARPATIC LEMN S.R.L.", "cui": _cui("3926154"),
+        "id": "carpatic", "name": "Carpatic Lemn SRL", "legal_name": "CARPATIC LEMN S.R.L.", "cui": _cui("9926154"),
         "client_id": "C-2311", "email": "contabilitate@carpatic-lemn.example", "city": "Bistrița", "county": "Bistrița-Năsăud",
         "street": "Str. Industriei nr. 9", "postal_code": "420063", "caen": "1610 Tăierea și rindeluirea lemnului",
         "loan": 400_000, "new_service": 150_000, "turnover": 2_900_000, "ebitda": 640_000, "existing_service": 200_000,
@@ -47,7 +47,7 @@ PROFILES: dict[str, dict] = {
         "story": "Outstanding tax debt on the ANAF certificate (HR-08)",
     },
     "delta": {
-        "id": "delta", "name": "Delta Pescăria SRL", "legal_name": "DELTA PESCĂRIA S.R.L.", "cui": _cui("3381927"),
+        "id": "delta", "name": "Delta Pescăria SRL", "legal_name": "DELTA PESCĂRIA S.R.L.", "cui": _cui("9381927"),
         "client_id": "C-2412", "email": "contact@delta-pescaria.example", "city": "Tulcea", "county": "Tulcea",
         "street": "Str. Isaccei nr. 15", "postal_code": "820025", "caen": "4723 Comerț cu amănuntul al peștelui",
         "loan": 200_000, "new_service": 90_000, "turnover": 980_000, "ebitda": 300_000, "existing_service": 60_000,
@@ -58,7 +58,7 @@ PROFILES: dict[str, dict] = {
     },
     "nord": {
         "id": "nord", "name": "Nord Construct Instal SRL", "legal_name": "NORD CONSTRUCT INSTAL S.R.L.",
-        "cui": _cui("4402718"), "client_id": "C-2513", "email": "office@nordconstruct.example", "city": "Suceava",
+        "cui": _cui("9402718"), "client_id": "C-2513", "email": "office@nordconstruct.example", "city": "Suceava",
         "county": "Suceava", "street": "Bd. George Enescu nr. 31", "postal_code": "720231",
         "caen": "4322 Lucrări de instalații sanitare, de încălzire și de aer condiționat",
         "loan": 600_000, "new_service": 180_000, "turnover": 3_700_000, "ebitda": 520_000, "existing_service": 310_000,
@@ -68,7 +68,7 @@ PROFILES: dict[str, dict] = {
         "story": "Debt service coverage 1.06, below the 1.2 minimum (HR-07)",
     },
     "medica": {
-        "id": "medica", "name": "Medica Plus Clinic SRL", "legal_name": "MEDICA PLUS CLINIC S.R.L.", "cui": _cui("3815562"),
+        "id": "medica", "name": "Medica Plus Clinic SRL", "legal_name": "MEDICA PLUS CLINIC S.R.L.", "cui": _cui("9815562"),
         "client_id": "C-2614", "email": "administrativ@medicaplus.example", "city": "Iași", "county": "Iași",
         "street": "Str. Păcurari nr. 102", "postal_code": "700545", "caen": "8622 Activități de asistență medicală specializată",
         "loan": 350_000, "new_service": 110_000, "turnover": 2_100_000, "ebitda": 480_000, "existing_service": 120_000,
@@ -78,8 +78,8 @@ PROFILES: dict[str, dict] = {
         "story": "Application signed by an associate who is not the administrator: a human decides, then a mandate",
     },
     "solaris": {
-        "id": "solaris", "name": "Solaris Agro SRL", "legal_name": "SOLARIS AGRO S.R.L.", "cui": _cui("4129836"),
-        "client_id": "C-2715", "email": "solaris.agro@example.ro", "city": "Fetești", "county": "Ialomița",
+        "id": "solaris", "name": "Solaris Agro SRL", "legal_name": "SOLARIS AGRO S.R.L.", "cui": _cui("9129836"),
+        "client_id": "C-2715", "email": "office@solaris-agro.example", "city": "Fetești", "county": "Ialomița",
         "street": "Str. Călărași nr. 8", "postal_code": "925100", "caen": "0111 Cultivarea cerealelor",
         "loan": 300_000, "new_service": 100_000, "turnover": 1_600_000, "ebitda": 410_000, "existing_service": 90_000,
         "net_profit": 230_000, "onrc_age_days": 45, "admin": _p("VASILE", "DUMITRU", "169120••••••"),
@@ -89,7 +89,7 @@ PROFILES: dict[str, dict] = {
     },
     "atelier": {
         "id": "atelier", "name": "Atelier Croitorie Ana SRL", "legal_name": "ATELIER CROITORIE ANA S.R.L.",
-        "cui": _cui("3672041"), "client_id": "C-2816", "email": "ana@atelier-croitorie.example", "city": "Brașov",
+        "cui": _cui("9672041"), "client_id": "C-2816", "email": "ana@atelier-croitorie.example", "city": "Brașov",
         "county": "Brașov", "street": "Str. Mureșenilor nr. 5", "postal_code": "500030",
         "caen": "1413 Fabricarea altor articole de îmbrăcăminte", "admin": _p("ANA", "MARIN", "283014••••••"),
         "owners": [_p("ANA", "MARIN", "283014••••••", 80), _p("LUCIAN", "MARIN", "180519••••••", 20)],

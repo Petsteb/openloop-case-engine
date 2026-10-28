@@ -9,7 +9,7 @@ CASE_START = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
 
 APPLICATION = """CERERE DE FINANȚARE — IMM
 Solicitant: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Sediu social: Str. Fagului nr. 7, bl. A2, Cluj-Napoca, jud. Cluj
 Cod poștal: 400127
 Produs solicitat: Credit capital de lucru
@@ -20,7 +20,7 @@ Data cererii: {issued}"""
 
 FINANCIALS = """SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS
 Entitate: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Cifra de afaceri netă: 3.150.000 RON
 EBITDA: 420.000 RON
 Serviciul anual al datoriei existente: 180.000 RON
@@ -28,14 +28,14 @@ Profit net: 210.000 RON"""
 
 UBO_V1 = """DECLARAȚIE PRIVIND BENEFICIARUL REAL
 Societate: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Beneficiar real: Andrei Munteanu — 70%
 Beneficiar real: Elena Munteanu — 30%
 Data declarației: 15.09.2026"""
 
 UBO_V2 = """DECLARAȚIE PRIVIND BENEFICIARUL REAL (actualizată)
 Societate: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Beneficiar real: Andrei Munteanu — 45%
 Beneficiar real: Elena Munteanu — 30%
 Beneficiar real: Radu Pop — 25%
@@ -49,7 +49,7 @@ Valabilă până la: {valid_until}"""
 
 ONRC = """CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
 Denumire: BRUTĂRIA AURORA S.R.L.
-Cod unic de înregistrare: 45123879
+Cod unic de înregistrare: 94123877
 Stare firmă: ACTIVĂ
 Sediul social: Calea Fagului nr. 7, Cluj-Napoca, Județ Cluj
 Cod poștal: 400127
@@ -61,7 +61,7 @@ Data eliberării: {issued}"""
 
 FISCAL = """CERTIFICAT DE ATESTARE FISCALĂ — ANAF
 Contribuabil: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Obligații fiscale restante: NU
 Data eliberării: {issued}"""
 
@@ -127,7 +127,7 @@ def materialise(item: dict, now: datetime) -> list[dict]:
 # ----------------------------------------------------------------------------- sample files for the client portal
 WRONG_COMPANY_ONRC = """CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
 Denumire: PANIFICAȚIA DOINA S.R.L.
-Cod unic de înregistrare: 30528174
+Cod unic de înregistrare: 93052816
 Stare firmă: ACTIVĂ
 Sediul social: Str. Morii nr. 12, Turda, Județ Cluj
 Cod poștal: 401061
@@ -137,14 +137,14 @@ Data eliberării: {issued}"""
 
 ADDRESS_PROOF = """CONTRACT DE COMODAT — SEDIU SOCIAL (extras)
 Societate: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Sediu social: Str. Fagului nr. 7, bl. A2, Cluj-Napoca, jud. Cluj
 Cod poștal: 400127
 Data: {issued}"""
 
 MANDATE = """ÎMPUTERNICIRE
 Societate: BRUTĂRIA AURORA S.R.L.
-CUI: 45123879
+CUI: 94123877
 Administrator: MUNTEANU ANDREI
 Împuternicit: MUNTEANU ANDREI
 Data: {issued}"""

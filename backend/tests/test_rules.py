@@ -5,8 +5,8 @@ from app.ledger import Ledger
 
 
 def test_cui_checksum():
-    assert rules.cui_checksum_valid("45123879")
-    assert rules.cui_checksum_valid("RO45123879")
+    assert rules.cui_checksum_valid("94123877")
+    assert rules.cui_checksum_valid("RO94123877")
     assert not rules.cui_checksum_valid("45123870")
     assert not rules.cui_checksum_valid("1")
 
