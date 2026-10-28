@@ -5,7 +5,7 @@ and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate v
 """
 from datetime import datetime, timedelta
 
-from . import extract, registry, rules
+from . import extract, extractors, learner, registry, rules, sequence
 from . import template as T
 from .judge import judge
 from .ledger import Ledger
@@ -65,6 +65,7 @@ def reduce(events: list[dict]) -> dict:
                 ex.update(status="RESOLVED", resolution={**p, "at": e["sim_time"], "by": e["actor"], "seq": e["seq"]})
                 if ex["kind"] == "address_uncertain" and p["action_id"] == "same_address":
                     st["precedents"].append({"kind": "address", "a": ex["judge"]["a"], "b": ex["judge"]["b"],
+                                             "postal": ex.get("postal"), "analyst": e["actor"].get("id"),
                                              "decision": "same_address", "exception_id": ex["id"], "seq": e["seq"]})
             case "TIMER_SET":
                 st["timers"][p["id"]] = {**p, "status": "PENDING"}
@@ -77,8 +78,19 @@ def reduce(events: list[dict]) -> dict:
             case "CASE_STATUS":
                 st["status"] = p["status"]
             case "AGENT_STEP":
-                st["trace"].append({"seq": e["seq"], "sim_time": e["sim_time"], **p})
+                st["trace"].append({"seq": e["seq"], "sim_time": e["sim_time"], "by": e["actor"].get("id"), **p})
     return st
+
+
+def _internal_summary(spec: dict) -> str:
+    p, who = spec["payload"], spec["actor"].get("id", "?")
+    if spec["type"] == "STAFF_CONTACT_CHANGE":
+        return f"Employee {who} changed client {p['client_id']} {p['field']}"
+    if spec["type"] == "CREDIT_ACTION":
+        return f"Employee {who} ran a {p['action'].replace('_', ' ')} for client {p['client_id']}"
+    if spec["type"] == "CLIENT_CONFIRMATION":
+        return f"Client {p['client_id']} confirmed the change by {p.get('channel', 'phone')}"
+    return spec["type"].replace("_", " ").lower()
 
 
 def doc_key(doc: dict) -> str:
@@ -125,10 +137,13 @@ def _pending(st: dict, key: str) -> bool:
 
 
 def allowed_actions(st: dict) -> list[dict]:
-    if st["status"] != "OPEN":
+    """OPEN: everything below. ON_HOLD (compliance): legal clocks and escalations still run, nothing reaches the
+    client and nothing moves the file forward. READY_FOR_DECISION: nothing (a regression reopens the file first)."""
+    if st["status"] not in ("OPEN", "ON_HOLD"):
         return []
+    on_hold = st["status"] == "ON_HOLD"
     acts, open_ex = [], {e["requirement_id"] for e in st["exceptions"].values() if e["status"] == "OPEN"}
-    for key in needed_doc_keys(st):
+    for key in ([] if on_hold else needed_doc_keys(st)):
         if not _pending(st, key):
             acts.append({"tool": "request_document", "params": {"key": key}})
     r2 = st["reqs"]["R2"]
@@ -139,7 +154,8 @@ def allowed_actions(st: dict) -> list[dict]:
     for r in st["reqs"].values():
         if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW") and r["id"] not in open_ex and not _already_decided(st, r):
             acts.append({"tool": "escalate_to_analyst", "params": {"req_id": r["id"]}})
-    if all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex and not needed_doc_keys(st):
+    if (not on_hold and all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex
+            and not needed_doc_keys(st)):
         acts.append({"tool": "mark_ready_for_decision", "params": {}})
     return acts
 
@@ -164,7 +180,7 @@ def gate(st: dict, tool: str, params: dict) -> tuple[bool, str]:
     if tool == "approve_credit":
         return False, "DENY: GATE-02"
     if tool == "send_reminder":
-        ok = st["requests"].get(params.get("key"), {}).get("status") == "PENDING"
+        ok = st["status"] == "OPEN" and st["requests"].get(params.get("key"), {}).get("status") == "PENDING"
         return (True, "ALLOW") if ok else (False, "DENY: GATE-01")
     if tool == "request_document" and _pending(st, params.get("key", "")):
         return False, "DENY: GATE-03"
@@ -198,7 +214,10 @@ class Case:
         item = next(i for i in SCENARIO if i["id"] == item_id)
         self.emit("SCENARIO_DELIVERED", ENGINE, {"item_id": item_id}, f"Inbound: {item['label']}")
         received = []
-        for doc in materialise(item, self.now):
+        for spec in item.get("events", []):  # internal bank events (staff actions), checked by sequence rules
+            received.append(self.emit(spec["type"], spec["actor"], spec["payload"], _internal_summary(spec)))
+            sequence.check(self)
+        for doc in (materialise(item, self.now) if item.get("docs") else []):
             doc_id = self._next_id("doc", "docs")
             payload = {"id": doc_id, **doc}
             noun = "Email" if doc["type"] == "email" else "Document"
@@ -237,7 +256,18 @@ class Case:
         ev = self.emit("EXCEPTION_RESOLVED", ANALYST, {"id": exception_id, "action_id": action_id, "note": note,
                                                        "requirement_id": ex["requirement_id"]},
                        f"Analyst resolved {exception_id}: {action_id}")
+        if ex["kind"] == "sequence_insider" and action_id == "escalate_compliance":
+            self.emit("CASE_STATUS", ENGINE, {"status": "ON_HOLD", "reason": f"Escalated to compliance ({exception_id})"},
+                      f"File on hold: {exception_id} escalated to compliance")
         return ev
+
+    def release_hold(self, by: str, note: str = "") -> dict:
+        """Compliance clears the file: back to OPEN so the agent and the client flow resume."""
+        if self.state()["status"] != "ON_HOLD":
+            raise ValueError("file is not on hold")
+        return self.emit("CASE_STATUS", {"type": "compliance", "id": by},
+                         {"status": "OPEN", "reason": f"Hold released by compliance ({by})", "note": note},
+                         f"Hold released by compliance ({by})")
 
     # --- tool execution (the agent's only door into the case)
     def run_tool(self, tool: str, params: dict, reason: str, actor: dict = AGENT) -> dict:
@@ -277,7 +307,7 @@ def t_get_document(case: Case, doc_id: str) -> dict:
 
 def t_extract_fields(case: Case, doc_id: str) -> dict:
     doc = case.state()["docs"][doc_id]
-    ex = extract.extract_scripted(doc["type"], doc["text"])
+    ex, extractor = extractors.extract(doc["type"], doc["text"])
     unverified = extract.verify_quotes(doc["text"], ex)
     if unverified:  # a field whose quote is not in the document can never be used as evidence
         ex["fields"] = [f for f in ex["fields"] if f["quote"] not in unverified]
@@ -286,9 +316,13 @@ def t_extract_fields(case: Case, doc_id: str) -> dict:
                 ex[k] = [o for o in ex[k] if o["quote"] not in unverified]
     injections = extract.scan_injection(doc["text"])
     case.emit("FIELDS_EXTRACTED", AGENT, {"doc_id": doc_id, "extraction": ex, "unverified_quotes": unverified,
-                                          "injection_lines": injections},
-              f"Extracted {len(ex['fields'])} fields from {doc['name']} (quotes verified: {not unverified})")
-    out = {f["field"]: f["value"] for f in ex["fields"]}
+                                          "injection_lines": injections, "extractor": extractor},
+              f"Extracted {len(ex['fields'])} fields from {doc['name']} via {extractor}"
+              + (f"; rejected {len(unverified)} field(s) whose quote is not in the document" if unverified else
+                 "; all quotes verified"))
+    out = {"extractor": extractor, **{f["field"]: f["value"] for f in ex["fields"]}}
+    if unverified:
+        out["rejected_unverified_quotes"] = unverified
     for k in ("declared_owners", "register_owners"):
         if k in ex:
             out[k] = [f"{o['name']} {o['pct']:g}%" for o in ex[k]]
@@ -413,14 +447,20 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if ruling and ruling["resolution"]["action_id"] == "different_address":
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the addresses differ ({ruling['id']}); "
                     "client must clarify the registered office", "evidence": ev, "details": {"kind": "address_differs"}}
+        learned = learner.promoted_check_for(a, b, pa, po)
+        if learned:
+            return {"status": "SATISFIED", "reason": f"Learned check {learned['id']} (promoted by {learned['promoted_by']}): "
+                    "same street, number, city and postal code; only the street type differs", "evidence": ev,
+                    "details": {"learned_check": learned["id"]}}
         j = judge("address", a, b)
-        if j["top"] == "same_address" and j["p_top"] >= j["threshold"]:
-            return {"status": "SATISFIED", "reason": f"Postal codes match; judge: same address p={j['p_top']}",
+        if j["auto_accept"]:
+            return {"status": "SATISFIED", "reason": f"Postal codes match; judge and similarity check agree: same address "
+                    f"(p={j['p_top']}, {j['second_opinion']['p_same']})",
                     "evidence": ev, "details": {"judge": j}}
         return {"status": "NEEDS_REVIEW", "reason": f"Postal codes match but judge is unsure "
                 f"(same {j['probs'].get('same_address')} / different {j['probs'].get('different_address')}, "
                 f"threshold {j['threshold']})", "evidence": ev,
-                "details": {"kind": "address_uncertain", "judge": j, "snippets": ev}}
+                "details": {"kind": "address_uncertain", "judge": j, "snippets": ev, "postal": [pa, po]}}
 
     if req_id == "R4":
         if not (have(app) and have(fin)):
@@ -449,8 +489,9 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the signatory is not the administrator ({ruling['id']}); "
                     "a signed mandate is required", "evidence": ev, "details": {"kind": "signatory_differs"}}
         j = judge("person", s, adm)
-        if j["top"] == "same_person" and j["p_top"] >= j["threshold"]:
-            return {"status": "SATISFIED", "reason": f"Signatory = administrator (judge p={j['p_top']})", "evidence": ev,
+        if j["auto_accept"]:
+            return {"status": "SATISFIED", "reason": f"Signatory = administrator (judge p={j['p_top']}, similarity "
+                    f"{j['second_opinion']['p_same']})", "evidence": ev,
                     "details": {"judge": j}}
         return {"status": "NEEDS_REVIEW", "reason": f"Signatory vs administrator unclear (p_same={j['probs'].get('same_person')})",
                 "evidence": ev, "details": {"kind": "signatory_uncertain", "judge": j, "snippets": ev}}
@@ -559,11 +600,13 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     judge_view = None
     if d.get("judge"):
         judge_view = {"question": d["judge"]["question"], "probs": d["judge"]["probs"], "threshold": d["judge"]["threshold"],
-                      "source": d["judge"]["source"], "a": d["judge"]["a"], "b": d["judge"]["b"]}
+                      "source": d["judge"]["source"], "a": d["judge"]["a"], "b": d["judge"]["b"],
+                      "second_opinion": d["judge"].get("second_opinion")}
     case.emit("EXCEPTION_RAISED", AGENT, {
         "id": ex_id, "requirement_id": req_id, "kind": kind, "severity": severity, "title": title,
         "summary": summary or req["reason"], "rule": {"id": rule_id, "text": T.RULES[rule_id]},
-        "snippets": d.get("snippets", req["evidence"]), "judge": judge_view, "actions": actions}, f"{ex_id} raised for {req_id}: {title}")
+        "snippets": d.get("snippets", req["evidence"]), "judge": judge_view, "actions": actions,
+        **({"postal": d["postal"]} if d.get("postal") else {})}, f"{ex_id} raised for {req_id}: {title}")
     return {"exception": ex_id, "title": title}
 
 

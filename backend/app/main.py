@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from typing import Literal  # noqa: E402
 
-from . import registry  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from . import case_views, chat, learner, notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
 from .engine import Case  # noqa: E402
@@ -42,6 +44,21 @@ class RegistryToggle(BaseModel):
     down: bool
 
 
+class Promote(BaseModel):
+    by: str = Field(min_length=1, max_length=80)
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=6000)
+
+
+class ChatIn(BaseModel):
+    role: Literal["client", "employee"]
+    message: str = Field(min_length=1, max_length=1000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=10)
+
+
 def _text(v) -> str:
     return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)
 
@@ -60,7 +77,8 @@ def bundle(case: Case) -> dict:
                          {"evidence": r["evidence"]} for r in st["reqs"].values()],
         "documents": [{k: d.get(k) for k in ("id", "type", "name", "received_at", "issued_at")} for d in st["docs"].values()],
         "exceptions": [{k: x.get(k) for k in ("id", "requirement_id", "status", "severity", "title", "summary", "rule",
-                                              "snippets", "judge", "actions", "created_at", "notes", "kind")} |
+                                              "snippets", "judge", "actions", "created_at", "notes", "kind",
+                                              "first_seq", "then_seq")} |
                        {"resolution": ({k: v for k, v in x["resolution"].items() if k != "seq"} if x.get("resolution") else None)}
                        for x in st["exceptions"].values()],
         "timers": [{k: t.get(k) for k in ("id", "kind", "label", "due", "status")} for t in st["timers"].values()],
@@ -74,8 +92,14 @@ def bundle(case: Case) -> dict:
         },
         "events": [{k: e[k] for k in ("seq", "type", "sim_time", "actor", "summary", "hash", "prev_hash")} for e in ev],
         "trace": [{"seq": s["seq"], "sim_time": s["sim_time"], "reason": s["reason"], "tool": s["tool"],
-                   "input": s["input"], "output": _text(s["output"]), "gate": s["gate"]} for s in steps],
-        "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"]} for i in SCENARIO],
+                   "input": s["input"], "output": _text(s["output"]), "gate": s["gate"], "by": s.get("by")}
+                  for s in steps],
+        "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"],
+                      "internal": "events" in i} for i in SCENARIO],
+        "learning": {"checks": learner.PROMOTED, "proposals": len(learner.proposals(st))},
+        "outbox": [{"seq": e["seq"], "sim_time": e["sim_time"], "status": "sent" if e["type"] == "EMAIL_SENT" else "failed",
+                    **{k: e["payload"].get(k) for k in ("to", "subject", "body", "mode", "error")}}
+                   for e in reversed(ev) if e["type"] in ("EMAIL_SENT", "EMAIL_FAILED")],
     }
 
 
@@ -106,8 +130,8 @@ def inbound(case_id: str, body: Inbound):
     with LOCK:
         if body.item_id in case.state()["delivered"]:
             raise HTTPException(409, "scenario item already delivered")
-        for event in case.deliver(body.item_id):
-            AGENT.handle(case, event)
+        AGENT.handle_batch(case, case.deliver(body.item_id))  # pipeline per document, one planning step per click
+        notifier.flush(case)
         return bundle(case)
 
 
@@ -117,8 +141,13 @@ def advance(case_id: str, body: Advance):
     if not 0 < body.days <= 60:
         raise HTTPException(422, "days must be in (0, 60]")
     with LOCK:
-        for fired in case.advance(body.days):
-            AGENT.handle(case, fired)
+        fired = []
+        for ev in case.advance(body.days):  # each timer goes through the pipeline as it fires...
+            AGENT.pipeline(case, ev)
+            fired.append(ev)
+        if fired:
+            AGENT.plan(case, fired)  # ...then one planning step for the whole skip
+        notifier.flush(case)
         return bundle(case)
 
 
@@ -132,8 +161,97 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
             event = case.resolve(exception_id, body.action_id, body.note)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
-        AGENT.handle(case, event)
+        AGENT.handle_batch(case, [event])
+        notifier.flush(case)
         return bundle(case)
+
+
+class Release(BaseModel):
+    by: str = Field(min_length=1, max_length=80)
+    note: str = Field(default="", max_length=500)
+
+
+@app.post("/api/cases/{case_id}/release-hold")
+def release_hold(case_id: str, body: Release, x_staff_token: str | None = Header(default=None)):
+    """Compliance lifts an ON_HOLD (e.g. the insider pattern turned out legitimate)."""
+    _require_staff(x_staff_token)
+    case = _case(case_id)
+    with LOCK:
+        try:
+            event = case.release_hold(body.by, body.note)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        AGENT.handle_batch(case, [event])
+        notifier.flush(case)
+        return bundle(case)
+
+
+def _require_staff(token: str | None) -> None:
+    """Demo has no login; set STAFF_TOKEN to require X-Staff-Token on staff-only calls (production: bank SSO)."""
+    expected = os.environ.get("STAFF_TOKEN", "")
+    if expected and token != expected:
+        raise HTTPException(403, "staff token required")
+
+
+@app.post("/api/cases/{case_id}/chat")
+def chat_endpoint(case_id: str, body: ChatIn, x_staff_token: str | None = Header(default=None)):
+    """Read-only Q&A about the case for a client or an employee; only the audit append takes the write lock."""
+    if body.role == "employee":
+        _require_staff(x_staff_token)
+    case = _case(case_id)
+    result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
+    with LOCK:
+        if CASES.get(case_id) is case:  # a reset during the answer replaced the case: don't log into the new ledger
+            chat.log_turn(case, body.role, body.message, result)
+    return result
+
+
+@app.get("/api/cases/{case_id}/client-view")
+def client_view(case_id: str):
+    """Everything the applicant may see, for a customer-facing page (same allow-list as the client chat)."""
+    case = _case(case_id)
+    return {"overview": case_views.overview(case, "client"),
+            "missing_documents": case_views.missing_documents(case, "client"),
+            "issues": case_views.issues(case, "client", "open"),
+            "timeline": case_views.timeline(case, "client"),
+            "emails": [{k: e["payload"].get(k) for k in ("subject", "body")} | {"sim_time": e["sim_time"]}
+                       for e in case.ledger.events if e["type"] == "EMAIL_SENT"]}
+
+
+def _learning_case() -> Case:
+    return _case("demo-1")
+
+
+@app.get("/api/learning")
+def learning_state():
+    return {"proposals": learner.proposals(_learning_case().state()), "checks": learner.PROMOTED}
+
+
+@app.post("/api/learning/proposals/{proposal_id}/backtest")
+def learning_backtest(proposal_id: str):
+    try:
+        return learner.backtest(proposal_id)
+    except KeyError:
+        raise HTTPException(404, "unknown proposal")
+
+
+@app.post("/api/learning/proposals/{proposal_id}/promote")
+def learning_promote(proposal_id: str, body: Promote, x_staff_token: str | None = Header(default=None)):
+    """Maker-checker: 409 when the promoter is one of the analysts whose rulings created the proposal.
+    Identity here is the typed name (no login in the demo); production takes it from the bank's SSO."""
+    _require_staff(x_staff_token)
+    case = _learning_case()
+    with LOCK:
+        try:
+            check = learner.promote(case.state(), proposal_id, body.by)
+        except KeyError:
+            raise HTTPException(404, "unknown proposal")
+        except PermissionError as exc:
+            raise HTTPException(409, str(exc))
+        case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
+                  {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
+                  f"Learned check {check['id']} promoted by {check['promoted_by']}")
+    return {"check": check}
 
 
 @app.get("/api/cases/{case_id}/verify")

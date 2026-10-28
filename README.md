@@ -35,13 +35,21 @@ Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and 
 6. **Inbound → updated documents**: the beneficial owners match, the IDs are on file, and the legal clock is **cancelled**. Every check passes, so the file becomes **READY_FOR_DECISION**.
 7. **+7 days**: the certificate passes 30 days and becomes **EXPIRED**. The engine enforces this, not the agent. The file **reopens** and the agent re-requests the certificate.
 8. **Inbound → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
-9. **Verify ledger**: the hash chain is intact.
+9. **Inbound → internal staff events** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
+10. **Ask the case** (chat, two roles):
+    - **Employee:** "When did we learn about Radu Pop and what did we do?" The answer cites ledger events `[#seq]`.
+    - **Client:** "What do you still need from me?" The answer is plain-language. The client role never sees internal reviews.
+11. **Outbox**: the client got one Romanian email per step: documents needed, reminders, file complete. Never anything internal.
+12. **Verify ledger**: the hash chain is intact, including every chat turn and email.
 
 ## Modes
 | Env | Values | Notes |
 |---|---|---|
-| `AGENT_MODE` | `scripted` (default) / `bedrock` | `bedrock` = Claude plans its own tool calls (Anthropic SDK Mantle client, key in `AWS_BEARER_TOKEN_BEDROCK`). On any failure it falls back to scripted (30 s timeout). Requests, legal clocks, escalations and expiry are enforced in code either way. |
+| `AGENT_MODE` | `scripted` (default) / `bedrock` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **Claude (Bedrock, `us.anthropic.claude-opus-5-5`, `us-east-1`) plans once per click** over the allowed actions, interprets emails and words escalations. On any failure it falls back to scripted (30 s timeout), and a code safety net runs after it either way. |
 | `JUDGE_MODE` | `heuristic` (default) / `featherless` | `featherless` calls `/v1/classifier`; on error it falls back to heuristic and says so |
+| `EMAIL_MODE` | `outbox` (default) / `gmail` | `gmail` sends through SMTP with `GMAIL_USER` + `GMAIL_APP_PASSWORD`; `NOTIFY_TO` redirects all demo mail to a team inbox |
+
+**Bring your own document AI:** `template.EXTRACTOR_ROUTES` routes each document type to an adapter (`backend/app/extractors.py`). Financial statements go through a simulated bank document-AI adapter. Whatever answers must return fields plus verbatim quotes, which code verifies; `DOCAI_CURVEBALL=1` shows an unverifiable field being rejected.
 
 Copy `.env.example` to `.env` to configure.
 
@@ -50,10 +58,17 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **The ledger is the only truth.** State = `reduce(events)`, each event hashes the previous one, and `GET /api/cases/{id}/verify` checks the chain.
 - **Hard rules are code** (`backend/app/rules.py`) and each has a rule ID: HR-01 CUI checksum through HR-08 fiscal certificate.
 - **Gate** (`engine.gate`): only state-allowed actions run. The only approve tool is hard-wired to DENY (GATE-02), and duplicate requests are denied (GATE-03).
-- **No model overrides a hard rule.** The judge only settles fuzzy matches (name and address variants). It auto-accepts only above its threshold, and only after the hard facts (postal code, tax ID) already match; otherwise it escalates.
+- **No model overrides a hard rule.** The judge only settles fuzzy matches (name and address variants), and only after the hard facts (postal code, tax ID) already match.
+  - It auto-accepts only when the Featherless classifier (≥ 0.9) **and** an independent similarity check (≥ 0.8) agree; otherwise it escalates.
+  - **Measured on 150 labelled pairs** (`backend/eval/`): the classifier alone auto-approved 7 wrong matches, for example "Str. Gării" vs "Calea Gării" at p = 1.0. Requiring both gave **0 false approvals** on the tune and test splits, with the same coverage.
 - **Code enforces the obligations.** Document expiry, legal clocks, escalations and missing-document requests run in code whatever the model does. A ready file reopens when evidence goes stale.
 - **Every agent step is logged** with its reason, tool, input, output and gate verdict, including failed calls.
 - **Quotes are verified:** every extracted field carries a verbatim quote. A field whose quote isn't in the document text is dropped and can never serve as evidence.
+
+## Known limitations (demo scope)
+- **Identity is simulated.** Roles (client, employee, compliance) and names (analyst, supervisor) come from the request; there is no login. `STAFF_TOKEN` can gate staff-only calls. Production would take identity from the bank's SSO, which is what makes the maker-checker rule binding.
+- **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.
+- **Learned check backtest.** It runs on a synthetic labelled set (`backend/eval/address_cases.jsonl`) that includes small-town counterexamples, where the naive rule makes 8 false approvals. It is evidence for the demo, not a substitute for backtesting on the bank's historical rulings.
 
 ## Domain evidence
 `research/` holds sourced findings: Raiffeisen fines, the AMLR/DORA/AI Act timelines, prior art, and 13 processes where the

@@ -81,6 +81,58 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
 - **`judge`**, when present: `{"question": "...", "probs": {"same_address": 0.86, "different_address": 0.14}, "threshold": 0.9}`
 - **`gate` in trace:** `ALLOW` | `DENY: <rule id>` | `-` (read-only tools)
 
+### API additions (v2, all additive)
+- **`POST /api/cases/{case_id}/chat`**
+  - **Body:** `{"role": "client" | "employee", "message": "1–1000 chars", "history": [{"role": "user" | "assistant", "content": "..."}]}`, with at most 10 history items.
+  - **Returns:**
+    ```json
+    {"answer": "Text with [#42] / [doc-3] markers",
+     "citations": [{"kind": "event" | "doc", "ref": "#42" | "doc-3", "label": "event summary or document name"}],
+     "tools_used": [{"tool": "get_timeline", "input": {}}],
+     "mode": "bedrock" | "offline"}
+    ```
+  - **Read-only:** the chat appends one `CHAT_TURN` event to the ledger and changes nothing else.
+  - **Client role:** never receives internal review details.
+- **`GET /api/cases/{case_id}/client-view`:** returns `{"overview", "missing_documents", "issues", "timeline", "emails"}`. Everything the applicant may see, from the same allow-list as the client chat. Use it for an optional customer page.
+- **`POST /api/cases/{case_id}/release-hold`:**
+  - **Body:** `{"by": "compliance-1", "note": "..."}`.
+  - **Effect:** compliance lifts an `ON_HOLD`. Returns the bundle, now with status `OPEN`, and the agent resumes.
+  - **409** if the file is not on hold.
+- **Optional staff token:** if `STAFF_TOKEN` is set, employee chat, `release-hold` and `promote` require the header `X-Staff-Token`. Unset in the demo; production takes identity from the bank's SSO.
+- **`case.status`:** may also be `ON_HOLD` (show as "On hold", brick red). It is set when an insider-pattern card is escalated to compliance.
+- **`exceptions[]` with `kind: "sequence_insider"`** (rule `SR-01`):
+  - `requirement_id` is `"MON"`, meaning monitoring, not one of R1–R6.
+  - Each `snippets[]` entry has `doc_id: null` and `label: "Ledger #<seq>"`, and its quote is the event summary.
+  - Actions: `escalate_compliance`, `legitimate`.
+  - Extra fields: `first_seq`, `then_seq`.
+- **`trace[].by`:** who acted.
+  - `"pipeline"`: code, always runs.
+  - `"claude"`: Bedrock planner.
+  - `"planner"`: scripted planner.
+  - `"safety-net"`: code, after Claude.
+- **`scenario[].internal`:** `true` for bank-internal events (staff actions), as opposed to client uploads. Suggested label prefix: "Internal: …".
+- **`outbox[]`, newest first:** `{"seq", "sim_time", "status": "sent" | "failed", "to", "subject", "body", "mode": "outbox" | "gmail", "error"}`. These are client emails, in Romanian.
+- **`config.agent_status`:** `"ok"` or `"fallback (<Error>)"`.
+- **`exceptions[].judge.second_opinion`:** `{"method": "string similarity", "p_same": 0.48, "threshold": 0.8}`.
+  - Auto-accept needs the classifier (`probs`, ≥ `threshold`) **and** this second opinion to agree.
+  - Show it as a second bar labelled "Similarity check".
+  - Calibration on 150 labelled pairs: the classifier alone had 7 false approvals; with both required, 0. See `backend/eval/calibration.json` and `docs/pitch/calibration.png`.
+- **Learning loop:** analyst rulings become a check; promotion requires a second person.
+  - **`GET /api/learning`** returns `{"proposals": [...], "checks": [...]}`.
+    - A proposal is `{"id": "P-address-variant", "kind", "support": 3, "ruled_by": ["analyst-1", ...], "description", "examples": [{"a", "b", "source"}]}`.
+    - It appears after 3 matching rulings. In the demo that is 2 past rulings plus the analyst's "same address" click.
+  - **`POST /api/learning/proposals/{id}/backtest`** returns `{"n": 40, "auto_resolved", "false_approvals": 0, "false_approval_ids", "manual_review_rate", "same_pairs_caught", "same_pairs_total"}`.
+  - **`POST /api/learning/proposals/{id}/promote`**
+    - **Body:** `{"by": "supervisor-1"}`.
+    - **Returns:** `{"check": {"id": "LC-1", "promoted_by", "promoted_at", "support", "backtest", "description"}}`.
+    - **409** when `by` is one of `ruled_by` (maker-checker), for example `analyst-1`.
+    - It also writes a `CHECK_PROMOTED` event to the ledger.
+  - **Bundle:** `learning: {"checks": [...], "proposals": <count>}`.
+  - **After promotion:** the next time the file reaches R3 (for example after "Reset demo" plus the trade-register certificate), R3 is verified by `Learned check LC-1` with no card. Promoted checks survive a reset.
+- **New event types in `events[]`:**
+  - **Hide from the timeline rail; show in the Ledger tab only:** `CHAT_TURN`, `EMAIL_SENT`, `EMAIL_FAILED`.
+  - **Bank-internal; show in the Ledger tab:** `STAFF_CONTACT_CHANGE`, `CREDIT_ACTION`, `CLIENT_CONFIRMATION`.
+
 ## Rulings made under time pressure (MVP, 80 min)
 - The controller (Claude) writes the backend inline; one subagent builds the frontend in parallel against this contract; one review at the end. Cost if wrong: less per-task review, so the bugs get caught later.
 - Commits go straight to `main` in a new repo; the user asked for one shared repo. Cost if wrong: switching to branches later is trivial.

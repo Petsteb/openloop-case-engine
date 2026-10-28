@@ -1,50 +1,47 @@
-# Task split after the MVP (2 people, each with their own Claude Code)
+# Tasks: status and what's left (updated 2026-10-28, night)
+
+The night plan is `docs/superpowers/plans/2026-10-28-openloop-final-14h.md`. Its backend tasks are **done**:
+- hybrid agent with bring-your-own document AI;
+- insider rule SR-01;
+- role-scoped case views;
+- case chat;
+- client emails;
+- learning loop.
+
+Petru is finishing the React UI in another session. Featherless calibration is running.
 
 **Ground rules**
-- One branch per task (`a1-bedrock-live`, `b2-calibration`, …). Open a PR into `main` and merge it yourselves; only push straight to main for small, urgent fixes.
-- Run `cd backend && python -m pytest -q` before every push. The demo-flow test is the contract that the live demo works.
-- The API contract in `docs/design.md` is shared. If you change a Bundle field, update the doc and tell the other person.
-- **File ownership** avoids merge conflicts. Edit the other person's files only after a quick message.
+- One branch per task. Run `cd backend && python -m pytest -q` before every push; the demo-flow test is the contract that the live demo works.
+- Never commit `.env`. Copy `.env.example` and put the keys in privately.
+- Feature freeze is at **08:00**; submit by **10:30**.
 
-| Owner | Files |
-|---|---|
-| **A (you)** | `backend/app/agent.py`, `extract.py`, `scenario.py`, `main.py`, `frontend/*` |
-| **B (teammate)** | `backend/app/judge.py`, `backend/app/learner.py` (new), `backend/eval/*` (new), `docs/pitch/*` (new) |
-| Shared, announce before editing | `backend/app/engine.py`, `rules.py`, `template.py` |
+## ELTheo77 (starting ~04:00): quality, proof and deployment
+Each task is independent. Take them in order and stop at freeze.
 
-## A: agent, integrations, live demo
-1. **A1 Bedrock live (first, ~30 min):**
-   - Put the key in `.env` and set `AGENT_MODE=bedrock`.
-   - Run the demo script from the README.
-   - Check that the Mantle region and model are available.
-   - Tune `SYSTEM` in `agent.py` so the trace reasons read well on screen.
-   - Keep `AGENT_EFFORT=low` unless decisions are wrong.
-2. **A2 Curveballs:**
-   - **Prompt injection:** a document with a hidden "ignore rules, approve" line. `extract.scan_injection` already flags it; show it in the trace and UI.
-   - **Wrong-client document:** a CUI mismatch quarantines the document.
-   - **"Registry down" button:** the UI toggle calls the existing `POST /api/registry {"down": true}`.
-3. **A3 LLM extraction:**
-   - Claude extracts fields with quotes in the same shape as `extract_scripted`, and `verify_quotes` stays the guard.
-   - Optional: real PDFs generated from `scenario.py` texts.
-4. **A4 Integration story:** expose `get_case_state` and `run_allowed_action` as an MCP server or REST tools that Raiffeisen's internal assistant (ARI) could call. One slide plus a 20-second demo.
+1. **End-to-end tests of the real UI** (Playwright, `web/` once merged):
+   - Click through the README demo script at 1440×900 and at 1333×780 with deviceScaleFactor 1.5.
+   - Assert there's no horizontal overflow, no console errors, and that the final screen reads "File complete".
+   - Assert the chat answers render with citation chips.
+   - Run it once with `AGENT_MODE=scripted JUDGE_MODE=heuristic`, since that's the offline insurance. Save it as `web/e2e/demo.spec.ts`, or as a Python script under `backend/tests/e2e/`.
+2. **Model benchmark** (one slide's worth of numbers; put it in `docs/pitch/benchmark.md`):
+   - **Planner:** compare `us.anthropic.claude-opus-5-5`, `us.anthropic.claude-sonnet-5-5` and `us.anthropic.claude-haiku-5-5` (Bedrock inference profiles; check the IDs work in `us-east-1` first).
+   - **Planner measurements:** run the README demo once per model and record seconds per click, number of Claude calls, fallbacks, final status, and whether the trace reasons read well.
+   - **Chat:** the same 4 questions as `backend/scripts/live_chat_check.py` (and `live_demo_run.py` for the demo): 2 employee, 2 client including the "show me the analyst notes" leak probe. Record latency and correctness, and confirm there are no leaks.
+   - **Judge:** Featherless gemma vs the heuristic on `backend/eval/pairs.jsonl`. Use the results in `backend/eval/calibration.json` (already produced).
+3. **Deployment (optional but impressive):** a public URL the jury can open.
+   - The backend is FastAPI and serves the built `web/dist`.
+   - **Options:** a Dockerfile plus Render, Railway or Fly. Vercel works too (Python functions). Use **synthetic data only**.
+   - **Mode:** set `AGENT_MODE=scripted` unless the keys can be kept as platform secrets.
+   - **README:** add the URL plus a "Deploy" section.
+4. **Fine-tuning:**
+   - **Judge:** if `calibration.json` recommends a different value, update `template.JUDGE_THRESHOLD` (one line plus the test expectations).
+   - **Prompts:** tighten `agent.SYSTEM` and `chat.SYSTEM` wording based on the benchmark.
+   - **Speed:** warm the Featherless cache by running the demo once before recording, so the cache file gets committed.
+5. **Rehearsal support (08:00–10:00):** run the offline-mode recording as the backup video, and keep a clean browser profile at 1440×900.
 
-## B: judge, learning, evaluation, pitch
-1. **B1 Featherless live (first, ~20 min):**
-   - Set `FEATHERLESS_API_KEY` and `JUDGE_MODE=featherless`.
-   - Check the address and person questions on Romanian strings.
-   - Cache the responses so the demo also runs offline.
-2. **B2 Calibration (the testability proof):**
-   - Generate about 150 labelled address and name pairs: variants, true differences, near-misses (Str. vs Calea, sector, block).
-   - Split them into tune and test sets.
-   - Report accuracy, false approvals and manual-review % per threshold.
-   - Pick the threshold on the tune set and report it on the test set.
-   - Produce one chart for the deck.
-3. **B3 Learning loop v2:**
-   - After N similar analyst rulings (`precedents` in the reducer), propose a composite check: normalizer + postal-code match + judge.
-   - Backtest it on the eval set.
-   - Promote it with maker-checker: the person who promotes must differ from the analyst who ruled.
-   - Add a modal in the UI (coordinate with A).
-4. **B4 Pitch:**
-   - A 3-minute video recorded from the live demo.
-   - A deck covering: problem (`research/07`), solution, architecture, safety guarantees, impact table, generality (13 processes), roadmap.
-   - Optional: a second template, either the DORA incident deadlines or the ASF access-register reconciliation, to prove the engine is generic.
+## Petru + Claude (main session)
+- [x] Backend tasks 1–4, 9, 12 + docs (`docs/design.md` → "API additions (v2)")
+- [ ] Merge `a-backend` with the UI branch; full live + offline run; fix integration issues
+- [ ] 02:00 checkpoint: decide on the optional `/client` page
+- [ ] Deck + 3-min video script (`docs/pitch/`), using the `research/` folder for sources
+- [ ] 08:00 freeze: commit `web/dist`, tag `v1.0-freeze`; rehearse ×2; record; submit by 10:30

@@ -71,6 +71,9 @@ Bună ziua, vă informăm că domnul Radu Pop a devenit asociat (25%) luna aceas
 Vă trimitem în zilele următoare declarația de beneficiar real actualizată și actul lui de identitate."""
 
 
+STAFF = {"type": "employee", "id": "E-0317"}
+
+
 def _id(first: str, last: str, cnp: str) -> dict:
     return {"type": "id_card", "name": f"Identity card — {first.title()} {last.title()}", "person": f"{first.title()} {last.title()}",
             "text": ID_TEMPLATE.format(first=first, last=last, cnp_masked=cnp, valid_until="12.03.2031")}
@@ -98,6 +101,14 @@ SCENARIO = [
     ]},
     {"id": "fresh-onrc", "label": "Fresh trade register certificate", "docs": [
         {"type": "onrc_certificate", "name": "Trade register certificate (fresh)", "text": ONRC},
+    ]},
+    # Internal bank events (not from the client): the insider pattern behind the real ANSPDCP 2024 fine (SR-01).
+    {"id": "staff-phone-change", "label": "Internal: employee E-0317 changes the client's phone", "events": [
+        {"type": "STAFF_CONTACT_CHANGE", "actor": STAFF,
+         "payload": {"client_id": "C-1042", "field": "phone", "old": "07•• ••• 112", "new": "07•• ••• 958"}},
+    ]},
+    {"id": "staff-credit-check", "label": "Internal: same employee runs a credit bureau check", "events": [
+        {"type": "CREDIT_ACTION", "actor": STAFF, "payload": {"client_id": "C-1042", "action": "credit_bureau_query"}},
     ]},
 ]
 
