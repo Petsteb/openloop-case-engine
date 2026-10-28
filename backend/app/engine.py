@@ -5,7 +5,7 @@ and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate v
 """
 from datetime import datetime, timedelta
 
-from . import extract, extractors, registry, rules, sequence
+from . import extract, extractors, learner, registry, rules, sequence
 from . import template as T
 from .judge import judge
 from .ledger import Ledger
@@ -65,6 +65,7 @@ def reduce(events: list[dict]) -> dict:
                 ex.update(status="RESOLVED", resolution={**p, "at": e["sim_time"], "by": e["actor"], "seq": e["seq"]})
                 if ex["kind"] == "address_uncertain" and p["action_id"] == "same_address":
                     st["precedents"].append({"kind": "address", "a": ex["judge"]["a"], "b": ex["judge"]["b"],
+                                             "postal": ex.get("postal"), "analyst": e["actor"].get("id"),
                                              "decision": "same_address", "exception_id": ex["id"], "seq": e["seq"]})
             case "TIMER_SET":
                 st["timers"][p["id"]] = {**p, "status": "PENDING"}
@@ -434,6 +435,11 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if ruling and ruling["resolution"]["action_id"] == "different_address":
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the addresses differ ({ruling['id']}); "
                     "client must clarify the registered office", "evidence": ev, "details": {"kind": "address_differs"}}
+        learned = learner.promoted_check_for(a, b, pa, po)
+        if learned:
+            return {"status": "SATISFIED", "reason": f"Learned check {learned['id']} (promoted by {learned['promoted_by']}): "
+                    "same street, number, city and postal code; only the street type differs", "evidence": ev,
+                    "details": {"learned_check": learned["id"]}}
         j = judge("address", a, b)
         if j["top"] == "same_address" and j["p_top"] >= j["threshold"]:
             return {"status": "SATISFIED", "reason": f"Postal codes match; judge: same address p={j['p_top']}",
@@ -441,7 +447,7 @@ def _evaluate(st: dict, req_id: str) -> dict:
         return {"status": "NEEDS_REVIEW", "reason": f"Postal codes match but judge is unsure "
                 f"(same {j['probs'].get('same_address')} / different {j['probs'].get('different_address')}, "
                 f"threshold {j['threshold']})", "evidence": ev,
-                "details": {"kind": "address_uncertain", "judge": j, "snippets": ev}}
+                "details": {"kind": "address_uncertain", "judge": j, "snippets": ev, "postal": [pa, po]}}
 
     if req_id == "R4":
         if not (have(app) and have(fin)):
@@ -584,7 +590,8 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     case.emit("EXCEPTION_RAISED", AGENT, {
         "id": ex_id, "requirement_id": req_id, "kind": kind, "severity": severity, "title": title,
         "summary": summary or req["reason"], "rule": {"id": rule_id, "text": T.RULES[rule_id]},
-        "snippets": d.get("snippets", req["evidence"]), "judge": judge_view, "actions": actions}, f"{ex_id} raised for {req_id}: {title}")
+        "snippets": d.get("snippets", req["evidence"]), "judge": judge_view, "actions": actions,
+        **({"postal": d["postal"]} if d.get("postal") else {})}, f"{ex_id} raised for {req_id}: {title}")
     return {"exception": ex_id, "title": title}
 
 

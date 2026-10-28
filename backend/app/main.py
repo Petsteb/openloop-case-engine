@@ -15,7 +15,7 @@ from typing import Literal  # noqa: E402
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from . import chat, notifier, registry  # noqa: E402
+from . import chat, learner, notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
 from .engine import Case  # noqa: E402
@@ -42,6 +42,10 @@ class Resolve(BaseModel):
 
 class RegistryToggle(BaseModel):
     down: bool
+
+
+class Promote(BaseModel):
+    by: str = Field(min_length=1, max_length=80)
 
 
 class ChatMessage(BaseModel):
@@ -91,6 +95,7 @@ def bundle(case: Case) -> dict:
                   for s in steps],
         "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"],
                       "internal": "events" in i} for i in SCENARIO],
+        "learning": {"checks": learner.PROMOTED, "proposals": len(learner.proposals(st))},
         "outbox": [{"seq": e["seq"], "sim_time": e["sim_time"], "status": "sent" if e["type"] == "EMAIL_SENT" else "failed",
                     **{k: e["payload"].get(k) for k in ("to", "subject", "body", "mode", "error")}}
                    for e in reversed(ev) if e["type"] in ("EMAIL_SENT", "EMAIL_FAILED")],
@@ -168,6 +173,40 @@ def chat_endpoint(case_id: str, body: ChatIn):
     with LOCK:
         chat.log_turn(case, body.role, body.message, result)
     return result
+
+
+def _learning_case() -> Case:
+    return _case("demo-1")
+
+
+@app.get("/api/learning")
+def learning_state():
+    return {"proposals": learner.proposals(_learning_case().state()), "checks": learner.PROMOTED}
+
+
+@app.post("/api/learning/proposals/{proposal_id}/backtest")
+def learning_backtest(proposal_id: str):
+    try:
+        return learner.backtest(proposal_id)
+    except KeyError:
+        raise HTTPException(404, "unknown proposal")
+
+
+@app.post("/api/learning/proposals/{proposal_id}/promote")
+def learning_promote(proposal_id: str, body: Promote):
+    """Maker-checker: 409 when the promoter is one of the analysts whose rulings created the proposal."""
+    case = _learning_case()
+    with LOCK:
+        try:
+            check = learner.promote(case.state(), proposal_id, body.by)
+        except KeyError:
+            raise HTTPException(404, "unknown proposal")
+        except PermissionError as exc:
+            raise HTTPException(409, str(exc))
+        case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
+                  {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
+                  f"Learned check {check['id']} promoted by {check['promoted_by']}")
+    return {"check": check}
 
 
 @app.get("/api/cases/{case_id}/verify")

@@ -1,0 +1,40 @@
+{"id": "AC-001", "a": "Str. Fagului nr. 3, bl. A0, Cluj-Napoca, jud. Cluj", "b": "Calea Fagului nr. 3, Cluj-Napoca, Județ Cluj", "postal_a": "400127", "postal_b": "400127", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-002", "a": "Strada Fagului 3, Cluj-Napoca", "b": "Str. Fagului nr. 3, Cluj-Napoca, jud. Cluj", "postal_a": "400127", "postal_b": "400127", "label": "same", "why": "formatting only"}
+{"id": "AC-003", "a": "Str. Fagului nr. 3, Cluj-Napoca", "b": "Str. Fagului nr. 5, Cluj-Napoca", "postal_a": "400127", "postal_b": "400127", "label": "different", "why": "different number"}
+{"id": "AC-004", "a": "Str. Fagului nr. 3, Cluj-Napoca", "b": "Calea Fagului nr. 3, Cluj-Napoca", "postal_a": "400127", "postal_b": "400134", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-005", "a": "Str. Teilor nr. 7, bl. A1, Timișoara, jud. Timiș", "b": "Calea Teilor nr. 7, Timișoara, Județ Timiș", "postal_a": "300011", "postal_b": "300011", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-006", "a": "Strada Teilor 7, Timișoara", "b": "Str. Teilor nr. 7, Timișoara, jud. Timiș", "postal_a": "300011", "postal_b": "300011", "label": "same", "why": "formatting only"}
+{"id": "AC-007", "a": "Str. Teilor nr. 7, Timișoara", "b": "Str. Teilor nr. 9, Timișoara", "postal_a": "300011", "postal_b": "300011", "label": "different", "why": "different number"}
+{"id": "AC-008", "a": "Str. Teilor nr. 7, Timișoara", "b": "Calea Teilor nr. 7, Timișoara", "postal_a": "300011", "postal_b": "300018", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-009", "a": "Str. Morii nr. 11, bl. A2, Sibiu, jud. Sibiu", "b": "Calea Morii nr. 11, Sibiu, Județ Sibiu", "postal_a": "550024", "postal_b": "550024", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-010", "a": "Strada Morii 11, Sibiu", "b": "Str. Morii nr. 11, Sibiu, jud. Sibiu", "postal_a": "550024", "postal_b": "550024", "label": "same", "why": "formatting only"}
+{"id": "AC-011", "a": "Str. Morii nr. 11, Sibiu", "b": "Str. Morii nr. 13, Sibiu", "postal_a": "550024", "postal_b": "550024", "label": "different", "why": "different number"}
+{"id": "AC-012", "a": "Str. Morii nr. 11, Sibiu", "b": "Calea Morii nr. 11, Sibiu", "postal_a": "550024", "postal_b": "550031", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-013", "a": "Str. Unirii nr. 15, bl. A3, Oradea, jud. Bihor", "b": "Calea Unirii nr. 15, Oradea, Județ Bihor", "postal_a": "410087", "postal_b": "410087", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-014", "a": "Strada Unirii 15, Oradea", "b": "Str. Unirii nr. 15, Oradea, jud. Bihor", "postal_a": "410087", "postal_b": "410087", "label": "same", "why": "formatting only"}
+{"id": "AC-015", "a": "Str. Unirii nr. 15, Oradea", "b": "Str. Unirii nr. 17, Oradea", "postal_a": "410087", "postal_b": "410087", "label": "different", "why": "different number"}
+{"id": "AC-016", "a": "Str. Unirii nr. 15, Oradea", "b": "Calea Unirii nr. 15, Oradea", "postal_a": "410087", "postal_b": "410094", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-017", "a": "Str. Florilor nr. 19, bl. A4, Constanța, jud. Constanța", "b": "Calea Florilor nr. 19, Constanța, Județ Constanța", "postal_a": "900178", "postal_b": "900178", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-018", "a": "Strada Florilor 19, Constanța", "b": "Str. Florilor nr. 19, Constanța, jud. Constanța", "postal_a": "900178", "postal_b": "900178", "label": "same", "why": "formatting only"}
+{"id": "AC-019", "a": "Str. Florilor nr. 19, Constanța", "b": "Str. Florilor nr. 21, Constanța", "postal_a": "900178", "postal_b": "900178", "label": "different", "why": "different number"}
+{"id": "AC-020", "a": "Str. Florilor nr. 19, Constanța", "b": "Calea Florilor nr. 19, Constanța", "postal_a": "900178", "postal_b": "900185", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-021", "a": "Str. Libertății nr. 23, bl. A5, Craiova, jud. Dolj", "b": "Calea Libertății nr. 23, Craiova, Județ Dolj", "postal_a": "200585", "postal_b": "200585", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-022", "a": "Strada Libertății 23, Craiova", "b": "Str. Libertății nr. 23, Craiova, jud. Dolj", "postal_a": "200585", "postal_b": "200585", "label": "same", "why": "formatting only"}
+{"id": "AC-023", "a": "Str. Libertății nr. 23, Craiova", "b": "Str. Libertății nr. 25, Craiova", "postal_a": "200585", "postal_b": "200585", "label": "different", "why": "different number"}
+{"id": "AC-024", "a": "Str. Libertății nr. 23, Craiova", "b": "Calea Libertății nr. 23, Craiova", "postal_a": "200585", "postal_b": "200592", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-025", "a": "Str. Păcii nr. 27, bl. A6, Galați, jud. Galați", "b": "Calea Păcii nr. 27, Galați, Județ Galați", "postal_a": "800008", "postal_b": "800008", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-026", "a": "Strada Păcii 27, Galați", "b": "Str. Păcii nr. 27, Galați, jud. Galați", "postal_a": "800008", "postal_b": "800008", "label": "same", "why": "formatting only"}
+{"id": "AC-027", "a": "Str. Păcii nr. 27, Galați", "b": "Str. Păcii nr. 29, Galați", "postal_a": "800008", "postal_b": "800008", "label": "different", "why": "different number"}
+{"id": "AC-028", "a": "Str. Păcii nr. 27, Galați", "b": "Calea Păcii nr. 27, Galați", "postal_a": "800008", "postal_b": "800015", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-029", "a": "Str. Viilor nr. 31, bl. A7, Ploiești, jud. Prahova", "b": "Calea Viilor nr. 31, Ploiești, Județ Prahova", "postal_a": "100066", "postal_b": "100066", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-030", "a": "Strada Viilor 31, Ploiești", "b": "Str. Viilor nr. 31, Ploiești, jud. Prahova", "postal_a": "100066", "postal_b": "100066", "label": "same", "why": "formatting only"}
+{"id": "AC-031", "a": "Str. Viilor nr. 31, Ploiești", "b": "Str. Viilor nr. 33, Ploiești", "postal_a": "100066", "postal_b": "100066", "label": "different", "why": "different number"}
+{"id": "AC-032", "a": "Str. Viilor nr. 31, Ploiești", "b": "Calea Viilor nr. 31, Ploiești", "postal_a": "100066", "postal_b": "100073", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-033", "a": "Str. Gării nr. 35, bl. A8, Arad, jud. Arad", "b": "Calea Gării nr. 35, Arad, Județ Arad", "postal_a": "310130", "postal_b": "310130", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-034", "a": "Strada Gării 35, Arad", "b": "Str. Gării nr. 35, Arad, jud. Arad", "postal_a": "310130", "postal_b": "310130", "label": "same", "why": "formatting only"}
+{"id": "AC-035", "a": "Str. Gării nr. 35, Arad", "b": "Str. Gării nr. 37, Arad", "postal_a": "310130", "postal_b": "310130", "label": "different", "why": "different number"}
+{"id": "AC-036", "a": "Str. Gării nr. 35, Arad", "b": "Calea Gării nr. 35, Arad", "postal_a": "310130", "postal_b": "310137", "label": "different", "why": "street type differs and postal differs"}
+{"id": "AC-037", "a": "Str. Școlii nr. 39, bl. A9, Bacău, jud. Bacău", "b": "Calea Școlii nr. 39, Bacău, Județ Bacău", "postal_a": "600093", "postal_b": "600093", "label": "same", "why": "street type differs, same postal"}
+{"id": "AC-038", "a": "Strada Școlii 39, Bacău", "b": "Str. Școlii nr. 39, Bacău, jud. Bacău", "postal_a": "600093", "postal_b": "600093", "label": "same", "why": "formatting only"}
+{"id": "AC-039", "a": "Str. Școlii nr. 39, Bacău", "b": "Str. Școlii nr. 41, Bacău", "postal_a": "600093", "postal_b": "600093", "label": "different", "why": "different number"}
+{"id": "AC-040", "a": "Str. Școlii nr. 39, Bacău", "b": "Calea Școlii nr. 39, Bacău", "postal_a": "600093", "postal_b": "600100", "label": "different", "why": "street type differs and postal differs"}

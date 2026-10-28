@@ -107,6 +107,18 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
 - **`scenario[].internal`:** `true` for bank-internal events (staff actions), as opposed to client uploads. Suggested label prefix: "Internal: …".
 - **`outbox[]`, newest first:** `{"seq", "sim_time", "status": "sent" | "failed", "to", "subject", "body", "mode": "outbox" | "gmail", "error"}`. These are client emails, in Romanian.
 - **`config.agent_status`:** `"ok"` or `"fallback (<Error>)"`.
+- **Learning loop:** analyst rulings become a check; promotion requires a second person.
+  - **`GET /api/learning`** returns `{"proposals": [...], "checks": [...]}`.
+    - A proposal is `{"id": "P-address-variant", "kind", "support": 3, "ruled_by": ["analyst-1", ...], "description", "examples": [{"a", "b", "source"}]}`.
+    - It appears after 3 matching rulings. In the demo that is 2 past rulings plus the analyst's "same address" click.
+  - **`POST /api/learning/proposals/{id}/backtest`** returns `{"n": 40, "auto_resolved", "false_approvals": 0, "false_approval_ids", "manual_review_rate", "same_pairs_caught", "same_pairs_total"}`.
+  - **`POST /api/learning/proposals/{id}/promote`**
+    - **Body:** `{"by": "supervisor-1"}`.
+    - **Returns:** `{"check": {"id": "LC-1", "promoted_by", "promoted_at", "support", "backtest", "description"}}`.
+    - **409** when `by` is one of `ruled_by` (maker-checker), for example `analyst-1`.
+    - It also writes a `CHECK_PROMOTED` event to the ledger.
+  - **Bundle:** `learning: {"checks": [...], "proposals": <count>}`.
+  - **After promotion:** the next time the file reaches R3 (for example after "Reset demo" plus the trade-register certificate), R3 is verified by `Learned check LC-1` with no card. Promoted checks survive a reset.
 - **New event types in `events[]`:**
   - **Hide from the timeline rail; show in the Ledger tab only:** `CHAT_TURN`, `EMAIL_SENT`, `EMAIL_FAILED`.
   - **Bank-internal; show in the Ledger tab:** `STAFF_CONTACT_CHANGE`, `CREDIT_ACTION`, `CLIENT_CONFIRMATION`.
