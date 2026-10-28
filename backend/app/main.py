@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from . import registry  # noqa: E402
+from . import notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
 from .engine import Case  # noqa: E402
@@ -76,7 +76,11 @@ def bundle(case: Case) -> dict:
         "trace": [{"seq": s["seq"], "sim_time": s["sim_time"], "reason": s["reason"], "tool": s["tool"],
                    "input": s["input"], "output": _text(s["output"]), "gate": s["gate"], "by": s.get("by")}
                   for s in steps],
-        "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"]} for i in SCENARIO],
+        "scenario": [{"id": i["id"], "label": i["label"], "delivered": i["id"] in st["delivered"],
+                      "internal": "events" in i} for i in SCENARIO],
+        "outbox": [{"seq": e["seq"], "sim_time": e["sim_time"], "status": "sent" if e["type"] == "EMAIL_SENT" else "failed",
+                    **{k: e["payload"].get(k) for k in ("to", "subject", "body", "mode", "error")}}
+                   for e in reversed(ev) if e["type"] in ("EMAIL_SENT", "EMAIL_FAILED")],
     }
 
 
@@ -108,6 +112,7 @@ def inbound(case_id: str, body: Inbound):
         if body.item_id in case.state()["delivered"]:
             raise HTTPException(409, "scenario item already delivered")
         AGENT.handle_batch(case, case.deliver(body.item_id))  # pipeline per document, one planning step per click
+        notifier.flush(case)
         return bundle(case)
 
 
@@ -123,6 +128,7 @@ def advance(case_id: str, body: Advance):
             fired.append(ev)
         if fired:
             AGENT.plan(case, fired)  # ...then one planning step for the whole skip
+        notifier.flush(case)
         return bundle(case)
 
 
@@ -137,6 +143,7 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         AGENT.handle_batch(case, [event])
+        notifier.flush(case)
         return bundle(case)
 
 
