@@ -601,7 +601,7 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     if d.get("judge"):
         judge_view = {"question": d["judge"]["question"], "probs": d["judge"]["probs"], "threshold": d["judge"]["threshold"],
                       "source": d["judge"]["source"], "a": d["judge"]["a"], "b": d["judge"]["b"],
-                      "second_opinion": d["judge"].get("second_opinion")}
+                      "second_opinion": d["judge"].get("second_opinion"), "auto_accept": d["judge"].get("auto_accept")}
     case.emit("EXCEPTION_RAISED", AGENT, {
         "id": ex_id, "requirement_id": req_id, "kind": kind, "severity": severity, "title": title,
         "summary": summary or req["reason"], "rule": {"id": rule_id, "text": T.RULES[rule_id]},

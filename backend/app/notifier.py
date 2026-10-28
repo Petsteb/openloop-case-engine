@@ -37,6 +37,12 @@ def _already_covered(events: list[dict]) -> int:
     return max(covered, default=0)
 
 
+def _client_already_told_complete(events: list[dict]) -> bool:
+    """A 'complete' email was sent and nothing the client was asked for since then."""
+    last_ready = max((e["seq"] for e in events if e["type"] == "EMAIL_SENT" and e["payload"].get("ready")), default=0)
+    return bool(last_ready) and not any(e["seq"] > last_ready and e["type"] == "DOCUMENT_REQUESTED" for e in events)
+
+
 def compose(events: list[dict]) -> dict | None:
     """Pure: the email for client-notifiable events not yet covered, or None."""
     after = _already_covered(events)
@@ -44,7 +50,11 @@ def compose(events: list[dict]) -> dict | None:
     asks = list(dict.fromkeys(ro_label(e["payload"]["key"]) for e in todo if e["type"] == "DOCUMENT_REQUESTED"))
     reminders = [r for r in dict.fromkeys(ro_label(e["payload"]["key"]) for e in todo if e["type"] == "REMINDER_SENT")
                  if r not in asks]  # a multi-day skip fires several reminders for the same document: list it once
-    ready = any(e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION" for e in todo)
+    statuses = [e["payload"]["status"] for e in events if e["type"] == "CASE_STATUS"]
+    ready = (bool(statuses) and statuses[-1] == "READY_FOR_DECISION"  # only if the file is complete right now
+             and any(e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION" for e in todo))
+    if ready and _client_already_told_complete(events):
+        ready = False  # e.g. a compliance hold was released: the client never saw the file leave "complete"
     if not (asks or reminders or ready):
         return None
     lines = ["Bună ziua,", ""]
@@ -60,7 +70,7 @@ def compose(events: list[dict]) -> dict | None:
                else "Reamintire: documente necesare" if reminders and not asks
                else "Documente necesare pentru dosarul de finanțare")
     return {"subject": f"{subject} · {CLIENT_NAME}", "body": "\n".join(lines),
-            "covers": [e["seq"] for e in todo]}
+            "covers": [e["seq"] for e in todo], "ready": ready}
 
 
 def _send_gmail(to: str, subject: str, body: str) -> str:
