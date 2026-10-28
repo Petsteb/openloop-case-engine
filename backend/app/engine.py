@@ -129,7 +129,7 @@ def pending_confirmations(events: list[dict]) -> list[dict]:
         field, new = c["payload"].get("field", "contact details"), c["payload"].get("new")
         out.append({"kind": "contact_change", "ref_seq": c["seq"],
                     "text": f"We updated your {field}{f' to {new}' if new else ''}. Did you request this change?"})
-    if not any(e["type"] == "CLIENT_CONSENT" for e in events):
+    if profiles.template_of(events) == "sme_loan" and not any(e["type"] == "CLIENT_CONSENT" for e in events):
         out.append({"kind": "credit_check_consent", "ref_seq": None,
                     "text": "We need your consent to check your company's credit history with the Credit Bureau."})
     return out
@@ -733,7 +733,14 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
                                 [{"id": "same_person", "label": "Same person"},
                                  {"id": "different_person", "label": "Different person, ask for a mandate"}]),
     }
-    severity, title, actions = cards.get(kind, ("medium", req["title"], [{"id": "acknowledge", "label": "Acknowledge"}]))
+    noted = [{"id": "acknowledge", "label": "Noted: keep this finding for the credit decision"}]
+    cards |= {  # hard-rule failures: the card names the problem, not the requirement it fails
+        "tax_debt": ("high", "Outstanding tax debt on the ANAF certificate", noted),
+        "inactive": ("high", "Company is not active in the trade register", noted),
+        "bad_cui": ("high", "Tax ID fails the official checksum", noted),
+        "dscr": ("medium", f"Debt service coverage below {T.DSCR_MIN}", noted),
+    }
+    severity, title, actions = cards.get(kind, ("medium", f"Check failed: {req['title']}", noted))
     rule_id = next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0])
     if kind in ("address_uncertain", "signatory_uncertain"):
         rule_id = "JQ-01" if kind == "address_uncertain" else "JQ-02"

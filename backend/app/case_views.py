@@ -565,10 +565,32 @@ def case_row(case: Case, role: str) -> dict:
                                          or (e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION")))}
     if role == "employee":
         row["open_decisions"] = len(open_ex)
-        row["needs_you"] = len(open_ex) + (1 if st["status"] == "READY_FOR_DECISION" else 0)
+        blocked = not open_ex and any(r["status"] in ("CONTRADICTED", "NEEDS_REVIEW") for r in st["reqs"].values())
+        row["needs_you"] = len(open_ex) + (1 if st["status"] == "READY_FOR_DECISION" or blocked else 0)
+        row["status_text"] = _queue_text(st, open_ex, waiting)
     else:
         row["needs_you"] = waiting
     return row
+
+
+def _queue_text(st: dict, open_ex: list, waiting: int) -> str:
+    """One line for the work queue: what this file needs from the bank right now."""
+    if st["status"] == "ON_HOLD":
+        return "On hold: escalated to compliance"
+    if open_ex:
+        first = sorted(open_ex, key=lambda x: x["seq"])[0]
+        more = f" (+{len(open_ex) - 1} more)" if len(open_ex) > 1 else ""
+        return f"Decision needed: {first.get('title') or first['kind']}{more}"
+    if st["status"] == "READY_FOR_DECISION":
+        return "Ready for the credit decision" if st["template"] == "sme_loan" else "Ready for sign-off"
+    failed = [r for r in st["reqs"].values() if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW")]
+    if failed:  # a human already saw the finding; the file cannot complete as it is
+        return f"Blocked: {failed[0]['title']} failed; the decision on the file is yours"
+    if not st["docs"]:
+        return "Waiting for the client's first documents"
+    if waiting:
+        return f"Waiting on the client: {waiting} item{'s' if waiting > 1 else ''}"
+    return "Agent is checking the file"
 
 
 def queue_sort_key(row: dict) -> tuple:
