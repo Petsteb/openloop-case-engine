@@ -19,7 +19,10 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - **Customer portal** (`/client/`): status, uploads (incl. a wrong-company demo file), confirmations, bank messages, documents, chat. It updates live next to the bank screen.
 - **The whole demo script below**, browser-tested both live (Claude on Bedrock + Featherless judge) and fully offline.
 
-**Still being done tonight by Petru + 2 Claude sessions:** a last UI fix batch, then the deck and video script.
+- **Many cases** (API v3, backend done): a SQLite store, 8 synthetic companies each with one problem, the templates "SME loan and KYB" and "Annual business review", a client↔staff message thread, notifications.
+
+**Still being done tonight by Petru + 2 Claude sessions:** the home screens, Messages and the bell (UI), more realistic synthetic documents, a browser check-and-fix loop on both apps, then the deck and video script.
+**Parked on purpose:** an admin editor for case templates. It comes last, after everything else.
 
 **Not done yet: what you can pick up** (details in `docs/TASKS.md`):
 1. **E2E tests** of the real UI with Playwright: the demo script, the portal upload, no console errors.
