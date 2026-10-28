@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import {
   actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, DAY, decisionEvidence, fTime, humanize, JUDGE_LABELS,
   linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, tidy, type CompareSlip,
@@ -15,7 +15,8 @@ function highlight(text: string, marks: string[]): ReactNode {
   return text.split(re).map((part, i) => (list.includes(part) ? <mark key={i}>{part}</mark> : part))
 }
 
-function SlipView({ s }: { s: CompareSlip }) {
+function SlipView({ s, showSame }: { s: CompareSlip; showSame: boolean }) {
+  const lines = showSame ? s.lines : s.lines.filter((l) => l.k !== 'same')
   return (
     <figure className={'slip' + (s.role === 'new' ? ' is-new' : '')}>
       <figcaption>
@@ -25,7 +26,8 @@ function SlipView({ s }: { s: CompareSlip }) {
         {s.meta ? <span className="meta">{s.meta}</span> : null}
       </figcaption>
       <ol>
-        {s.lines.map((l, j) => (
+        {!lines.length ? <li className="ln ln-gap"><span className="q">No differences in this document</span></li> : null}
+        {lines.map((l, j) => (
           <li key={j} className={`ln ln-${l.k}`}>
             <span className="q">{l.k === 'gap' ? l.t : highlight(l.t, l.marks)}</span>
             {l.note ? <span className="ln-note">{l.note}</span> : null}
@@ -73,6 +75,8 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
   const why = tidy(plain(String(x.summary || '').replace(/\s*\((?:HR|JQ|SR|GATE)-\d+\)\s*$/, '')))
   const busyHere = busy?.startsWith(`resolve:${x.id}:`) ? busy.split(':')[2] : null
   const ruleId = x.rule?.id ? String(x.rule.id) : null
+  const [showSame, setShowSame] = useState(false)
+  const hasSame = slips.some((sl) => sl.lines.some((l) => l.k === 'same')) || !!ev?.matches.length
 
   return (
     <article className="decision" style={{ ['--tone' as string]: tone }} aria-label={`Decision: ${cleanTitle(x.title)}`}>
@@ -85,7 +89,7 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
       </header>
       <div className="dec-main">
         <h2>{cleanTitle(x.title)}</h2>
-        {why ? <p className="why">{why}</p> : null}
+        {why ? <p className="why dec-why">{why}</p> : null}
         <dl className="props">
           <div><dt>Check</dt><dd><span className="mono">{x.requirement_id || 'MON'}</span>{req ? cleanTitle(req.title) : insider ? 'Staff actions' : 'Monitoring'}</dd></div>
           {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{RULE_NAMES[ruleId] || 'Rule'}</dd></div> : null}
@@ -107,15 +111,21 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
           </div>
         ) : pair ? (
           <div className="compare" aria-label="The document on file compared with the new document">
-            <SlipView s={slips[0]} />
+            <SlipView s={slips[0]} showSame={showSame} />
             <div className="vs" aria-hidden="true"><span>vs</span></div>
-            <SlipView s={slips[1]} />
+            <SlipView s={slips[1]} showSame={showSame} />
           </div>
         ) : slips.length ? (
-          <div className="compare single">{slips.map((s, i) => <Fragment key={i}><SlipView s={s} /></Fragment>)}</div>
+          <div className="compare single">{slips.map((s, i) => <Fragment key={i}><SlipView s={s} showSame={showSame} /></Fragment>)}</div>
         ) : null}
 
-        {ev && ev.matches.length ? (
+        {!insider && hasSame ? (
+          <div><button type="button" className="linkish" aria-expanded={showSame} onClick={() => setShowSame((v) => !v)}>
+            {showSame ? 'Hide what already matches' : 'Show what already matches'}
+          </button></div>
+        ) : null}
+
+        {showSame && ev && ev.matches.length ? (
           <div className="matches" aria-label="What already matches">
             {ev.matches.map((m) => <span key={m}><Icon name="check" size={13} />{m}</span>)}
           </div>

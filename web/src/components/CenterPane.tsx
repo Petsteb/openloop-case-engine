@@ -145,7 +145,7 @@ export function CenterPane(p: Props) {
     return (
       <div className="stack">
         <section className="hold-card">
-          <StatusWord kind="conflict" />
+          <span className="st st-hold"><i aria-hidden="true" />On hold</span>
           <h2>File on hold</h2>
           <p className="why">The file was escalated to compliance. The agent takes no further action until compliance releases it.</p>
         </section>

@@ -37,7 +37,8 @@ export const arr = <T,>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x
 export const humanize = (s: unknown) => String(s ?? '').replace(/_/g, ' ')
 export const sentence = (s: unknown) => { const t = String(s ?? ''); return t ? t[0].toUpperCase() + t.slice(1) : t }
 const joinPlus = (s: string) => {
-  const parts = s.split(/\s+\+\s+/)
+  // join "A + B" lists, but keep arithmetic such as "(180,000 + 120,000)"
+  const parts = s.split(/(?<!\d)\s+\+\s+|\s+\+\s+(?!\d)/)
   return parts.length < 2 ? s : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 /** Copy rules: no arrows, no "A · B" strings, no "+" joins. */
