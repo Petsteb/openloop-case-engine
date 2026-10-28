@@ -44,7 +44,8 @@ def reduce(events: list[dict]) -> dict:
                 doc = {**p, "received_at": e["sim_time"], "seq": e["seq"]}
                 st["docs"][p["id"]] = doc
                 for req in st["requests"].values():
-                    if req["status"] == "PENDING" and keys_match(req["key"], doc_key(doc)):
+                    if (req["status"] == "PENDING" and not p.get("quarantined")  # a rejected upload fulfils nothing
+                            and keys_match(req["key"], doc_key(doc))):
                         req["status"] = "FULFILLED"
             case "SCENARIO_DELIVERED":
                 st["delivered"].add(p["item_id"])
@@ -105,7 +106,7 @@ def keys_match(a: str, b: str) -> bool:
 
 
 def latest_doc(st: dict, doc_type: str) -> dict | None:
-    docs = [d for d in st["docs"].values() if d["type"] == doc_type]
+    docs = [d for d in st["docs"].values() if d["type"] == doc_type and not d.get("quarantined")]
     return max(docs, key=lambda d: (d["issued_at"], d["seq"])) if docs else None
 
 

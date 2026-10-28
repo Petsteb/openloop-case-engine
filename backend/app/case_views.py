@@ -338,3 +338,157 @@ def explain_rule(rule_id: str, role: str) -> dict:
     if role == "employee":
         return {"id": rid, "text": T.RULES[rid]} if rid in T.RULES else {"error": f"unknown rule {rid}"}
     return {"text": CLIENT_RULE_TEXT[rid]} if rid in CLIENT_RULE_TEXT else {"error": "unknown rule"}
+
+
+# ----------------------------------------------------------------------------- documents (portal + viewer)
+EMPLOYEE_DOC_WORD = {"valid": "Valid", "expired": "Expired", "superseded": "Superseded", "quarantined": "Quarantined"}
+CLIENT_DOC_WORD = {"expired": "Please send a new one", "superseded": "Replaced by a newer version",
+                   "quarantined": "Not accepted"}
+
+
+def _doc_status(st: dict, d: dict) -> str:
+    from .engine import doc_expired, doc_key
+    if d.get("quarantined"):
+        return "quarantined"
+    if d["type"] != "email" and any(
+            not x.get("quarantined") and x["id"] != d["id"] and x["type"] == d["type"]
+            and keys_match(doc_key(x), doc_key(d)) and (x["issued_at"], x["seq"]) > (d["issued_at"], d["seq"])
+            for x in st["docs"].values()):
+        return "superseded"
+    return "expired" if doc_expired(st, d) else "valid"
+
+
+def _used_by(st: dict, doc_id: str) -> list[dict]:
+    return [{"id": r["id"], "title": r["title"], "status_word": EMPLOYEE_STATUS_WORD.get(r["status"], r["status"])}
+            for r in st["reqs"].values() if any(ev.get("doc_id") == doc_id for ev in r.get("evidence") or [])]
+
+
+def _client_doc_word(st: dict, d: dict, status: str) -> str:
+    if status != "valid":
+        return CLIENT_DOC_WORD[status]
+    used = [r for r in st["reqs"].values() if any(ev.get("doc_id") == d["id"] for ev in r.get("evidence") or [])]
+    return "Verified" if used and all(r["status"] == "SATISFIED" for r in used) else "Received"
+
+
+def documents(case: Case, role: str) -> list[dict]:
+    """Every case document. Client: own uploads (no emails), client words, no internal links."""
+    role = _role(role)
+    st = case.state()
+    out = []
+    for d in sorted(st["docs"].values(), key=lambda x: x["seq"]):
+        status = _doc_status(st, d)
+        base = {"id": d["id"], "type": d["type"], "label": T.DOC_LABELS.get(d["type"], d["type"]), "name": d["name"],
+                "issued_day": _day(d["issued_at"]), "received_day": _day(d["received_at"]), "status": status}
+        if role == "client":
+            if d["type"] == "email":
+                continue
+            out.append({**base, "status_word": _client_doc_word(st, d, status)})
+        else:
+            ext = _extraction_event(case, d["id"])
+            out.append({**base, "status_word": EMPLOYEE_DOC_WORD[status], "person": d.get("person"),
+                        "source": d.get("source", "scenario"), "used_by": _used_by(st, d["id"]),
+                        "extractor": ext["payload"].get("extractor") if ext else None})
+    return out
+
+
+def _extraction_event(case: Case, doc_id: str) -> dict | None:
+    return next((e for e in reversed(case.ledger.events)
+                 if e["type"] == "FIELDS_EXTRACTED" and e["payload"].get("doc_id") == doc_id), None)
+
+
+def _doc_history(case: Case, st: dict, d: dict) -> list[dict]:
+    """Ledger events that touched this document, oldest first: [{"seq", "day", "type", "what"}]."""
+    from .engine import doc_key
+    key, doc_id, out = doc_key(d), d["id"], []
+    expiry_timers = {e["payload"]["id"] for e in case.ledger.events
+                     if e["type"] == "TIMER_SET" and e["payload"].get("doc_id") == doc_id}
+    prior_request = max((e["seq"] for e in case.ledger.events if e["type"] == "DOCUMENT_REQUESTED"
+                         and e["seq"] < d["seq"] and keys_match(e["payload"]["key"], key)), default=0)
+    for e in case.ledger.events:
+        p, t, what = e["payload"], e["type"], None
+        if t == "DOCUMENT_REQUESTED" and e["seq"] == prior_request:
+            what = f"Requested from the client: {p.get('label', key)}"
+        elif t == "REMINDER_SENT" and prior_request < e["seq"] < d["seq"] and keys_match(p.get("key", ""), key):
+            what = "Reminder sent to the client"
+        elif t == "DOCUMENT_RECEIVED" and p.get("id") == doc_id:
+            what = ("Received but not accepted: " + p.get("quarantine_reason", "quarantined")) if p.get("quarantined") \
+                else f"Received ({p.get('source', 'scenario')})"
+        elif t == "FIELDS_EXTRACTED" and p.get("doc_id") == doc_id:
+            what = e["summary"]
+        elif t == "REQUIREMENT_UPDATED" and any(ev.get("doc_id") == doc_id for ev in
+                                                (p.get("evidence") or []) + ((p.get("details") or {}).get("snippets") or [])):
+            what = f"Used as evidence: {p['req_id']} → {EMPLOYEE_STATUS_WORD.get(p['status'], p['status'])}"
+        elif t == "EXCEPTION_RAISED" and any(s.get("doc_id") == doc_id for s in p.get("snippets") or []):
+            what = f"Quoted on decision card {p['id']}: {p.get('title', '')}"
+        elif t == "TIMER_SET" and p.get("doc_id") == doc_id:
+            what = f"Validity ends day {_day(p['due'])}"
+        elif t == "TIMER_FIRED" and p.get("id") in expiry_timers:
+            what = "Validity window ended: expired"
+        elif (t == "DOCUMENT_RECEIVED" and p.get("id") != doc_id and not p.get("quarantined") and e["seq"] > d["seq"]
+              and p.get("type") == d["type"] and keys_match(doc_key(p), key) and d["type"] != "email"):
+            what = f"Superseded by {p['id']} ({p['name']})"
+        if what:
+            out.append({"seq": e["seq"], "day": _day(e["sim_time"]), "type": t, "what": what})
+    return out
+
+
+CLIENT_HISTORY_TYPES = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "DOCUMENT_RECEIVED", "FIELDS_EXTRACTED", "TIMER_FIRED"}
+
+
+def _client_history(rows: list[dict]) -> list[dict]:
+    words = {"DOCUMENT_REQUESTED": "The bank asked for this document", "REMINDER_SENT": "Reminder sent",
+             "FIELDS_EXTRACTED": "Checked by the bank", "TIMER_FIRED": "No longer valid: please send a new one"}
+    out = []
+    for r in rows:
+        if r["type"] not in CLIENT_HISTORY_TYPES:
+            continue
+        if r["type"] == "DOCUMENT_RECEIVED":
+            what = ("Not accepted: it seems to belong to another company" if r["what"].startswith("Received but not")
+                    else "Replaced by your newer upload" if r["what"].startswith("Superseded")
+                    else "Received")
+        else:
+            what = words[r["type"]]
+        out.append({"day": r["day"], "what": what})
+    return out
+
+
+def document_detail(case: Case, role: str, doc_id: str) -> dict:
+    """Employee: full text, fields with quotes, rejected quotes, used-by, validity, history. Client: own view."""
+    role = _role(role)
+    st = case.state()
+    d = st["docs"].get(doc_id)
+    if d is None or (role == "client" and d["type"] == "email"):
+        raise KeyError(doc_id)
+    status, history = _doc_status(st, d), _doc_history(case, st, d)
+    if role == "client":
+        return {"id": d["id"], "name": d["name"], "received_day": _day(d["received_at"]),
+                "status_word": _client_doc_word(st, d, status), "text": d.get("text", ""),
+                "history": _client_history(history)}
+    from .engine import doc_expired
+    from .rules import doc_expires_at
+    ext = _extraction_event(case, doc_id)
+    extraction = (ext or {}).get("payload", {}).get("extraction", {})
+    fields = [{**{k: f[k] for k in ("field", "value", "quote")}, "verified": True} for f in extraction.get("fields", [])]
+    for k in ("declared_owners", "register_owners"):
+        fields += [{"field": k[:-1], "value": f"{o['name']} {o['pct']:g}%", "quote": o["quote"], "verified": True}
+                   for o in extraction.get(k, [])]
+    text = d.get("text", "")
+    for f in fields:  # verified quotes are exact substrings, so offsets are exact (for highlighting)
+        start = text.find(f["quote"])
+        f["start"], f["end"] = (start, start + len(f["quote"])) if start >= 0 else (None, None)
+    expires = (_day(doc_expires_at(datetime.fromisoformat(d["issued_at"])).isoformat())
+               if d["type"] in T.EXPIRING_DOCS else None)
+    return {"id": d["id"], "type": d["type"], "label": T.DOC_LABELS.get(d["type"], d["type"]), "name": d["name"],
+            "text": d.get("text", ""), "status": status, "status_word": EMPLOYEE_DOC_WORD[status],
+            "source": d.get("source", "scenario"), "extractor": (ext or {}).get("payload", {}).get("extractor"),
+            "fields": fields, "rejected": list((ext or {}).get("payload", {}).get("unverified_quotes", [])),
+            "injection_lines": list((ext or {}).get("payload", {}).get("injection_lines", [])),
+            "used_by": _used_by(st, doc_id),
+            "validity": {"issued_day": _day(d["issued_at"]), "expires_day": expires, "expired": doc_expired(st, d)},
+            "history": history}
+
+
+def version(case: Case) -> dict:
+    """Cheap change detector for polling: ledger length + current case status."""
+    status = next((e["payload"]["status"] for e in reversed(case.ledger.events) if e["type"] == "CASE_STATUS"), "OPEN")
+    return {"length": len(case.ledger.events), "status": status}

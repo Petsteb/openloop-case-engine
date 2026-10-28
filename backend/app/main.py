@@ -206,6 +206,32 @@ def chat_endpoint(case_id: str, body: ChatIn, x_staff_token: str | None = Header
     return result
 
 
+@app.get("/api/cases/{case_id}/version")
+def case_version(case_id: str):
+    """Cheap polling target: refetch the bundle only when `length` changes."""
+    return case_views.version(_case(case_id))
+
+
+@app.get("/api/cases/{case_id}/documents")
+def list_documents(case_id: str, role: Literal["client", "employee"] = "client",
+                   x_staff_token: str | None = Header(default=None)):
+    """Fails closed: without role=employee the caller gets the client list."""
+    if role == "employee":
+        _require_staff(x_staff_token)
+    return case_views.documents(_case(case_id), role)
+
+
+@app.get("/api/cases/{case_id}/documents/{doc_id}")
+def get_document(case_id: str, doc_id: str, role: Literal["client", "employee"] = "client",
+                 x_staff_token: str | None = Header(default=None)):
+    if role == "employee":
+        _require_staff(x_staff_token)
+    try:
+        return case_views.document_detail(_case(case_id), role, doc_id)
+    except KeyError:
+        raise HTTPException(404, "document not found")
+
+
 @app.get("/api/cases/{case_id}/client-view")
 def client_view(case_id: str):
     """Everything the applicant may see, for a customer-facing page (same allow-list as the client chat)."""
