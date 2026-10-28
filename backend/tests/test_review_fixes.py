@@ -107,6 +107,23 @@ def test_compliance_can_release_a_hold():                                       
     assert c.post("/api/cases/demo-1/release-hold", json={"by": "compliance-1"}).status_code == 409
 
 
+def test_release_after_complete_does_not_resend_complete_email():
+    c.post("/api/demo/reset")
+    for item in ("day0-pack", "onrc-cert"):
+        b = post(item)
+    for x in [x for x in b["exceptions"] if x["status"] == "OPEN"]:
+        c.post(f"/api/cases/demo-1/exceptions/{x['id']}/resolve",
+               json={"action_id": "same_address" if x["kind"] == "address_uncertain" else "confirm_discrepancy"})
+    post("updated-docs")
+    post("staff-phone-change")
+    b = post("staff-credit-check")
+    ex = next(x["id"] for x in b["exceptions"] if x["kind"] == "sequence_insider" and x["status"] == "OPEN")
+    c.post(f"/api/cases/demo-1/exceptions/{ex}/resolve", json={"action_id": "escalate_compliance"})
+    b = c.post("/api/cases/demo-1/release-hold", json={"by": "compliance-1"}).json()
+    assert b["case"]["status"] == "READY_FOR_DECISION"                 # all checks passed: straight back to ready
+    assert sum("Dosar complet" in m["subject"] for m in b["outbox"]) == 1
+
+
 def test_one_insider_card_per_credit_action():                                      # CR-7
     from app import sequence
     from app.engine import Case

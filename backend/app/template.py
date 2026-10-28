@@ -64,10 +64,10 @@ RULES = {
     "HR-06": "Registered-office postal code must match across documents.",
     "HR-07": f"DSCR = EBITDA / (existing + new annual debt service) must be ≥ {DSCR_MIN}.",
     "HR-08": "Fiscal certificate must show no outstanding tax obligations.",
-    "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if the classifier (p ≥ {JUDGE_THRESHOLD}) "
-             f"and an independent similarity check (p ≥ {HEURISTIC_THRESHOLD}) agree.",
-    "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if the classifier "
-             f"(p ≥ {JUDGE_THRESHOLD}) and an independent similarity check (p ≥ {HEURISTIC_THRESHOLD}) agree.",
+    "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if the similarity check (p ≥ "
+             f"{HEURISTIC_THRESHOLD}) and, when the classifier is used, the classifier (p ≥ {JUDGE_THRESHOLD}) agree.",
+    "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if the similarity check (p ≥ "
+             f"{HEURISTIC_THRESHOLD}) and, when the classifier is used, the classifier (p ≥ {JUDGE_THRESHOLD}) agree.",
     "SR-01": "An employee changed the client's contact details and then started a credit action for the same client "
              "within 48 hours, without client confirmation.",
     "GATE-01": "Only actions allowed by the current case state may run.",
