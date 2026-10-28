@@ -28,7 +28,7 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 4. **Tuning:** prompts in `agent.py`/`chat.py`; warm the Featherless cache before recording.
 5. **Backup video:** record one run in offline mode as insurance.
 
-**Resume our context:** `docs/handoff/` has a short handoff from each Claude session and their redacted transcripts, so you can `claude --resume` them (see `docs/handoff/sessions/README.md`).
+**Resume where we left off:** start with `docs/handoff/README.md`. It has the read order, the setup, and a prompt to paste into Claude Code.
 
 **Rules:** never commit `.env` (keys come privately); run the tests before every push; feature freeze is at 08:00 and we submit by 10:30.
 
@@ -65,7 +65,7 @@ Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and 
 ## Modes
 | Env | Values | Notes |
 |---|---|---|
-| `AGENT_MODE` | `scripted` (default) / `bedrock` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **Claude (Bedrock, `us.anthropic.claude-opus-5-5`, `us-east-1`) plans once per click** over the allowed actions, interprets emails and words escalations. On any failure it falls back to scripted (30 s timeout), and a code safety net runs after it either way. |
+| `AGENT_MODE` | `scripted` (default) / `bedrock` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **Claude (Bedrock, `us.anthropic.claude-opus-5-5`, `us-east-1`) plans once per click** over the allowed actions, interprets emails and words escalations. On any failure, or when the 20 s budget per click runs out (`AGENT_BUDGET_S`), it falls back to scripted, and a code safety net runs after it either way. |
 | `JUDGE_MODE` | `heuristic` (default) / `featherless` | `featherless` calls `/v1/classifier`; on error it falls back to heuristic and says so |
 | `EMAIL_MODE` | `outbox` (default) / `gmail` | `gmail` sends through SMTP with `GMAIL_USER` + `GMAIL_APP_PASSWORD`; `NOTIFY_TO` redirects all demo mail to a team inbox |
 
