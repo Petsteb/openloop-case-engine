@@ -151,7 +151,33 @@ def overview(case: Case, role: str) -> dict:
             status_text = UNDER_REVIEW
         else:
             status_text = "We are checking your file"
-    return {"status_text": status_text, "day": day, "checks": checks, "open_items": len(pending) + len(open_ex)}
+    return {"status_text": status_text, "state": _state(st, pending, open_ex), "day": day, "checks": checks,
+            "open_items": len(pending) + len(open_ex), "company": T.CLIENT_COMPANY, "product": T.PRODUCT}
+
+
+def _state(st: dict, pending: list, open_ex: list) -> str:
+    """needs_you | under_review | complete | in_progress (for UI tone and progress, same rule for both roles)."""
+    if st["status"] == "READY_FOR_DECISION":
+        return "complete"
+    if st["status"] == "ON_HOLD":
+        return "under_review"
+    if pending:
+        return "needs_you"
+    if open_ex or any(r["status"] in ("CONTRADICTED", "NEEDS_REVIEW") for r in st["reqs"].values()):
+        return "under_review"
+    return "in_progress"
+
+
+WHY_BY_DOC = {
+    "application": "Your application tells us what financing you are asking for.",
+    "financial_statement": "We check that the company's income comfortably covers its loan repayments.",
+    "ubo_declaration": "The law requires us to know who ultimately owns or controls your company.",
+    "id_card": "We must identify everyone who owns a significant share of the company.",
+    "onrc_certificate": "It confirms your company is registered and active; it must be issued in the last 30 days.",
+    "fiscal_certificate": "It shows your company has no outstanding tax debts.",
+    "address_proof": "We need to confirm your company's registered office.",
+    "signatory_mandate": "We need proof that the person who signed may act for the company.",
+}
 
 
 def missing_documents(case: Case, role: str) -> list[dict]:
@@ -163,7 +189,8 @@ def missing_documents(case: Case, role: str) -> list[dict]:
     for r in _pending_requests(st):
         due = [t["due"] for t in st["timers"].values()
                if t["kind"] == "reminder" and t["status"] == "PENDING" and keys_match(t.get("key", ""), r["key"])]
-        out.append({"key": r["key"], "label": r["label"], "requested_day": _day(r["requested_at"]),
+        out.append({"key": r["key"], "label": r["label"], "why": WHY_BY_DOC.get(r["key"].partition(":")[0], ""),
+                    "requested_day": _day(r["requested_at"]),
                     "reminders": r["reminders"], "next_reminder_day": _day(min(due)) if due else None,
                     "seq": seqs.get(r["key"])})
     return out
