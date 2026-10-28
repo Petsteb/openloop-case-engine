@@ -58,13 +58,14 @@ def reduce(events: list[dict]) -> dict:
             case "EXCEPTION_RAISED":
                 st["exceptions"][p["id"]] = {**p, "status": "OPEN", "created_at": e["sim_time"], "notes": [], "seq": e["seq"]}
             case "EXCEPTION_ANNOTATED":
-                st["exceptions"][p["id"]]["notes"].append(p["note"])
+                if p["id"] in st["exceptions"]:
+                    st["exceptions"][p["id"]]["notes"].append(p["note"])
             case "EXCEPTION_RESOLVED":
                 ex = st["exceptions"][p["id"]]
                 ex.update(status="RESOLVED", resolution={**p, "at": e["sim_time"], "by": e["actor"], "seq": e["seq"]})
                 if ex["kind"] == "address_uncertain" and p["action_id"] == "same_address":
                     st["precedents"].append({"kind": "address", "a": ex["judge"]["a"], "b": ex["judge"]["b"],
-                                             "decision": "same_address", "exception_id": ex["id"]})
+                                             "decision": "same_address", "exception_id": ex["id"], "seq": e["seq"]})
             case "TIMER_SET":
                 st["timers"][p["id"]] = {**p, "status": "PENDING"}
             case "TIMER_FIRED" | "TIMER_CANCELLED":
@@ -93,7 +94,7 @@ def keys_match(a: str, b: str) -> bool:
 
 def latest_doc(st: dict, doc_type: str) -> dict | None:
     docs = [d for d in st["docs"].values() if d["type"] == doc_type]
-    return max(docs, key=lambda d: d["seq"]) if docs else None
+    return max(docs, key=lambda d: (d["issued_at"], d["seq"])) if docs else None
 
 
 def doc_expired(st: dict, doc: dict) -> bool:
@@ -112,6 +113,10 @@ def needed_doc_keys(st: dict) -> list[str]:
         keys.append("ubo_declaration")
     for name in r2["details"].get("owners_without_id", []):
         keys.append(f"id_card:{name.title()}")
+    if st["reqs"]["R3"]["details"].get("kind") == "address_differs":
+        keys.append("address_proof")
+    if st["reqs"]["R5"]["details"].get("kind") == "signatory_differs":
+        keys.append("signatory_mandate")
     return keys
 
 
@@ -127,13 +132,14 @@ def allowed_actions(st: dict) -> list[dict]:
         if not _pending(st, key):
             acts.append({"tool": "request_document", "params": {"key": key}})
     r2 = st["reqs"]["R2"]
-    if r2["status"] == "CONTRADICTED" and not any(t["kind"] == "legal_deadline" and t["status"] == "PENDING"
+    # one legal clock per discrepancy: a FIRED deadline is never silently restarted
+    if r2["status"] == "CONTRADICTED" and not any(t["kind"] == "legal_deadline" and t["status"] in ("PENDING", "FIRED")
                                                   for t in st["timers"].values()):
         acts.append({"tool": "start_legal_clock", "params": {"req_id": "R2"}})
     for r in st["reqs"].values():
         if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW") and r["id"] not in open_ex and not _already_decided(st, r):
             acts.append({"tool": "escalate_to_analyst", "params": {"req_id": r["id"]}})
-    if all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex:
+    if all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex and not needed_doc_keys(st):
         acts.append({"tool": "mark_ready_for_decision", "params": {}})
     return acts
 
@@ -195,9 +201,12 @@ class Case:
         for doc in materialise(item, self.now):
             doc_id = self._next_id("doc", "docs")
             payload = {"id": doc_id, **doc}
-            kind = "EMAIL_RECEIVED" if doc["type"] == "email" else "DOCUMENT_RECEIVED"
-            received.append(self.emit("DOCUMENT_RECEIVED", CLIENT, payload,
-                                      f"{'Email' if kind == 'EMAIL_RECEIVED' else 'Document'} received: {doc['name']}"))
+            noun = "Email" if doc["type"] == "email" else "Document"
+            received.append(self.emit("DOCUMENT_RECEIVED", CLIENT, payload, f"{noun} received: {doc['name']}"))
+            for t in self.state()["timers"].values():  # the document arrived: its reminder is moot
+                if t["kind"] == "reminder" and t["status"] == "PENDING" and keys_match(t.get("key", ""), doc_key(payload)):
+                    self.emit("TIMER_CANCELLED", ENGINE, {"id": t["id"], "reason": "Document received"},
+                              f"Timer cancelled: {t['label']}")
         return received
 
     def advance(self, days: float):
@@ -211,9 +220,12 @@ class Case:
                 break
             t = due[0]
             self.now = max(self.now, _dt(t["due"]))
-            yield self.emit("TIMER_FIRED", ENGINE, {"id": t["id"], "kind": t["kind"], "key": t.get("key"),
-                                                    "req_id": t.get("req_id"), "label": t["label"]},
-                            f"Timer fired: {t['label']}")
+            fired = self.emit("TIMER_FIRED", ENGINE, {"id": t["id"], "kind": t["kind"], "key": t.get("key"),
+                                                      "req_id": t.get("req_id"), "label": t["label"], "cui": t.get("cui")},
+                              f"Timer fired: {t['label']}")
+            if t["kind"] == "doc_expiry" and t.get("req_id"):  # expiry is enforced by code, whatever the agent does
+                apply_result(self, t["req_id"], _evaluate(self.state(), t["req_id"]))
+            yield fired
         self.now = target
         self.emit("CLOCK_ADVANCED", ENGINE, {"days": days, "to": target.isoformat()}, f"Clock advanced {days:g} day(s)")
 
@@ -236,6 +248,8 @@ class Case:
                 output = TOOLS[tool](self, **params)
             except registry.RegistryUnavailable as exc:
                 output = {"error": str(exc)}
+            except (KeyError, TypeError, ValueError) as exc:  # bad tool input: logged as a failed step, never crashes
+                output = {"error": f"{type(exc).__name__}: {exc}"}
         else:
             output = {"blocked": T.RULES[verdict.split(": ")[1]]}
         self.emit("AGENT_STEP", actor, {"reason": reason, "tool": tool, "input": params, "output": output, "gate": verdict},
@@ -265,6 +279,11 @@ def t_extract_fields(case: Case, doc_id: str) -> dict:
     doc = case.state()["docs"][doc_id]
     ex = extract.extract_scripted(doc["type"], doc["text"])
     unverified = extract.verify_quotes(doc["text"], ex)
+    if unverified:  # a field whose quote is not in the document can never be used as evidence
+        ex["fields"] = [f for f in ex["fields"] if f["quote"] not in unverified]
+        for k in ("declared_owners", "register_owners"):
+            if k in ex:
+                ex[k] = [o for o in ex[k] if o["quote"] not in unverified]
     injections = extract.scan_injection(doc["text"])
     case.emit("FIELDS_EXTRACTED", AGENT, {"doc_id": doc_id, "extraction": ex, "unverified_quotes": unverified,
                                           "injection_lines": injections},
@@ -284,6 +303,8 @@ def t_lookup_registry(case: Case, cui: str) -> dict:
         res = registry.lookup(cui)
     except registry.RegistryUnavailable as exc:
         case.emit("REGISTRY_CHECKED", AGENT, {"cui": cui, "error": str(exc)}, "Trade register API unavailable")
+        _set_timer(case, "registry_retry", (case.now + timedelta(days=1)).isoformat(), "Retry trade register API",
+                   cui=cui, req_id="R1")
         raise
     case.emit("REGISTRY_CHECKED", AGENT, {"cui": cui, "result": res}, f"Trade register: {res.get('status')}")
     return res
@@ -332,9 +353,15 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return wait(T.DOC_LABELS["ubo_declaration"])
         declared = X[ubo["id"]].get("declared_owners", [])
         ruling = _ruling(st, "R2", max(ubo["seq"], onrc["seq"] if onrc else 0))
-        if ruling and ruling["resolution"]["action_id"] == "dismiss":
-            return {"status": "SATISFIED", "reason": f"Analyst dismissed the discrepancy ({ruling['id']})", "evidence": [],
-                    "details": {"analyst_override": ruling["id"]}}
+        if ruling and ruling["resolution"]["action_id"] == "dismiss":  # dismissing waives the discrepancy, not the IDs
+            reg_ubos = ([o for o in X[onrc["id"]].get("register_owners", []) if o["pct"] >= T.UBO_THRESHOLD_PCT]
+                        if have(onrc) else [])
+            missing_ids = rules.owners_without_id(reg_ubos, ids)
+            if missing_ids:
+                return {**wait(*[f"ID — {n.title()}" for n in missing_ids]),
+                        "details": {"analyst_override": ruling["id"], "owners_without_id": missing_ids}}
+            return {"status": "SATISFIED", "reason": f"Analyst dismissed the discrepancy ({ruling['id']}); owners have IDs",
+                    "evidence": [], "details": {"analyst_override": ruling["id"], "decided_by": "analyst"}}
         if ruling and ruling["resolution"]["action_id"] == "confirm_discrepancy":
             return {"status": "OPEN_WAITING", "reason": f"Discrepancy confirmed by analyst ({ruling['id']}); "
                     "waiting for corrected UBO declaration + IDs", "evidence": [],
@@ -354,11 +381,10 @@ def _evaluate(st: dict, req_id: str) -> dict:
             snippets = [{"doc_id": onrc["id"], "label": onrc["name"], "quote": "\n".join(o["quote"] for o in register)},
                         {"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
             return {"status": "CONTRADICTED", "reason": "; ".join(parts) + " (HR-04)", "evidence": snippets,
-                    "details": {"kind": "ubo_discrepancy", "snippets": snippets, "missing": [o["name"] for o in res["missing"]],
-                                "owners_without_id": rules.owners_without_id(res["ubos"], ids)}}
+                    "details": {"kind": "ubo_discrepancy", "snippets": snippets, "missing": [o["name"] for o in res["missing"]]}}
         missing_ids = rules.owners_without_id(res["ubos"], ids)
         if missing_ids:
-            return {**wait(*[f"ID — {n}" for n in missing_ids]), "details": {"owners_without_id": missing_ids}}
+            return {**wait(*[f"ID — {n.title()}" for n in missing_ids]), "details": {"owners_without_id": missing_ids}}
         return {"status": "SATISFIED", "reason": f"{len(res['ubos'])} beneficial owners match the register and have IDs",
                 "evidence": [{"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}],
                 "details": {}}
@@ -378,8 +404,11 @@ def _evaluate(st: dict, req_id: str) -> dict:
         prec = next((p for p in st["precedents"] if {rules.norm_text(p["a"]), rules.norm_text(p["b"])} ==
                      {rules.norm_text(a), rules.norm_text(b)}), None)
         if prec:
-            return {"status": "SATISFIED", "reason": f"Postal codes match; analyst precedent {prec['exception_id']} "
-                    "ruled this pair the same address", "evidence": ev, "details": {"precedent": prec["exception_id"]}}
+            fresh = prec["seq"] > max(app["seq"], onrc["seq"])
+            reason = (f"Analyst ruled: same address ({prec['exception_id']})" if fresh else
+                      f"Precedent {prec['exception_id']} reused: an analyst already ruled this address pair the same place")
+            return {"status": "SATISFIED", "reason": reason, "evidence": ev,
+                    "details": {"precedent": prec["exception_id"], **({"decided_by": "analyst"} if fresh else {})}}
         ruling = _ruling(st, "R3", max(app["seq"], onrc["seq"]))
         if ruling and ruling["resolution"]["action_id"] == "different_address":
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the addresses differ ({ruling['id']}); "
@@ -412,6 +441,13 @@ def _evaluate(st: dict, req_id: str) -> dict:
         ea, eo = X[app["id"]], X[onrc["id"]]
         s, adm = extract.field(ea, "signatory")["value"], extract.field(eo, "administrator")["value"]
         ev = _ev(app, ea, "signatory") + _ev(onrc, eo, "administrator")
+        ruling = _ruling(st, "R5", max(app["seq"], onrc["seq"]))
+        if ruling and ruling["resolution"]["action_id"] == "same_person":
+            return {"status": "SATISFIED", "reason": f"Analyst confirmed signatory = administrator ({ruling['id']})",
+                    "evidence": ev, "details": {"decided_by": "analyst"}}
+        if ruling and ruling["resolution"]["action_id"] == "different_person":
+            return {"status": "CONTRADICTED", "reason": f"Analyst ruled the signatory is not the administrator ({ruling['id']}); "
+                    "a signed mandate is required", "evidence": ev, "details": {"kind": "signatory_differs"}}
         j = judge("person", s, adm)
         if j["top"] == "same_person" and j["p_top"] >= j["threshold"]:
             return {"status": "SATISFIED", "reason": f"Signatory = administrator (judge p={j['p_top']})", "evidence": ev,
@@ -436,36 +472,44 @@ def _evaluate(st: dict, req_id: str) -> dict:
 
 
 def t_check_requirement(case: Case, req_id: str) -> dict:
+    res = _evaluate(case.state(), req_id)
+    apply_result(case, req_id, res)
+    return {"status": res["status"], "reason": res["reason"]}
+
+
+def apply_result(case: Case, req_id: str, res: dict) -> None:
+    """Record a rule evaluation plus its deterministic side effects. Owned by code (actor = engine), not by the model."""
     st = case.state()
-    res = _evaluate(st, req_id)
     cur = st["reqs"][req_id]
     if (cur["status"], cur["reason"]) != (res["status"], res["reason"]):
-        case.emit("REQUIREMENT_UPDATED", AGENT, {"req_id": req_id, "rule_ids": cur["rule_ids"], **res},
+        case.emit("REQUIREMENT_UPDATED", ENGINE, {"req_id": req_id, "rule_ids": cur["rule_ids"], **res},
                   f"{req_id} → {res['status']}")
-    # side effects owned by deterministic code, not by the model:
+        if st["status"] == "READY_FOR_DECISION" and res["status"] != "SATISFIED":  # a ready file can regress
+            case.emit("CASE_STATUS", ENGINE, {"status": "OPEN", "reason": f"{req_id} is {res['status']}"},
+                      f"File reopened: {req_id} is {res['status'].lower().replace('_', ' ')}")
     st = case.state()
     doc_id = res["details"].get("doc_id")
     if res["status"] == "SATISFIED" and doc_id and res["details"].get("expires_at") and not any(
             t["kind"] == "doc_expiry" and t.get("doc_id") == doc_id for t in st["timers"].values()):
         _set_timer(case, "doc_expiry", res["details"]["expires_at"], f"{T.DOC_LABELS[st['docs'][doc_id]['type']]} expires",
                    doc_id=doc_id, req_id=req_id)
-    if req_id == "R2" and res["status"] != "CONTRADICTED":
+    if req_id == "R2" and res["status"] != "CONTRADICTED" and res["details"].get("kind") != "awaiting_corrected_declaration":
+        why = (f"Analyst dismissed the discrepancy ({res['details']['analyst_override']})"
+               if res["details"].get("analyst_override") else "Declaration corrected — register and bank data agree")
         for t in st["timers"].values():
-            if t["kind"] == "legal_deadline" and t["status"] == "PENDING" and res["details"].get("kind") != "awaiting_corrected_declaration":
-                case.emit("TIMER_CANCELLED", AGENT, {"id": t["id"], "reason": "Declaration corrected — register and bank data agree"},
-                          f"Timer cancelled: {t['label']}")
+            if t["kind"] == "legal_deadline" and t["status"] == "PENDING":
+                case.emit("TIMER_CANCELLED", ENGINE, {"id": t["id"], "reason": why}, f"Timer cancelled: {t['label']}")
     if res["status"] == "SATISFIED":
         for x in st["exceptions"].values():
             if x["requirement_id"] == req_id and x["status"] == "OPEN":
-                case.emit("EXCEPTION_RESOLVED", AGENT, {"id": x["id"], "action_id": "superseded", "requirement_id": req_id,
-                                                        "note": "Rule now passes on newer documents"},
+                case.emit("EXCEPTION_RESOLVED", ENGINE, {"id": x["id"], "action_id": "superseded", "requirement_id": req_id,
+                                                         "note": "Rule now passes on newer documents"},
                           f"{x['id']} closed: superseded by newer documents")
-    return {"status": res["status"], "reason": res["reason"]}
 
 
 def _set_timer(case: Case, kind: str, due_iso: str, label: str, **extra) -> str:
     tid = case._next_id("T", "timers")
-    case.emit("TIMER_SET", AGENT, {"id": tid, "kind": kind, "due": due_iso, "label": label, **extra}, f"Timer set: {label}")
+    case.emit("TIMER_SET", ENGINE, {"id": tid, "kind": kind, "due": due_iso, "label": label, **extra}, f"Timer set: {label}")
     return tid
 
 
@@ -498,16 +542,19 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     kind = d.get("kind", "generic")
     cards = {
         "ubo_discrepancy": ("high", "Beneficial-owner discrepancy vs trade register",
-                            [{"id": "confirm_discrepancy", "label": "Confirm discrepancy → request corrected declaration + IDs"},
-                             {"id": "dismiss", "label": "Dismiss (documents agree)"}]),
+                            [{"id": "confirm_discrepancy", "label": "Confirm discrepancy and request a corrected declaration"},
+                             {"id": "dismiss", "label": "Dismiss: the documents agree"}]),
         "address_uncertain": ("medium", "Registered office: same place?",
-                              [{"id": "same_address", "label": "Same address (formatting variant)"},
-                               {"id": "different_address", "label": "Different address → ask client"}]),
+                              [{"id": "same_address", "label": "Same address, only formatting differs"},
+                               {"id": "different_address", "label": "Different address, ask the client"}]),
+        "signatory_uncertain": ("medium", "Signatory: same person as the administrator?",
+                                [{"id": "same_person", "label": "Same person"},
+                                 {"id": "different_person", "label": "Different person, ask for a mandate"}]),
     }
     severity, title, actions = cards.get(kind, ("medium", req["title"], [{"id": "acknowledge", "label": "Acknowledge"}]))
     rule_id = next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0])
-    if kind == "address_uncertain":
-        rule_id = "JQ-01"
+    if kind in ("address_uncertain", "signatory_uncertain"):
+        rule_id = "JQ-01" if kind == "address_uncertain" else "JQ-02"
     ex_id = case._next_id("EX", "exceptions")
     judge_view = None
     if d.get("judge"):
@@ -526,6 +573,8 @@ def t_mark_ready_for_decision(case: Case) -> dict:
 
 
 def t_annotate_exception(case: Case, exception_id: str, note: str) -> dict:
+    if exception_id not in case.state()["exceptions"]:
+        raise KeyError(f"unknown exception {exception_id}")
     case.emit("EXCEPTION_ANNOTATED", AGENT, {"id": exception_id, "note": note}, f"Note added to {exception_id}")
     return {"annotated": exception_id}
 

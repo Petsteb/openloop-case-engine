@@ -22,6 +22,8 @@ DOC_LABELS = {
     "onrc_certificate": "Trade register certificate (ONRC)",
     "fiscal_certificate": "Fiscal certificate (ANAF)",
     "email": "Client email",
+    "address_proof": "Proof of registered office",
+    "signatory_mandate": "Signatory mandate",
 }
 
 # Documents whose validity window is enforced (HR-03).

@@ -56,18 +56,61 @@ def test_full_demo_flow():
     assert req(b, "R6")["status"] == "SATISFIED"
     assert any(t["kind"] == "legal_deadline" and t["status"] == "CANCELLED" for t in b["timers"])
 
+    assert b["case"]["status"] == "READY_FOR_DECISION"      # everything verified on day 3...
+
     b = c.post("/api/cases/demo-1/advance", json={"days": 7}).json()
-    assert req(b, "R1")["status"] == "EXPIRED"               # ONRC issued 07 Oct, > 30 days
+    assert req(b, "R1")["status"] == "EXPIRED"               # ...but the ONRC cert (issued 07 Oct) passes 30 days
+    assert b["case"]["status"] == "OPEN"                     # a ready file regresses when evidence goes stale
+    assert any(s["tool"] == "request_document" and s["input"].get("key") == "onrc_certificate" and s["gate"] == "ALLOW"
+               and s["sim_time"] > "2026-11-05" for s in b["trace"])
 
     b = c.post("/api/cases/demo-1/inbound", json={"item_id": "fresh-onrc"}).json()
     assert all(r["status"] == "SATISFIED" for r in b["requirements"]), [(r["id"], r["status"], r["reason"]) for r in b["requirements"]]
-    assert "precedent" in req(b, "R3")["reason"]             # analyst ruling reused, no new triage card
+    assert "precedent" in req(b, "R3")["reason"].lower()     # analyst ruling reused, no new triage card
     assert b["case"]["status"] == "READY_FOR_DECISION"
     assert not open_ex(b)
 
     assert c.get("/api/cases/demo-1/verify").json()["ok"]
     pending = [r["key"] for r in CASES["demo-1"].state()["requests"].values() if r["status"] == "PENDING"]
     assert pending == [], pending                            # every request closed by a matching document
+
+
+def _to_triage():
+    c.post("/api/demo/reset")
+    c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"})
+    return c.post("/api/cases/demo-1/inbound", json={"item_id": "onrc-cert"}).json()
+
+
+def test_missed_legal_deadline_is_flagged_not_restarted():
+    _to_triage()
+    b = c.post("/api/cases/demo-1/advance", json={"days": 15}).json()
+    legal = [t for t in b["timers"] if t["kind"] == "legal_deadline"]
+    assert [t["status"] for t in legal] == ["FIRED"]         # one clock, never silently restarted
+    ubo = next(x for x in b["exceptions"] if x["kind"] == "ubo_discrepancy")
+    assert any("overdue" in n for n in ubo["notes"])
+
+
+def test_dismiss_waives_discrepancy_but_not_ids():
+    b = _to_triage()
+    ex = next(x["id"] for x in b["exceptions"] if x["kind"] == "ubo_discrepancy")
+    b = c.post(f"/api/cases/demo-1/exceptions/{ex}/resolve", json={"action_id": "dismiss"}).json()
+    assert req(b, "R2")["status"] == "OPEN_WAITING"          # Radu Pop / Elena Munteanu IDs still required
+    cancelled = [e for e in b["events"] if e["type"] == "TIMER_CANCELLED"]
+    assert any("Timer cancelled: AMLR" in e["summary"] for e in cancelled)
+
+
+def test_bad_tool_input_never_poisons_the_ledger():
+    c.post("/api/demo/reset")
+    out = CASES["demo-1"].run_tool("annotate_exception", {"exception_id": "EX-99", "note": "x"}, "bad id")
+    assert "error" in out["output"]
+    assert c.get("/api/cases/demo-1/bundle").status_code == 200
+    assert c.get("/api/cases/demo-1/verify").json()["ok"]
+
+
+def test_scenario_item_cannot_be_delivered_twice():
+    c.post("/api/demo/reset")
+    assert c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"}).status_code == 200
+    assert c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"}).status_code == 409
 
 
 def test_agent_can_never_approve_credit():

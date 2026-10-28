@@ -7,7 +7,7 @@
 ## Principles
 - Only the engine changes state; the LLM never mutates it. State = `reduce(events)`.
 - Hard rules (tax-ID checksum, registry status, beneficial owners ≥25%, DSCR ≥1.2, document validity) are plain code, and each has a rule ID.
-- Models can add friction, never remove it. The judge or LLM can only escalate. Approving credit is not an action the agent has.
+- No model overrides a hard rule. The judge only settles fuzzy matches above a threshold, after the hard facts match; otherwise it escalates. The only approve tool is hard-wired to DENY (GATE-02). Expiry, legal clocks and escalations are enforced in code.
 - Every agent step is logged: reason, tool, input, output, gate verdict.
 - Runs with no API keys: `AGENT_MODE=scripted` uses the deterministic planner and `JUDGE_MODE=heuristic` uses a string-similarity judge. With keys: `AGENT_MODE=bedrock` (Claude on Amazon Bedrock) and `JUDGE_MODE=featherless`.
 
@@ -16,15 +16,13 @@
 backend/app/
   main.py        FastAPI app; serves /api/* and the static frontend at /
   ledger.py      append-only hash-chained event store
-  clock.py       simulated clock per case (time skip)
-  template.py    KYB case template: requirements, rules, timers, allowed actions
-  reducer.py     events -> case state
+  engine.py      Case (simulated clock, deliver/advance/resolve), reducer (events -> state), gate, agent tools
+  template.py    KYB case template: requirements, rules, timers
   rules.py       hard rules (pure functions, rule IDs)
   judge.py       fuzzy judge: heuristic | featherless
   extract.py     document field extraction with verbatim quotes, plus quote verification
   registry.py    mock trade-register (ONRC) API
-  tools.py       agent tools + gate
-  agent.py       case agent: scripted planner | bedrock planner
+  agent.py       case agent: scripted planner | Claude-on-Bedrock planner (+ code safety net)
   scenario.py    demo case documents and scripted inbound items
 backend/tests/   pytest
 frontend/        index.html, app.js, styles.css (no build step)

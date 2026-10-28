@@ -26,6 +26,7 @@ def _reason_for(action: dict, st: dict) -> str:
 
 class ScriptedAgent:
     mode = "scripted"
+    status = "ok"
 
     def handle(self, case: Case, trigger: dict) -> None:
         p = trigger["payload"]
@@ -67,8 +68,17 @@ class ScriptedAgent:
         elif t["kind"] == "doc_expiry":
             case.run_tool("check_requirement", {"req_id": t["req_id"]}, "A certificate's validity window just ended — re-check")
         elif t["kind"] == "legal_deadline":
-            case.run_tool("escalate_to_analyst", {"req_id": t["req_id"], "summary": "AMLR reporting deadline reached"},
-                          "Legal deadline reached — make sure a human owns the discrepancy report")
+            owned = [x for x in case.state()["exceptions"].values() if x["requirement_id"] == t["req_id"]]
+            if owned:
+                case.run_tool("annotate_exception", {"exception_id": owned[-1]["id"],
+                                                     "note": "AMLR reporting deadline reached: the discrepancy report is now overdue"},
+                              "Legal deadline reached — flag it on the discrepancy the analyst already owns")
+            else:
+                case.run_tool("escalate_to_analyst", {"req_id": t["req_id"], "summary": "AMLR reporting deadline reached"},
+                              "Legal deadline reached — make sure a human owns the discrepancy report")
+        elif t["kind"] == "registry_retry":
+            case.run_tool("lookup_registry", {"cui": t.get("cui") or ""}, "The trade register API was down — retry the lookup")
+            case.run_tool("check_requirement", {"req_id": "R1"}, "Re-evaluate R1 with the registry result")
 
     def follow_up(self, case: Case) -> None:
         st = case.state()
@@ -95,7 +105,7 @@ TOOL_SPECS = {
     "start_legal_clock": ("Start the AMLR 14-day discrepancy-report deadline for a requirement.", {"req_id": "string"}),
     "escalate_to_analyst": ("Send a requirement to a human analyst as a triage card.", {"req_id": "string", "summary": "string"}),
     "mark_ready_for_decision": ("Mark the file complete for the human credit decision.", {}),
-    "approve_credit": ("Approve the loan.", {}),
+    "approve_credit": ("Approve the loan. Reserved for humans: the gate always denies it (GATE-02).", {}),
 }
 
 SYSTEM = f"""You are the case agent for an SME loan + KYB file at a bank. A new event just happened.
@@ -117,7 +127,10 @@ class BedrockAgent:
 
     def __init__(self):
         from anthropic import AnthropicBedrockMantle
-        self.client = AnthropicBedrockMantle(aws_region=os.environ.get("AWS_REGION", "eu-central-1"))
+        # short timeout + one retry: a live demo must fall back in seconds, not minutes
+        self.client = AnthropicBedrockMantle(aws_region=os.environ.get("AWS_REGION", "eu-central-1"),
+                                             timeout=float(os.environ.get("AGENT_TIMEOUT_S", "30")), max_retries=1)
+        self.status = "ok"
         self.model = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-opus-5-5")
         self.effort = os.environ.get("AGENT_EFFORT", "low")  # short, bounded decisions; raise for harder cases
         self.fallback = ScriptedAgent()
@@ -130,7 +143,9 @@ class BedrockAgent:
     def handle(self, case: Case, trigger: dict) -> None:
         try:
             self._loop(case, trigger)
+            self.status = "ok"
         except Exception as exc:  # model outage or refusal must not stall the case
+            self.status = f"fallback ({type(exc).__name__})"
             case.run_tool("get_case_state", {}, f"LLM planner unavailable ({type(exc).__name__}) — falling back to scripted planner")
             self.fallback.handle(case, trigger)
             return
@@ -138,7 +153,7 @@ class BedrockAgent:
         # whatever the model chose to do.
         self.fallback.follow_up(case)
 
-    def _loop(self, case: Case, trigger: dict, max_turns: int = 12) -> None:
+    def _loop(self, case: Case, trigger: dict, max_turns: int = 8) -> None:
         messages = [{"role": "user", "content": f"Event: {trigger['type']} — {trigger['summary']}\n"
                                                 f"Payload: {json.dumps(trigger['payload'], ensure_ascii=False, default=str)[:1500]}"}]
         for _ in range(max_turns):
