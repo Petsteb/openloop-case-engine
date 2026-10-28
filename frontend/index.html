@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenLoop · AI case agent</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="tb-left">
+      <div class="brand-row">
+        <span class="logo" aria-hidden="true"></span>
+        <span class="brand">OpenLoop</span>
+        <span id="case-status" class="status-chip"></span>
+        <span id="mock-flag" class="badge mock" hidden>MOCK DATA</span>
+      </div>
+      <div id="case-title" class="case-title">Loading case…</div>
+      <div id="badges" class="badges"></div>
+    </div>
+
+    <div class="tb-center">
+      <div id="clock" class="clock" aria-live="polite" aria-label="Simulated clock">
+        <span id="clock-day" class="clock-day">Day –</span>
+        <span class="clock-sep">·</span>
+        <span id="clock-date" class="clock-date">–</span>
+      </div>
+    </div>
+
+    <div class="tb-right">
+      <div class="ctl-row">
+        <span class="ctl-label">Time skip</span>
+        <button type="button" class="btn primary act" data-act="advance" data-days="1">+1 day</button>
+        <button type="button" class="btn primary act" data-act="advance" data-days="3">+3 days</button>
+        <button type="button" class="btn primary act" data-act="advance" data-days="7">+7 days</button>
+      </div>
+      <div class="ctl-row">
+        <button type="button" class="btn act" data-act="verify">Verify ledger</button>
+        <span id="verify-result" class="verify" role="status"></span>
+        <button type="button" class="btn ghost act" data-act="reset" id="btn-reset">Reset demo</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- LEFT -->
+    <aside class="col col-left" aria-label="Inbound and ledger">
+      <section class="panel">
+        <h2>Inbound <span class="h2-sub">scripted client items</span></h2>
+        <div id="inbound" class="inbound"></div>
+      </section>
+      <section class="panel grow">
+        <h2>Ledger <span id="ledger-count" class="count"></span></h2>
+        <div id="ledger" class="ledger scroll"></div>
+      </section>
+    </aside>
+
+    <!-- CENTER -->
+    <section class="col col-center" aria-label="Case state">
+      <section class="panel">
+        <h2>Requirements <span id="req-legend" class="legend"></span></h2>
+        <div id="requirements" class="req-grid"></div>
+      </section>
+
+      <div class="two-up">
+        <section class="panel">
+          <h2>Timers</h2>
+          <ul id="timers" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Documents</h2>
+          <ul id="documents" class="list"></ul>
+        </section>
+      </div>
+
+      <section class="panel metrics-panel">
+        <h2>Agent metrics</h2>
+        <div id="metrics" class="metrics"></div>
+      </section>
+    </section>
+
+    <!-- RIGHT -->
+    <aside class="col col-right" aria-label="Triage and agent trace">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-triage" class="tab active" data-tab="triage" aria-selected="true">Triage</button>
+        <button type="button" role="tab" id="tab-trace" class="tab" data-tab="trace" aria-selected="false">Agent trace</button>
+      </div>
+      <div id="pane-triage" class="tabpane" role="tabpanel"></div>
+      <div id="pane-trace" class="tabpane" role="tabpanel" hidden></div>
+    </aside>
+
+  </main>
+
+  <div id="boot" class="boot">
+    <div class="boot-card">
+      <div id="boot-spin" class="spinner" aria-hidden="true"></div>
+      <div id="boot-msg">Loading case…</div>
+      <div id="boot-actions" class="boot-actions" hidden>
+        <button type="button" class="btn primary" id="boot-retry">Retry</button>
+        <a class="btn" href="?mock=1">Open with mock data</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

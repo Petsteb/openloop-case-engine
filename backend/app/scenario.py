@@ -1,0 +1,113 @@
+"""Synthetic demo case: a fictional bakery applies for an SME working-capital loan.
+
+All companies, people and IDs are fictional. Documents are Romanian text stand-ins for PDFs.
+`{issued}` is replaced with the delivery date; a fixed `issued_offset_days` pins an older issue date.
+"""
+from datetime import datetime, timedelta, timezone
+
+CASE_START = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
+
+APPLICATION = """CERERE DE FINANȚARE — IMM
+Solicitant: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Sediu social: Str. Fagului nr. 7, bl. A2, Cluj-Napoca, jud. Cluj
+Cod poștal: 400127
+Produs solicitat: Credit capital de lucru
+Suma solicitată: 500.000 RON
+Rată anuală estimată credit nou: 120.000 RON
+Reprezentant legal / semnatar: Andrei Munteanu
+Data cererii: {issued}"""
+
+FINANCIALS = """SITUAȚII FINANCIARE ANUALE 2025 — EXTRAS
+Entitate: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Cifra de afaceri netă: 3.150.000 RON
+EBITDA: 420.000 RON
+Serviciul anual al datoriei existente: 180.000 RON
+Profit net: 210.000 RON"""
+
+UBO_V1 = """DECLARAȚIE PRIVIND BENEFICIARUL REAL
+Societate: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Beneficiar real: Andrei Munteanu — 70%
+Beneficiar real: Elena Munteanu — 30%
+Data declarației: 15.09.2026"""
+
+UBO_V2 = """DECLARAȚIE PRIVIND BENEFICIARUL REAL (actualizată)
+Societate: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Beneficiar real: Andrei Munteanu — 45%
+Beneficiar real: Elena Munteanu — 30%
+Beneficiar real: Radu Pop — 25%
+Data declarației: {issued}"""
+
+ID_TEMPLATE = """CARTE DE IDENTITATE (copie)
+Nume: {last}
+Prenume: {first}
+CNP: {cnp_masked}
+Valabilă până la: {valid_until}"""
+
+ONRC = """CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
+Denumire: BRUTĂRIA AURORA S.R.L.
+Cod unic de înregistrare: 45123879
+Stare firmă: ACTIVĂ
+Sediul social: Calea Fagului nr. 7, Cluj-Napoca, Județ Cluj
+Cod poștal: 400127
+Administrator: MUNTEANU ANDREI
+Asociat: MUNTEANU ANDREI — 45%
+Asociat: MUNTEANU ELENA — 30%
+Asociat: POP RADU — 25%
+Data eliberării: {issued}"""
+
+FISCAL = """CERTIFICAT DE ATESTARE FISCALĂ — ANAF
+Contribuabil: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Obligații fiscale restante: NU
+Data eliberării: {issued}"""
+
+EMAIL_OWNERSHIP = """De la: andrei.munteanu@brutaria-aurora.example
+Subiect: Modificare acționariat
+Bună ziua, vă informăm că domnul Radu Pop a devenit asociat (25%) luna aceasta.
+Vă trimitem în zilele următoare declarația de beneficiar real actualizată și actul lui de identitate."""
+
+
+def _id(first: str, last: str, cnp: str) -> dict:
+    return {"type": "id_card", "name": f"Identity card — {first.title()} {last.title()}", "person": f"{first.title()} {last.title()}",
+            "text": ID_TEMPLATE.format(first=first, last=last, cnp_masked=cnp, valid_until="12.03.2031")}
+
+
+# Scripted inbound items the presenter delivers during the demo (in any order).
+SCENARIO = [
+    {"id": "day0-pack", "label": "Day 0 · Client uploads application pack (4 docs)", "docs": [
+        {"type": "application", "name": "Loan application", "text": APPLICATION},
+        {"type": "financial_statement", "name": "Financial statements 2025", "text": FINANCIALS, "issued_offset_days": -60},
+        {"type": "ubo_declaration", "name": "UBO declaration (Sep 2026)", "text": UBO_V1, "issued_offset_days": -43},
+        _id("ANDREI", "MUNTEANU", "185031••••••"),
+    ]},
+    {"id": "onrc-cert", "label": "Trade register certificate arrives (issued 07 Oct)", "docs": [
+        {"type": "onrc_certificate", "name": "Trade register certificate", "text": ONRC, "issued_offset_days": -21},
+    ]},
+    {"id": "client-email", "label": "Client email: “shareholder changed”", "docs": [
+        {"type": "email", "name": "Email: Modificare acționariat", "text": EMAIL_OWNERSHIP},
+    ]},
+    {"id": "updated-docs", "label": "Updated UBO declaration + 2 IDs + fiscal certificate", "docs": [
+        {"type": "ubo_declaration", "name": "UBO declaration (updated)", "text": UBO_V2},
+        _id("ELENA", "MUNTEANU", "288070••••••"),
+        _id("RADU", "POP", "179112••••••"),
+        {"type": "fiscal_certificate", "name": "Fiscal certificate", "text": FISCAL},
+    ]},
+    {"id": "fresh-onrc", "label": "Fresh trade register certificate", "docs": [
+        {"type": "onrc_certificate", "name": "Trade register certificate (fresh)", "text": ONRC},
+    ]},
+]
+
+
+def materialise(item: dict, now: datetime) -> list[dict]:
+    """Turn a scenario item into concrete documents with issue dates."""
+    out = []
+    for d in item["docs"]:
+        issued = CASE_START + timedelta(days=d["issued_offset_days"]) if "issued_offset_days" in d else now
+        out.append({**{k: v for k, v in d.items() if k != "issued_offset_days"},
+                    "text": d["text"].replace("{issued}", issued.strftime("%d.%m.%Y")),
+                    "issued_at": issued.isoformat()})
+    return out

@@ -1,0 +1,818 @@
+{
+  "case": {
+    "id": "demo-1",
+    "title": "SME loan & KYB — Brutăria Aurora SRL",
+    "goal": "File ready for credit decision",
+    "status": "OPEN",
+    "sim_now": "2026-10-31T09:00:00Z",
+    "day": 3,
+    "opened_at": "2026-10-28T09:00:00Z"
+  },
+  "config": {
+    "agent_mode": "scripted",
+    "judge_mode": "heuristic",
+    "judge_threshold": 0.9
+  },
+  "requirements": [
+    {
+      "id": "R1",
+      "title": "Company active in trade register",
+      "status": "SATISFIED",
+      "reason": "CUI checksum valid; registry status ACTIVE",
+      "rule_ids": [
+        "HR-01",
+        "HR-02"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-onrc",
+          "field": "status",
+          "quote": "Stare firmă: ACTIVĂ"
+        },
+        {
+          "doc_id": "doc-app",
+          "field": "cui",
+          "quote": "CUI: RO48392014"
+        }
+      ],
+      "updated_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "R2",
+      "title": "Beneficial owners (≥25%) declared and identified",
+      "status": "CONTRADICTED",
+      "reason": "Trade register lists Radu Pop with 25%; the UBO declaration omits him.",
+      "rule_ids": [
+        "HR-04"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-onrc",
+          "field": "associates",
+          "quote": "Asociați: MARINESCU ION — 75% · POP RADU — 25%"
+        },
+        {
+          "doc_id": "doc-ubo",
+          "field": "beneficial_owners",
+          "quote": "Beneficiar real: Marinescu Ion, deține 100% din părțile sociale."
+        }
+      ],
+      "updated_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "R3",
+      "title": "Registered office matches application",
+      "status": "NEEDS_REVIEW",
+      "reason": "Address match scored 0.86, below the 0.90 auto-accept threshold; sent to an analyst.",
+      "rule_ids": [
+        "HR-05"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-app",
+          "field": "registered_office",
+          "quote": "Sediu social: Str. Fabricii nr. 12, Cluj-Napoca, jud. Cluj"
+        },
+        {
+          "doc_id": "doc-onrc",
+          "field": "registered_office",
+          "quote": "Sediu: Cluj-Napoca, Str. Fabricii nr. 12A, jud. Cluj"
+        }
+      ],
+      "updated_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "R4",
+      "title": "Financial statements and DSCR ≥ 1.2",
+      "status": "OPEN_WAITING",
+      "reason": "FY2025 financial statements not received yet, so DSCR cannot be computed. Reminder timer T-2 is running.",
+      "rule_ids": [
+        "HR-06"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-email-1",
+          "field": "body",
+          "quote": "Bilanțul pe 2025 îl trimitem până vineri, vă rugăm să ne scuzați întârzierea."
+        }
+      ],
+      "updated_at": "2026-10-29T10:12:00Z"
+    },
+    {
+      "id": "R5",
+      "title": "Fiscal certificate valid (≤30 days)",
+      "status": "EXPIRED",
+      "reason": "Certificate issued 2026-10-01 and valid 30 days; validity ended 2026-10-31. A new certificate was requested.",
+      "rule_ids": [
+        "HR-07"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-fiscal",
+          "field": "issued_at",
+          "quote": "Data emiterii: 01.10.2026 · Valabil 30 de zile de la data emiterii"
+        }
+      ],
+      "updated_at": "2026-10-31T09:00:00Z"
+    },
+    {
+      "id": "R6",
+      "title": "Legal representative identified",
+      "status": "SATISFIED",
+      "reason": "ID document valid until 2031-03-14; name matches the application.",
+      "rule_ids": [
+        "HR-03"
+      ],
+      "evidence": [
+        {
+          "doc_id": "doc-id",
+          "field": "valid_until",
+          "quote": "Valabilă până la: 14.03.2031"
+        }
+      ],
+      "updated_at": "2026-10-28T09:00:00Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-app",
+      "type": "application",
+      "name": "Cerere de credit",
+      "received_at": "2026-10-28T09:00:00Z",
+      "issued_at": "2026-10-27T09:00:00Z"
+    },
+    {
+      "id": "doc-ubo",
+      "type": "ubo_declaration",
+      "name": "Declarație beneficiari reali",
+      "received_at": "2026-10-28T09:00:00Z",
+      "issued_at": "2026-10-27T09:00:00Z"
+    },
+    {
+      "id": "doc-id",
+      "type": "identity",
+      "name": "CI administrator, Ion Marinescu",
+      "received_at": "2026-10-28T09:00:00Z",
+      "issued_at": "2021-03-15T00:00:00Z"
+    },
+    {
+      "id": "doc-fiscal",
+      "type": "tax_certificate",
+      "name": "Certificat de atestare fiscală",
+      "received_at": "2026-10-28T09:00:00Z",
+      "issued_at": "2026-10-01T00:00:00Z"
+    },
+    {
+      "id": "doc-onrc",
+      "type": "registry_extract",
+      "name": "Certificat constatator ONRC",
+      "received_at": "2026-10-28T09:00:00Z",
+      "issued_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "doc-email-1",
+      "type": "email",
+      "name": "Email client: bilanț în curs",
+      "received_at": "2026-10-29T10:12:00Z",
+      "issued_at": "2026-10-29T10:12:00Z"
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "EX-1",
+      "requirement_id": "R2",
+      "status": "OPEN",
+      "severity": "high",
+      "title": "Undeclared beneficial owner",
+      "summary": "Trade register lists Radu Pop with 25%; UBO declaration omits him.",
+      "rule": {
+        "id": "HR-04",
+        "text": "Every person with ≥25% ownership must be declared and identified (Law 129/2019; AMLR Art. 24: report register discrepancies within 14 days)."
+      },
+      "snippets": [
+        {
+          "doc_id": "doc-onrc",
+          "label": "Trade register certificate",
+          "quote": "Asociați:\n  MARINESCU ION — 75% (750 părți sociale)\n  POP RADU — 25% (250 părți sociale)"
+        },
+        {
+          "doc_id": "doc-ubo",
+          "label": "UBO declaration",
+          "quote": "Beneficiar real:\n  Marinescu Ion, CNP ************\n  deține 100% din părțile sociale"
+        }
+      ],
+      "judge": null,
+      "actions": [
+        {
+          "id": "confirm_discrepancy",
+          "label": "Confirm discrepancy → request new declaration + draft report"
+        },
+        {
+          "id": "dismiss",
+          "label": "Dismiss (documents agree)"
+        }
+      ],
+      "created_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "EX-2",
+      "requirement_id": "R3",
+      "status": "OPEN",
+      "severity": "medium",
+      "title": "Registered office wording differs",
+      "summary": "Application and trade register give the office address in different forms (12 vs 12A). The judge is not confident enough to accept it.",
+      "rule": {
+        "id": "HR-05",
+        "text": "The registered office on the application must match the trade register. Fuzzy matches below the judge threshold go to an analyst."
+      },
+      "snippets": [
+        {
+          "doc_id": "doc-app",
+          "label": "Application",
+          "quote": "Sediu social: Str. Fabricii nr. 12,\nCluj-Napoca, jud. Cluj"
+        },
+        {
+          "doc_id": "doc-onrc",
+          "label": "Trade register certificate",
+          "quote": "Sediu: Cluj-Napoca,\nStr. Fabricii nr. 12A, jud. Cluj"
+        }
+      ],
+      "judge": {
+        "question": "Do these two addresses refer to the same registered office?",
+        "probs": {
+          "same_address": 0.86,
+          "different_address": 0.14
+        },
+        "threshold": 0.9
+      },
+      "actions": [
+        {
+          "id": "accept_same_address",
+          "label": "Accept as the same address"
+        },
+        {
+          "id": "request_proof",
+          "label": "Request proof of registered office"
+        },
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ],
+      "created_at": "2026-10-28T09:00:00Z"
+    },
+    {
+      "id": "EX-3",
+      "requirement_id": "R1",
+      "status": "RESOLVED",
+      "severity": "low",
+      "title": "Company name spelling differs",
+      "summary": "Application says \"Brutaria Aurora S.R.L.\"; the register says \"BRUTĂRIA AURORA S.R.L.\" (diacritics only). Dismissed by analyst.",
+      "rule": {
+        "id": "HR-02",
+        "text": "Legal name must match the trade register."
+      },
+      "snippets": [
+        {
+          "doc_id": "doc-app",
+          "label": "Application",
+          "quote": "Brutaria Aurora S.R.L."
+        },
+        {
+          "doc_id": "doc-onrc",
+          "label": "Trade register certificate",
+          "quote": "BRUTĂRIA AURORA S.R.L."
+        }
+      ],
+      "judge": {
+        "question": "Same company name?",
+        "probs": {
+          "same_name": 0.97,
+          "different_name": 0.03
+        },
+        "threshold": 0.9
+      },
+      "actions": [
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ],
+      "created_at": "2026-10-29T10:13:00Z"
+    }
+  ],
+  "timers": [
+    {
+      "id": "T-1",
+      "kind": "legal_deadline",
+      "label": "AMLR discrepancy report due",
+      "due": "2026-11-11T09:00:00Z",
+      "status": "PENDING"
+    },
+    {
+      "id": "T-2",
+      "kind": "client_reminder",
+      "label": "Financial statements due from client",
+      "due": "2026-11-02T09:00:00Z",
+      "status": "PENDING"
+    },
+    {
+      "id": "T-3",
+      "kind": "validity",
+      "label": "Fiscal certificate validity ends",
+      "due": "2026-10-31T09:00:00Z",
+      "status": "FIRED"
+    },
+    {
+      "id": "T-4",
+      "kind": "client_reminder",
+      "label": "Reminder: signed application missing",
+      "due": "2026-10-30T09:00:00Z",
+      "status": "CANCELLED"
+    }
+  ],
+  "metrics": {
+    "agent_steps": 14,
+    "tool_calls": 14,
+    "auto_resolved": 4,
+    "sent_to_human": 3,
+    "denied_actions": 1
+  },
+  "events": [
+    {
+      "seq": 1,
+      "type": "CASE_OPENED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "Case opened: SME loan & KYB, Brutăria Aurora SRL",
+      "hash": "723fb6b808e446075b017ca544089ae7256af602668101c586005b8e60b12f9f",
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "seq": 2,
+      "type": "DOCUMENT_RECEIVED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "client",
+        "id": "brutaria-aurora"
+      },
+      "summary": "Document received: Cerere de credit (application)",
+      "hash": "84c0ad7239d7ef2d0d6f87bde28e14db97462f9bf1296eb1a8660a34b0399e31",
+      "prev_hash": "723fb6b808e446075b017ca544089ae7256af602668101c586005b8e60b12f9f"
+    },
+    {
+      "seq": 3,
+      "type": "DOCUMENT_RECEIVED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "client",
+        "id": "brutaria-aurora"
+      },
+      "summary": "Document received: Declarație beneficiari reali (UBO declaration)",
+      "hash": "d7258677bb37ca335c164f6af08fab18e21d090b01ebd954c2458ebb0259d6d2",
+      "prev_hash": "84c0ad7239d7ef2d0d6f87bde28e14db97462f9bf1296eb1a8660a34b0399e31"
+    },
+    {
+      "seq": 4,
+      "type": "DOCUMENT_RECEIVED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "client",
+        "id": "brutaria-aurora"
+      },
+      "summary": "Document received: CI administrator, Ion Marinescu",
+      "hash": "38f339e832b3a181666aa6938dc83216fbbdd9b37742baef0a4472a80cf2302a",
+      "prev_hash": "d7258677bb37ca335c164f6af08fab18e21d090b01ebd954c2458ebb0259d6d2"
+    },
+    {
+      "seq": 5,
+      "type": "DOCUMENT_RECEIVED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "client",
+        "id": "brutaria-aurora"
+      },
+      "summary": "Document received: Certificat de atestare fiscală",
+      "hash": "d00b16162ce59e5b9a82a30bc0e58a5abd27e4fdf3f2bacaebd8bc2970d71ffd",
+      "prev_hash": "38f339e832b3a181666aa6938dc83216fbbdd9b37742baef0a4472a80cf2302a"
+    },
+    {
+      "seq": 6,
+      "type": "TOOL_CALLED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "agent",
+        "id": "case-agent"
+      },
+      "summary": "lookup_registry(CUI RO48392014) returned status ACTIVĂ",
+      "hash": "4cdeca465926213afbdb24471b9ac4ca7d480624f96983574d642657fd18c5e9",
+      "prev_hash": "d00b16162ce59e5b9a82a30bc0e58a5abd27e4fdf3f2bacaebd8bc2970d71ffd"
+    },
+    {
+      "seq": 7,
+      "type": "DOCUMENT_RECEIVED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "Document stored: Certificat constatator ONRC (registry snapshot)",
+      "hash": "a3d829f3c8c98d95e3b5d60b91323f55db79288d3f07b57373cc3e8f5855cd0e",
+      "prev_hash": "4cdeca465926213afbdb24471b9ac4ca7d480624f96983574d642657fd18c5e9"
+    },
+    {
+      "seq": 8,
+      "type": "REQUIREMENT_UPDATED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "R1 Company active in trade register → SATISFIED",
+      "hash": "613852020f47d4bec514d83705821eb3a8506c7b39cfaff51339090406741112",
+      "prev_hash": "a3d829f3c8c98d95e3b5d60b91323f55db79288d3f07b57373cc3e8f5855cd0e"
+    },
+    {
+      "seq": 9,
+      "type": "REQUIREMENT_UPDATED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "R6 Legal representative identified → SATISFIED",
+      "hash": "0a4418c8bf1d74bf3b9b0b9843013c70c2313b43fda6bf4cd5836479c3036f47",
+      "prev_hash": "613852020f47d4bec514d83705821eb3a8506c7b39cfaff51339090406741112"
+    },
+    {
+      "seq": 10,
+      "type": "JUDGE_VERDICT",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "judge",
+        "id": "heuristic"
+      },
+      "summary": "Address match same_address 0.86 < 0.90 threshold → escalate",
+      "hash": "67eb5a9de5ca6274ec56bf7abcc5af3c7778c2f39c9bdc52cd552d75c834a771",
+      "prev_hash": "0a4418c8bf1d74bf3b9b0b9843013c70c2313b43fda6bf4cd5836479c3036f47"
+    },
+    {
+      "seq": 11,
+      "type": "EXCEPTION_OPENED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "EX-2 opened (medium): Registered office wording differs",
+      "hash": "9ee20a64fe052b3a9a8744dc10e27118017d862fec045053a0858599a1681356",
+      "prev_hash": "67eb5a9de5ca6274ec56bf7abcc5af3c7778c2f39c9bdc52cd552d75c834a771"
+    },
+    {
+      "seq": 12,
+      "type": "EXCEPTION_OPENED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "EX-1 opened (high): Undeclared beneficial owner",
+      "hash": "daa9938d677a1e3b0bad8c2a011fa692e37a9b875155e192d181979c5bf04ce0",
+      "prev_hash": "9ee20a64fe052b3a9a8744dc10e27118017d862fec045053a0858599a1681356"
+    },
+    {
+      "seq": 13,
+      "type": "TIMER_SET",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "T-1 set: AMLR discrepancy report due 11 Nov 2026",
+      "hash": "0faef95536c9c43c63e490f0d5b30e7da5cf2166c31ec7ee8cc8dc56b49f77db",
+      "prev_hash": "daa9938d677a1e3b0bad8c2a011fa692e37a9b875155e192d181979c5bf04ce0"
+    },
+    {
+      "seq": 14,
+      "type": "ACTION_DENIED",
+      "sim_time": "2026-10-28T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "action-gate"
+      },
+      "summary": "mark_satisfied(R2) denied by HR-04: owner ≥25% undeclared",
+      "hash": "e9c28450153927da0a2ed3ed6ae4eb598b652bab56a079452c701167274d0c36",
+      "prev_hash": "0faef95536c9c43c63e490f0d5b30e7da5cf2166c31ec7ee8cc8dc56b49f77db"
+    },
+    {
+      "seq": 15,
+      "type": "TIME_ADVANCED",
+      "sim_time": "2026-10-29T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "Clock advanced +1 day → Day 1",
+      "hash": "11f4dd3ebd04b969553dedb4edb7006a6481b60433a7fc35f8f78be79cc75476",
+      "prev_hash": "e9c28450153927da0a2ed3ed6ae4eb598b652bab56a079452c701167274d0c36"
+    },
+    {
+      "seq": 16,
+      "type": "EMAIL_RECEIVED",
+      "sim_time": "2026-10-29T10:12:00Z",
+      "actor": {
+        "type": "client",
+        "id": "brutaria-aurora"
+      },
+      "summary": "Client email: \"bilanțul pe 2025 îl trimitem până vineri\"",
+      "hash": "4ede17787f3735d44cb6a6ac2565d411811fafc5310daee7f94d62ba7579c44d",
+      "prev_hash": "11f4dd3ebd04b969553dedb4edb7006a6481b60433a7fc35f8f78be79cc75476"
+    },
+    {
+      "seq": 17,
+      "type": "TIMER_SET",
+      "sim_time": "2026-10-29T10:12:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "T-2 set: financial statements due from client 2 Nov 2026",
+      "hash": "32f0869a42c1d4d12a5e3aa8250215b7ee487350741917e1547f915c6052b2d0",
+      "prev_hash": "4ede17787f3735d44cb6a6ac2565d411811fafc5310daee7f94d62ba7579c44d"
+    },
+    {
+      "seq": 18,
+      "type": "EXCEPTION_OPENED",
+      "sim_time": "2026-10-29T10:13:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "EX-3 opened (low): Company name spelling differs",
+      "hash": "331cf4cae66f563632509efc73fa19a1582ebf4bf22794a01136d62000ef9418",
+      "prev_hash": "32f0869a42c1d4d12a5e3aa8250215b7ee487350741917e1547f915c6052b2d0"
+    },
+    {
+      "seq": 19,
+      "type": "TIME_ADVANCED",
+      "sim_time": "2026-10-30T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "Clock advanced +1 day → Day 2",
+      "hash": "4266fb0d9f217dca478ff0512e8117dc3cd6472ac5470e5bd366311a6554008d",
+      "prev_hash": "331cf4cae66f563632509efc73fa19a1582ebf4bf22794a01136d62000ef9418"
+    },
+    {
+      "seq": 20,
+      "type": "EXCEPTION_RESOLVED",
+      "sim_time": "2026-10-30T09:41:00Z",
+      "actor": {
+        "type": "human",
+        "id": "analyst"
+      },
+      "summary": "EX-3 resolved by analyst: dismiss (same legal entity)",
+      "hash": "19592406f542296e43da2b2d8bd6c6d286c86830c151129bce13e3c0eb21963b",
+      "prev_hash": "4266fb0d9f217dca478ff0512e8117dc3cd6472ac5470e5bd366311a6554008d"
+    },
+    {
+      "seq": 21,
+      "type": "TIME_ADVANCED",
+      "sim_time": "2026-10-31T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "Clock advanced +1 day → Day 3",
+      "hash": "396b4d906c217ea89a4f2d7834b57df35231dce5f6a3b899989806276c06491e",
+      "prev_hash": "19592406f542296e43da2b2d8bd6c6d286c86830c151129bce13e3c0eb21963b"
+    },
+    {
+      "seq": 22,
+      "type": "TIMER_FIRED",
+      "sim_time": "2026-10-31T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "T-3 fired: fiscal certificate 30-day validity ended",
+      "hash": "c82658da40bbc709e706bf3f8ea33572ef2cb621aae598aa2e4e2ee638cfd026",
+      "prev_hash": "396b4d906c217ea89a4f2d7834b57df35231dce5f6a3b899989806276c06491e"
+    },
+    {
+      "seq": 23,
+      "type": "REQUIREMENT_UPDATED",
+      "sim_time": "2026-10-31T09:00:00Z",
+      "actor": {
+        "type": "system",
+        "id": "engine"
+      },
+      "summary": "R5 Fiscal certificate valid → EXPIRED",
+      "hash": "0b90d0c4c49e12bb77931b9caf7bd88d8133b7b2d77f0f5821dce335045e56c0",
+      "prev_hash": "c82658da40bbc709e706bf3f8ea33572ef2cb621aae598aa2e4e2ee638cfd026"
+    }
+  ],
+  "trace": [
+    {
+      "seq": 1,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "New application pack received; verify company identity first",
+      "tool": "validate_cui",
+      "input": {
+        "cui": "RO48392014"
+      },
+      "output": "CUI RO48392014: checksum valid (HR-01)",
+      "gate": "-"
+    },
+    {
+      "seq": 2,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Checksum is valid; check the trade register for status and associates",
+      "tool": "lookup_registry",
+      "input": {
+        "cui": "RO48392014"
+      },
+      "output": "ONRC: BRUTĂRIA AURORA S.R.L. · Stare firmă: ACTIVĂ · Asociați: MARINESCU ION 75%, POP RADU 25% · Sediu: Cluj-Napoca, Str. Fabricii nr. 12A",
+      "gate": "-"
+    },
+    {
+      "seq": 3,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Extract declared beneficial owners from the UBO declaration",
+      "tool": "extract_fields",
+      "input": {
+        "doc_id": "doc-ubo",
+        "fields": [
+          "beneficial_owners"
+        ]
+      },
+      "output": "1 beneficial owner declared: Marinescu Ion (100%). Quote verified verbatim in doc-ubo.",
+      "gate": "-"
+    },
+    {
+      "seq": 4,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Compare declared owners against the register (threshold 25%)",
+      "tool": "compare_ownership",
+      "input": {
+        "registry": "doc-onrc",
+        "declared": "doc-ubo",
+        "threshold_pct": 25
+      },
+      "output": "MISMATCH: POP RADU holds 25% in the register and is not declared (HR-04)",
+      "gate": "-"
+    },
+    {
+      "seq": 5,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "A ≥25% owner is missing from the declaration; a human must confirm",
+      "tool": "open_exception",
+      "input": {
+        "requirement_id": "R2",
+        "severity": "high",
+        "rule_id": "HR-04"
+      },
+      "output": "EX-1 opened and added to the analyst triage queue",
+      "gate": "ALLOW"
+    },
+    {
+      "seq": 6,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Registered office wording differs between application and register; ask the judge",
+      "tool": "judge_match",
+      "input": {
+        "question": "Do these two addresses refer to the same registered office?"
+      },
+      "output": "same_address 0.86 / different_address 0.14 (threshold 0.90) → not auto-accepted",
+      "gate": "-"
+    },
+    {
+      "seq": 7,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Judge confidence is below threshold; escalate instead of accepting",
+      "tool": "open_exception",
+      "input": {
+        "requirement_id": "R3",
+        "severity": "medium",
+        "rule_id": "HR-05"
+      },
+      "output": "EX-2 opened and added to the analyst triage queue",
+      "gate": "ALLOW"
+    },
+    {
+      "seq": 8,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Beneficial-owner discrepancy starts the 14-day reporting clock",
+      "tool": "set_timer",
+      "input": {
+        "kind": "legal_deadline",
+        "label": "AMLR discrepancy report due",
+        "days": 14
+      },
+      "output": "T-1 set for 2026-11-11T09:00:00Z",
+      "gate": "ALLOW"
+    },
+    {
+      "seq": 9,
+      "sim_time": "2026-10-28T09:00:00Z",
+      "reason": "Try to close R2 using the declaration alone",
+      "tool": "mark_satisfied",
+      "input": {
+        "requirement_id": "R2"
+      },
+      "output": "Refused: a person with ≥25% ownership is undeclared in the UBO declaration",
+      "gate": "DENY: HR-04"
+    },
+    {
+      "seq": 10,
+      "sim_time": "2026-10-29T10:12:00Z",
+      "reason": "Client email says financial statements will follow; keep R4 open and chase on time",
+      "tool": "classify_email",
+      "input": {
+        "doc_id": "doc-email-1"
+      },
+      "output": "intent=will_send_later · mentions financial statements · promised by Friday",
+      "gate": "-"
+    },
+    {
+      "seq": 11,
+      "sim_time": "2026-10-29T10:12:00Z",
+      "reason": "Set a reminder so the file does not stall silently",
+      "tool": "set_timer",
+      "input": {
+        "kind": "client_reminder",
+        "label": "Financial statements due from client",
+        "days": 5
+      },
+      "output": "T-2 set for 2026-11-02T09:00:00Z",
+      "gate": "ALLOW"
+    },
+    {
+      "seq": 12,
+      "sim_time": "2026-10-31T09:00:00Z",
+      "reason": "Timer T-3 fired; re-check the fiscal certificate validity",
+      "tool": "check_document_validity",
+      "input": {
+        "doc_id": "doc-fiscal",
+        "max_age_days": 30
+      },
+      "output": "Issued 2026-10-01, valid 30 days → ended 2026-10-31 (HR-07)",
+      "gate": "-"
+    },
+    {
+      "seq": 13,
+      "sim_time": "2026-10-31T09:00:00Z",
+      "reason": "Certificate is past validity; requirement can no longer be satisfied",
+      "tool": "update_requirement",
+      "input": {
+        "requirement_id": "R5",
+        "status": "EXPIRED"
+      },
+      "output": "R5 → EXPIRED",
+      "gate": "ALLOW"
+    },
+    {
+      "seq": 14,
+      "sim_time": "2026-10-31T09:00:00Z",
+      "reason": "Draft a request for a fresh certificate; a human sends it",
+      "tool": "draft_message",
+      "input": {
+        "to": "client",
+        "template": "request_fiscal_certificate"
+      },
+      "output": "Draft saved (not sent): \"Vă rugăm să încărcați un certificat de atestare fiscală valabil…\"",
+      "gate": "ALLOW"
+    }
+  ],
+  "scenario": [
+    {
+      "id": "day0-docs",
+      "label": "Day 0 · Client uploads application pack",
+      "delivered": true
+    },
+    {
+      "id": "day1-email",
+      "label": "Day 1 · Client emails: financials to follow",
+      "delivered": true
+    },
+    {
+      "id": "day3-ubo",
+      "label": "Day 3 · Client sends corrected UBO declaration",
+      "delivered": false
+    },
+    {
+      "id": "day4-financials",
+      "label": "Day 4 · Client uploads FY2025 financial statements",
+      "delivered": false
+    },
+    {
+      "id": "day6-cert",
+      "label": "Day 6 · Client uploads renewed fiscal certificate",
+      "delivered": false
+    }
+  ]
+}
