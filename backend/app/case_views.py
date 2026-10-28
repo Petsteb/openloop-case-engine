@@ -245,14 +245,17 @@ def _owner_rows(ext: dict) -> list[tuple[str, str, str]]:
 
 
 def _matches(query: str, *haystacks: str) -> bool:
-    q, qn = query.casefold(), norm_text(query)
-    return any(q in h.casefold() or (qn and qn in norm_text(h)) for h in haystacks)
+    """Every query word appears somewhere, in any order: "Radu Pop" finds "POP RADU — 25%"."""
+    words = norm_text(query).split()
+    text = " ".join(norm_text(h) for h in haystacks)
+    return bool(words) and all(w in text for w in words)
 
 
 def document_fields(case: Case, role: str, doc_id: str | None = None, query: str | None = None) -> list[dict]:
     """Extracted fields with their verbatim quotes: [{"doc_id", "doc_name", "field", "value", "quote"}].
 
-    `query` is a case-insensitive substring (diacritics ignored) over field name, value and document name.
+    `query` matches when all its words appear (any order, case and diacritics ignored) in field name, value
+    or document name.
     Ownership lines (declared and register owners with their shares) are employee-only: they are the evidence
     behind an internal check, so clients get the plain fields only.
     """

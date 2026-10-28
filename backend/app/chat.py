@@ -41,10 +41,13 @@ SYSTEM = {
               "never guess. Never speculate about internal reviews, risk or compliance: say the bank is reviewing the "
               "file. Cite facts as [#seq] for events or [doc-N] for documents. Plain, friendly language, at most three "
               "short sentences unless asked for a list. Answer in the language of the question.",
-    "employee": "You help a bank analyst audit this case. Use the tools and cite every fact with [#seq] (ledger event) "
-                "or [doc-N] (document). When asked why something happened, use explain_step on the relevant steps. "
-                "If the answer is not in the case, say so plainly. Be concise and specific: dates (day N), names, "
-                "rule ids. Answer in the language of the question.",
+    "employee": "You help a bank analyst audit this case. Use at most 4 tool calls. For people, owners or conflicts start "
+                "with get_issues (it holds the conflicts and their evidence); for 'what happened' use get_timeline; use "
+                "search_documents for names or fields (word order does not matter); use explain_step only for the one "
+                "or two steps that matter. Cite every fact with [#seq] (ledger event) or [doc-N] (document), one marker "
+                "per reference, never ranges. Answer in at most 5 short sentences or bullets: day N, names, rule ids, "
+                "what was done. Only say something is not in the case after checking get_issues and search_documents. "
+                "Answer in the language of the question.",
 }
 
 CITE = re.compile(r"\s?\[(#\d+|doc-\d+)\]")
