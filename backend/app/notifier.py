@@ -40,8 +40,9 @@ def compose(events: list[dict]) -> dict | None:
     """Pure: the email for client-notifiable events not yet covered, or None."""
     after = _already_covered(events)
     todo = [e for e in events if e["seq"] > after and e["type"] in NOTIFIABLE]
-    asks = [ro_label(e["payload"]["key"]) for e in todo if e["type"] == "DOCUMENT_REQUESTED"]
-    reminders = [ro_label(e["payload"]["key"]) for e in todo if e["type"] == "REMINDER_SENT"]
+    asks = list(dict.fromkeys(ro_label(e["payload"]["key"]) for e in todo if e["type"] == "DOCUMENT_REQUESTED"))
+    reminders = [r for r in dict.fromkeys(ro_label(e["payload"]["key"]) for e in todo if e["type"] == "REMINDER_SENT")
+                 if r not in asks]  # a multi-day skip fires several reminders for the same document: list it once
     ready = any(e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION" for e in todo)
     if not (asks or reminders or ready):
         return None

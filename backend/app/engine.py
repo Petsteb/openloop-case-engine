@@ -137,10 +137,13 @@ def _pending(st: dict, key: str) -> bool:
 
 
 def allowed_actions(st: dict) -> list[dict]:
-    if st["status"] != "OPEN":
+    """OPEN: everything below. ON_HOLD (compliance): legal clocks and escalations still run, nothing reaches the
+    client and nothing moves the file forward. READY_FOR_DECISION: nothing (a regression reopens the file first)."""
+    if st["status"] not in ("OPEN", "ON_HOLD"):
         return []
+    on_hold = st["status"] == "ON_HOLD"
     acts, open_ex = [], {e["requirement_id"] for e in st["exceptions"].values() if e["status"] == "OPEN"}
-    for key in needed_doc_keys(st):
+    for key in ([] if on_hold else needed_doc_keys(st)):
         if not _pending(st, key):
             acts.append({"tool": "request_document", "params": {"key": key}})
     r2 = st["reqs"]["R2"]
@@ -151,7 +154,8 @@ def allowed_actions(st: dict) -> list[dict]:
     for r in st["reqs"].values():
         if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW") and r["id"] not in open_ex and not _already_decided(st, r):
             acts.append({"tool": "escalate_to_analyst", "params": {"req_id": r["id"]}})
-    if all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex and not needed_doc_keys(st):
+    if (not on_hold and all(r["status"] == "SATISFIED" for r in st["reqs"].values()) and not open_ex
+            and not needed_doc_keys(st)):
         acts.append({"tool": "mark_ready_for_decision", "params": {}})
     return acts
 
@@ -176,7 +180,7 @@ def gate(st: dict, tool: str, params: dict) -> tuple[bool, str]:
     if tool == "approve_credit":
         return False, "DENY: GATE-02"
     if tool == "send_reminder":
-        ok = st["requests"].get(params.get("key"), {}).get("status") == "PENDING"
+        ok = st["status"] == "OPEN" and st["requests"].get(params.get("key"), {}).get("status") == "PENDING"
         return (True, "ALLOW") if ok else (False, "DENY: GATE-01")
     if tool == "request_document" and _pending(st, params.get("key", "")):
         return False, "DENY: GATE-03"

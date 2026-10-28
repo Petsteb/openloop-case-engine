@@ -77,7 +77,8 @@ def bundle(case: Case) -> dict:
                          {"evidence": r["evidence"]} for r in st["reqs"].values()],
         "documents": [{k: d.get(k) for k in ("id", "type", "name", "received_at", "issued_at")} for d in st["docs"].values()],
         "exceptions": [{k: x.get(k) for k in ("id", "requirement_id", "status", "severity", "title", "summary", "rule",
-                                              "snippets", "judge", "actions", "created_at", "notes", "kind")} |
+                                              "snippets", "judge", "actions", "created_at", "notes", "kind",
+                                              "first_seq", "then_seq")} |
                        {"resolution": ({k: v for k, v in x["resolution"].items() if k != "seq"} if x.get("resolution") else None)}
                        for x in st["exceptions"].values()],
         "timers": [{k: t.get(k) for k in ("id", "kind", "label", "due", "status")} for t in st["timers"].values()],
@@ -171,7 +172,8 @@ def chat_endpoint(case_id: str, body: ChatIn):
     case = _case(case_id)
     result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
     with LOCK:
-        chat.log_turn(case, body.role, body.message, result)
+        if CASES.get(case_id) is case:  # a reset during the answer replaced the case: don't log into the new ledger
+            chat.log_turn(case, body.role, body.message, result)
     return result
 
 

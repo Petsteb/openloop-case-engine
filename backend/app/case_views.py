@@ -169,18 +169,12 @@ def missing_documents(case: Case, role: str) -> list[dict]:
     return out
 
 
-def timeline(case: Case, role: str, since_day: int | None = None, types: list[str] | None = None,
-             limit: int = 40) -> list[dict]:
-    """[{"seq", "day", "when", "type", "what"}] in time order; the newest `limit` events when there are more.
-
-    Clients see only document, reminder and status events. Employees see everything except the agent trace and
-    chat audit events. `types` narrows the role's own set; it can never widen it.
-    """
+def _timeline_all(case: Case, role: str, since_day=None, until_day=None, types=None) -> list[dict]:
     role = _role(role)
     if isinstance(types, str):
         types = [types]
     wanted = set(types) if types else None
-    since_day, n = _int_or_none(since_day), max(1, min(_int_or_none(limit) or 40, 200))
+    since_day, until_day = _int_or_none(since_day), _int_or_none(until_day)
     out = []
     for e in case.ledger.events:
         t = e["type"]
@@ -189,7 +183,7 @@ def timeline(case: Case, role: str, since_day: int | None = None, types: list[st
         if wanted is not None and t not in wanted:
             continue
         day = _day(e["sim_time"])
-        if since_day is not None and day < since_day:
+        if (since_day is not None and day < since_day) or (until_day is not None and day > until_day):
             continue
         if role == "client":
             what = (_client_case_event(e["payload"].get("status")) if t == "CASE_STATUS"
@@ -197,7 +191,23 @@ def timeline(case: Case, role: str, since_day: int | None = None, types: list[st
         else:
             what = e["summary"]
         out.append({"seq": e["seq"], "day": day, "when": e["sim_time"], "type": t, "what": what})
-    return out[-n:]
+    return out
+
+
+def timeline(case: Case, role: str, since_day: int | None = None, types: list[str] | None = None,
+             limit: int = 40, until_day: int | None = None) -> list[dict]:
+    """[{"seq", "day", "when", "type", "what"}] in time order; the newest `limit` (max 200) events in the window.
+
+    Clients see only document, reminder and status events. Employees see everything except the agent trace and
+    chat audit events. `types` narrows the role's own set; it can never widen it. Use since_day / until_day to page.
+    """
+    n = max(1, min(_int_or_none(limit) or 40, 200))
+    return _timeline_all(case, role, since_day, until_day, types)[-n:]
+
+
+def visible_events(case: Case, role: str) -> dict[int, str]:
+    """Every event this role may see, by seq (used to validate chat citations)."""
+    return {e["seq"]: e["what"] for e in _timeline_all(case, role)}
 
 
 def issues(case: Case, role: str, status: str = "all") -> list[dict]:

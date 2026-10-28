@@ -30,6 +30,7 @@ def find_violations(events: list[dict], rule: dict) -> list[tuple[dict, dict]]:
             if datetime.fromisoformat(t["sim_time"]) - t_first > timedelta(hours=rule["within_hours"]):
                 continue
             cleared = any(u["type"] == rule["unless"] and f["seq"] < u["seq"] < t["seq"]
+                          and u["actor"].get("type") == "client"  # staff can't confirm on the client's behalf
                           and _get(u, "payload.client_id") == _get(f, "payload.client_id") for u in events)
             if not cleared:
                 pairs.append((f, t))
@@ -62,4 +63,7 @@ def check(case) -> list[str]:
                             {"id": "legitimate", "label": "Legitimate: client confirmed by phone"}]},
                 f"{ex_id} raised: {rule['id']} insider pattern")
             new_ids.append(ex_id)
+            if case.state()["status"] == "READY_FOR_DECISION":  # a ready file can't stay ready with an insider card
+                case.emit("CASE_STATUS", ENGINE, {"status": "OPEN", "reason": f"{ex_id} insider pattern under review"},
+                          f"File reopened: {ex_id} insider pattern under review")
     return new_ids
