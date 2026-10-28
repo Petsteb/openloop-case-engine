@@ -110,6 +110,23 @@ def test_dispute_has_its_own_rule_and_a_client_visible_trace():
     assert any("did not request the change" in t["what"] for t in v["timeline"])
 
 
+def test_complete_file_with_an_open_dispute_reads_under_review():
+    c.post("/api/demo/reset")
+    for item in ("day0-pack", "onrc-cert", "client-email"):
+        post(item)
+    b = c.get("/api/cases/demo-1/bundle").json()
+    for x in b["exceptions"]:   # same address, then confirm the discrepancy (the README order)
+        if x["kind"] != "ubo_discrepancy" and x["status"] == "OPEN":
+            c.post(f"/api/cases/demo-1/exceptions/{x['id']}/resolve", json={"action_id": x["actions"][0]["id"]})
+    ubo = next(x for x in b["exceptions"] if x["kind"] == "ubo_discrepancy")
+    c.post(f"/api/cases/demo-1/exceptions/{ubo['id']}/resolve", json={"action_id": "confirm_discrepancy"})
+    post("updated-docs")
+    assert c.get("/api/cases/demo-1/client-view").json()["overview"]["state"] == "complete"
+    post("staff-phone-change")
+    v = c.post("/api/cases/demo-1/client-confirm", json={"kind": "contact_change", "answer": "no"}).json()
+    assert v["overview"]["state"] == "under_review" and "Complete" not in v["overview"]["status_text"]
+
+
 def test_quarantined_doc_detail_for_the_bank():
     start()
     c.post("/api/cases/demo-1/upload-sample", json={"key": "onrc_certificate", "variant": "wrong_company"})

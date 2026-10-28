@@ -153,8 +153,10 @@ def overview(case: Case, role: str) -> dict:
     else:
         checks = [{"id": r["id"], "title": CLIENT_CHECK_TITLE.get(r["id"], "Another check"),
                    "status_word": CLIENT_STATUS_WORD.get(r["status"], UNDER_REVIEW)} for r in reqs]
-        if st["status"] == "READY_FOR_DECISION":
+        if st["status"] == "READY_FOR_DECISION" and not _disputed(st):
             status_text = "Complete: waiting for the bank's credit decision"
+        elif st["status"] == "READY_FOR_DECISION":
+            status_text = UNDER_REVIEW
         elif st["status"] == "ON_HOLD":
             status_text = UNDER_REVIEW
         elif pending:
@@ -167,10 +169,16 @@ def overview(case: Case, role: str) -> dict:
             "open_items": len(pending) + len(open_ex), "company": T.CLIENT_COMPANY, "product": T.PRODUCT}
 
 
+def _disputed(st: dict) -> bool:
+    """The client reported a change they did not make: a complete file is not 'complete' to them until it's settled.
+    Read from state, not the role-filtered list: the client made this report themselves."""
+    return any(x.get("kind") == "client_dispute" and x["status"] == "OPEN" for x in st["exceptions"].values())
+
+
 def _state(st: dict, pending: list, open_ex: list) -> str:
     """needs_you | under_review | complete | in_progress (for UI tone and progress, same rule for both roles)."""
     if st["status"] == "READY_FOR_DECISION":
-        return "complete"
+        return "under_review" if _disputed(st) else "complete"
     if st["status"] == "ON_HOLD":
         return "under_review"
     if pending:
