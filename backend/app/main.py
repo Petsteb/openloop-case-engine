@@ -1,4 +1,7 @@
 """OpenLoop API. Every POST returns the full case bundle (see docs/design.md)."""
+import base64
+import binascii
+import hashlib
 import json
 import os
 import threading
@@ -10,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi.responses import PlainTextResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from typing import Literal  # noqa: E402
 
@@ -18,8 +22,8 @@ from pydantic import BaseModel, Field  # noqa: E402
 from . import case_views, chat, learner, notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
-from .engine import Case  # noqa: E402
-from .scenario import CASE_START, SCENARIO  # noqa: E402
+from .engine import Case, _pending, pending_confirmations  # noqa: E402
+from .scenario import CASE_START, SAMPLES, SCENARIO, WRONG_COMPANY, sample_file  # noqa: E402
 
 app = FastAPI(title="OpenLoop", version="0.1.0")
 CASES: dict[str, Case] = {}
@@ -235,13 +239,112 @@ def get_document(case_id: str, doc_id: str, role: Literal["client", "employee"] 
 @app.get("/api/cases/{case_id}/client-view")
 def client_view(case_id: str):
     """Everything the applicant may see, for a customer-facing page (same allow-list as the client chat)."""
-    case = _case(case_id)
+    return _client_view(_case(case_id))
+
+
+def _client_view(case: Case) -> dict:
     return {"overview": case_views.overview(case, "client"),
             "missing_documents": case_views.missing_documents(case, "client"),
             "issues": case_views.issues(case, "client", "open"),
             "timeline": case_views.timeline(case, "client"),
+            "documents": case_views.documents(case, "client"),
+            "confirmations": [{k: c[k] for k in ("kind", "text", "ref_seq")}
+                              for c in pending_confirmations(case.ledger.events)],
             "emails": [{k: e["payload"].get(k) for k in ("subject", "body")} | {"sim_time": e["sim_time"]}
                        for e in case.ledger.events if e["type"] == "EMAIL_SENT"]}
+
+
+class Upload(BaseModel):
+    key: str = Field(min_length=1, max_length=120)
+    filename: str = Field(min_length=1, max_length=200)
+    content_b64: str = Field(min_length=1, max_length=1_400_000)
+
+
+class UploadSample(BaseModel):
+    key: str = Field(min_length=1, max_length=120)
+    variant: Literal["ok", "wrong_company"] = "ok"
+
+
+class Confirm(BaseModel):
+    kind: Literal["contact_change", "credit_check_consent"]
+    answer: Literal["yes", "no"]
+
+
+def _ingest_upload(case: Case, key: str, filename: str, raw: bytes) -> dict:
+    """Shared by real and sample uploads: validate, store, run the pipeline + planner, notify the client."""
+    ext = Path(filename).suffix.lower()
+    if ext not in (".txt", ".pdf"):
+        raise HTTPException(422, "only .txt or .pdf files are accepted")
+    if len(raw) > 1_000_000:
+        raise HTTPException(422, "file is larger than 1 MB")
+    with LOCK:
+        if not _pending(case.state(), key):
+            raise HTTPException(422, "this document was not requested (or was already received)")
+        if ext == ".pdf":
+            event = case.receive_upload(key, filename, "", pdf={"pdf": True, "bytes": len(raw),
+                                                                "sha256": hashlib.sha256(raw).hexdigest()})
+        else:
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPException(422, "text files must be UTF-8")
+            event = case.receive_upload(key, filename, text)
+        AGENT.handle_batch(case, [event])
+        notifier.flush(case)
+        return _client_view(case)
+
+
+@app.post("/api/cases/{case_id}/upload")
+def upload(case_id: str, body: Upload):
+    """Client portal upload (JSON + base64; no multipart dependency)."""
+    try:
+        raw = base64.b64decode(body.content_b64.split(",", 1)[-1], validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(422, "content_b64 is not valid base64")
+    return _ingest_upload(_case(case_id), body.key, body.filename, raw)
+
+
+@app.post("/api/cases/{case_id}/upload-sample")
+def upload_sample(case_id: str, body: UploadSample):
+    """Demo: upload the prepared synthetic file for a request (variant=wrong_company: another firm's certificate)."""
+    case = _case(case_id)
+    sample = sample_file(body.key, body.variant)
+    if sample is None:
+        raise HTTPException(404, "no sample file for this request")
+    filename, template = sample
+    return _ingest_upload(case, body.key, filename, template.replace("{issued}", case.now.strftime("%d.%m.%Y")).encode())
+
+
+@app.get("/api/demo/sample-files")
+def sample_files():
+    items = [{"key": k, "label": T.DOC_LABELS.get(k.partition(":")[0], k) + (f" — {k.partition(':')[2]}" if ":" in k else ""),
+              "filename": f, "variant": "ok"} for k, (f, _) in SAMPLES.items()]
+    return items + [{"key": "onrc_certificate", "label": "Trade register certificate (another company: wrong file)",
+                     "filename": WRONG_COMPANY[0], "variant": "wrong_company"}]
+
+
+@app.get("/api/demo/sample-files/{filename}")
+def sample_file_content(filename: str):
+    match = next((t for f, t in [*SAMPLES.values(), WRONG_COMPANY] if f == filename), None)
+    if match is None:
+        raise HTTPException(404, "unknown sample file")
+    case = CASES.get("demo-1")
+    issued = (case.now if case else CASE_START).strftime("%d.%m.%Y")
+    return PlainTextResponse(match.replace("{issued}", issued), headers={
+        "Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.post("/api/cases/{case_id}/client-confirm")
+def client_confirm(case_id: str, body: Confirm):
+    case = _case(case_id)
+    with LOCK:
+        try:
+            event = case.client_confirm(body.kind, body.answer)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        AGENT.handle_batch(case, [event])
+        notifier.flush(case)
+        return _client_view(case)
 
 
 def _learning_case() -> Case:

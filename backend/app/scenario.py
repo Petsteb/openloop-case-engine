@@ -122,3 +122,57 @@ def materialise(item: dict, now: datetime) -> list[dict]:
                     "text": d["text"].replace("{issued}", issued.strftime("%d.%m.%Y")),
                     "issued_at": issued.isoformat()})
     return out
+
+
+# ----------------------------------------------------------------------------- sample files for the client portal
+WRONG_COMPANY_ONRC = """CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
+Denumire: PANIFICAȚIA DOINA S.R.L.
+Cod unic de înregistrare: 30528174
+Stare firmă: ACTIVĂ
+Sediul social: Str. Morii nr. 12, Turda, Județ Cluj
+Cod poștal: 401061
+Administrator: IONESCU DOINA
+Asociat: IONESCU DOINA — 100%
+Data eliberării: {issued}"""
+
+ADDRESS_PROOF = """CONTRACT DE COMODAT — SEDIU SOCIAL (extras)
+Societate: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Sediu social: Str. Fagului nr. 7, bl. A2, Cluj-Napoca, jud. Cluj
+Cod poștal: 400127
+Data: {issued}"""
+
+MANDATE = """ÎMPUTERNICIRE
+Societate: BRUTĂRIA AURORA S.R.L.
+CUI: 45123879
+Administrator: MUNTEANU ANDREI
+Împuternicit: MUNTEANU ANDREI
+Data: {issued}"""
+
+_ID_PEOPLE = {"Andrei Munteanu": ("ANDREI", "MUNTEANU", "185031••••••"), "Elena Munteanu": ("ELENA", "MUNTEANU", "288070••••••"),
+              "Radu Pop": ("RADU", "POP", "179112••••••")}
+SAMPLES = {  # request key -> (filename, text template)
+    "application": ("cerere_finantare.txt", APPLICATION),
+    "financial_statement": ("situatii_financiare_2025.txt", FINANCIALS),
+    "ubo_declaration": ("declaratie_beneficiar_real.txt", UBO_V2),
+    "onrc_certificate": ("certificat_constatator_onrc.txt", ONRC),
+    "fiscal_certificate": ("certificat_atestare_fiscala.txt", FISCAL),
+    "address_proof": ("dovada_sediu.txt", ADDRESS_PROOF),
+    "signatory_mandate": ("imputernicire.txt", MANDATE),
+    **{f"id_card:{name}": (f"ci_{last.lower()}_{first.lower()}.txt",
+                           ID_TEMPLATE.format(first=first, last=last, cnp_masked=cnp, valid_until="12.03.2031"))
+       for name, (first, last, cnp) in _ID_PEOPLE.items()},
+}
+WRONG_COMPANY = ("certificat_constatator_ALTA_FIRMA.txt", WRONG_COMPANY_ONRC)
+
+
+def sample_file(key: str, variant: str = "ok") -> tuple[str, str] | None:
+    """(filename, text) of the prepared upload for a request key; `wrong_company` gives another firm's ONRC certificate."""
+    if variant == "wrong_company":
+        return WRONG_COMPANY
+    doc_type, _, person = key.partition(":")
+    if doc_type == "id_card":
+        match = next((k for k in SAMPLES if k.startswith("id_card:") and
+                      sorted(k[8:].lower().split()) == sorted(person.lower().split())), None)
+        return SAMPLES.get(match) if match else None
+    return SAMPLES.get(key)

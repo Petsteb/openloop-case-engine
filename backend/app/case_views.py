@@ -341,15 +341,18 @@ def explain_rule(rule_id: str, role: str) -> dict:
 
 
 # ----------------------------------------------------------------------------- documents (portal + viewer)
-EMPLOYEE_DOC_WORD = {"valid": "Valid", "expired": "Expired", "superseded": "Superseded", "quarantined": "Quarantined"}
+EMPLOYEE_DOC_WORD = {"valid": "Valid", "expired": "Expired", "superseded": "Superseded", "quarantined": "Quarantined",
+                     "unreadable": "Needs manual reading"}
 CLIENT_DOC_WORD = {"expired": "Please send a new one", "superseded": "Replaced by a newer version",
-                   "quarantined": "Not accepted"}
+                   "quarantined": "Not accepted", "unreadable": "Received, waiting for manual reading"}
 
 
 def _doc_status(st: dict, d: dict) -> str:
     from .engine import doc_expired, doc_key
     if d.get("quarantined"):
         return "quarantined"
+    if d.get("unreadable"):
+        return "unreadable"
     if d["type"] != "email" and any(
             not x.get("quarantined") and x["id"] != d["id"] and x["type"] == d["type"]
             and keys_match(doc_key(x), doc_key(d)) and (x["issued_at"], x["seq"]) > (d["issued_at"], d["seq"])

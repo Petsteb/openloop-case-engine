@@ -13,7 +13,7 @@ from email.message import EmailMessage
 ENGINE = {"type": "system", "id": "notifier"}
 CLIENT_NAME = "Brutăria Aurora S.R.L."
 CLIENT_ADDRESS = "andrei.munteanu@brutaria-aurora.example"  # fictional; NOTIFY_TO redirects demo mail to a team inbox
-NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS"}
+NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED"}
 RO_LABELS = {
     "application": "Cererea de finanțare",
     "financial_statement": "Situațiile financiare anuale",
@@ -55,9 +55,14 @@ def compose(events: list[dict]) -> dict | None:
              and any(e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION" for e in todo))
     if ready and _client_already_told_complete(events):
         ready = False  # e.g. a compliance hold was released: the client never saw the file leave "complete"
-    if not (asks or reminders or ready):
+    rejected = [ro_label(e["payload"]["type"] + (f":{e['payload']['person']}" if e["payload"].get("person") else ""))
+                for e in todo if e["type"] == "DOCUMENT_RECEIVED" and e["payload"].get("quarantined")]
+    if not (asks or reminders or ready or rejected):
         return None
     lines = ["Bună ziua,", ""]
+    if rejected:
+        lines += ["Nu am putut accepta documentul încărcat, deoarece pare să aparțină altei firme sau altei persoane:"]
+        lines += [f"  • {r}" for r in rejected] + ["Vă rugăm să încărcați documentul corect.", ""]
     if asks:
         lines += ["Pentru a continua analiza dosarului de finanțare, vă rugăm să ne trimiteți:"] + [f"  • {a}" for a in asks] + [""]
     if reminders:
@@ -66,7 +71,8 @@ def compose(events: list[dict]) -> dict | None:
         lines += ["Dosarul dumneavoastră este complet. Un consultant al băncii vă va contacta cu decizia de creditare.", ""]
     lines += ["Puteți răspunde la acest email sau încărca documentele în aplicația Smart Business.", "",
               "Echipa IMM", "(mesaj generat automat; demo OpenLoop, date fictive)"]
-    subject = ("Dosar complet: decizia urmează" if ready and not (asks or reminders)
+    subject = ("Document neacceptat: vă rugăm să încărcați documentul corect" if rejected and not (asks or reminders or ready)
+               else "Dosar complet: decizia urmează" if ready and not (asks or reminders)
                else "Reamintire: documente necesare" if reminders and not asks
                else "Documente necesare pentru dosarul de finanțare")
     return {"subject": f"{subject} · {CLIENT_NAME}", "body": "\n".join(lines),
