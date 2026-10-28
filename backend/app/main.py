@@ -15,7 +15,7 @@ from typing import Literal  # noqa: E402
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from . import chat, learner, notifier, registry  # noqa: E402
+from . import case_views, chat, learner, notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
 from .engine import Case  # noqa: E402
@@ -173,6 +173,18 @@ def chat_endpoint(case_id: str, body: ChatIn):
     with LOCK:
         chat.log_turn(case, body.role, body.message, result)
     return result
+
+
+@app.get("/api/cases/{case_id}/client-view")
+def client_view(case_id: str):
+    """Everything the applicant may see, for a customer-facing page (same allow-list as the client chat)."""
+    case = _case(case_id)
+    return {"overview": case_views.overview(case, "client"),
+            "missing_documents": case_views.missing_documents(case, "client"),
+            "issues": case_views.issues(case, "client", "open"),
+            "timeline": case_views.timeline(case, "client"),
+            "emails": [{k: e["payload"].get(k) for k in ("subject", "body")} | {"sim_time": e["sim_time"]}
+                       for e in case.ledger.events if e["type"] == "EMAIL_SENT"]}
 
 
 def _learning_case() -> Case:

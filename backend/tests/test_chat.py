@@ -84,6 +84,15 @@ def test_chat_turn_logged_and_chain_valid(monkeypatch):
     assert c.get("/api/cases/demo-1/verify").json()["ok"]
 
 
+def test_client_view_endpoint_is_free_of_internal_details():
+    to_triage_with_insider()
+    body = c.get("/api/cases/demo-1/client-view").json()
+    assert body["missing_documents"] and body["overview"]["status_text"]
+    blob = json.dumps(body, ensure_ascii=False).lower()
+    for word in LEAKS:
+        assert word not in blob, word
+
+
 def test_chat_endpoint_validates_role_and_length():
     c.post("/api/demo/reset")
     assert c.post("/api/cases/demo-1/chat", json={"role": "admin", "message": "hi"}).status_code == 422
