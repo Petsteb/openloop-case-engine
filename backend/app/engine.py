@@ -423,7 +423,8 @@ class Case:
 # ----------------------------------------------------------------------------- tools
 def t_get_case_state(case: Case) -> dict:
     st = case.state()
-    return {"status": st["status"], "now": st["now"].isoformat(),
+    return {"template": T.TEMPLATES[st["template"]]["title"], "client": st["profile"]["name"],
+            "status": st["status"], "now": st["now"].isoformat(),
             "requirements": {r["id"]: f"{r['status']}: {r['reason']}" for r in st["reqs"].values()},
             "open_exceptions": [e["id"] for e in st["exceptions"].values() if e["status"] == "OPEN"],
             "documents": [f"{d['id']} {d['type']} {d.get('person', '')}".strip() for d in st["docs"].values()]}
