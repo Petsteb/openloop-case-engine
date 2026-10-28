@@ -13,7 +13,7 @@ from email.message import EmailMessage
 ENGINE = {"type": "system", "id": "notifier"}
 CLIENT_NAME = "Brutăria Aurora S.R.L."
 CLIENT_ADDRESS = "andrei.munteanu@brutaria-aurora.example"  # fictional; NOTIFY_TO redirects demo mail to a team inbox
-NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED"}
+NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED", "CLIENT_DISPUTE"}
 RO_LABELS = {
     "application": "Cererea de finanțare",
     "financial_statement": "Situațiile financiare anuale",
@@ -57,9 +57,13 @@ def compose(events: list[dict]) -> dict | None:
         ready = False  # e.g. a compliance hold was released: the client never saw the file leave "complete"
     rejected = [ro_label(e["payload"]["type"] + (f":{e['payload']['person']}" if e["payload"].get("person") else ""))
                 for e in todo if e["type"] == "DOCUMENT_RECEIVED" and e["payload"].get("quarantined")]
-    if not (asks or reminders or ready or rejected):
+    disputed = any(e["type"] == "CLIENT_DISPUTE" for e in todo)
+    if not (asks or reminders or ready or rejected or disputed):
         return None
     lines = ["Bună ziua,", ""]
+    if disputed:
+        lines += ["Am înregistrat că nu ați solicitat modificarea recentă a datelor de contact din dosarul dumneavoastră.",
+                  "Un coleg al băncii vă va contacta în cel mai scurt timp.", ""]
     if rejected:
         lines += ["Nu am putut accepta documentul încărcat, deoarece pare să aparțină altei firme sau altei persoane:"]
         lines += [f"  • {r}" for r in rejected] + ["Vă rugăm să încărcați documentul corect.", ""]
@@ -71,7 +75,9 @@ def compose(events: list[dict]) -> dict | None:
         lines += ["Dosarul dumneavoastră este complet. Un consultant al băncii vă va contacta cu decizia de creditare.", ""]
     lines += ["Puteți răspunde la acest email sau încărca documentele în aplicația Smart Business.", "",
               "Echipa IMM", "(mesaj generat automat; demo OpenLoop, date fictive)"]
-    subject = ("Document neacceptat: vă rugăm să încărcați documentul corect" if rejected and not (asks or reminders or ready)
+    subject = ("Am înregistrat răspunsul dumneavoastră: vă vom contacta" if disputed and not (asks or reminders or ready
+                                                                                              or rejected)
+               else "Document neacceptat: vă rugăm să încărcați documentul corect" if rejected and not (asks or reminders or ready)
                else "Dosar complet: decizia urmează" if ready and not (asks or reminders)
                else "Reamintire: documente necesare" if reminders and not asks
                else "Documente necesare pentru dosarul de finanțare")

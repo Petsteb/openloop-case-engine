@@ -73,6 +73,8 @@ RULES = {
              f"{HEURISTIC_THRESHOLD}) and, when the classifier is used, the classifier (p ≥ {JUDGE_THRESHOLD}) agree.",
     "SR-01": "An employee changed the client's contact details and then started a credit action for the same client "
              "within 48 hours, without client confirmation.",
+    "SR-02": "The client says they did not request a contact change made by bank staff: compliance reviews it before "
+             "the file continues.",
     "GATE-01": "Only actions allowed by the current case state may run.",
     "GATE-02": "Credit approval is a human decision — the agent has no such action.",
     "GATE-03": "A document already requested and still pending is not requested again.",
