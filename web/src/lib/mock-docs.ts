@@ -9,7 +9,7 @@ const REJECTED = 'Profit net: 260.000 RON'
 
 const QUARANTINED_TEXT = `CERTIFICAT CONSTATATOR — Oficiul Național al Registrului Comerțului
 Denumire: PANIFICAȚIA BOREAL S.R.L.
-Cod unic de înregistrare: 39876512
+Cod unic de înregistrare: 93052816
 Stare firmă: ACTIVĂ
 Sediul social: Str. Morii nr. 12, Turda, Județ Cluj
 Administrator: IONESCU MARIA
@@ -36,7 +36,7 @@ export function mockDocument(id: string, real: DocDetail | null): DocDetail | nu
   if (id === 'doc-90') {
     return {
       ...EXTRA[0], text: QUARANTINED_TEXT, extractor: null, fields: [], rejected: [], injection_lines: [],
-      quarantine_reason: 'The tax ID on this document (39876512) belongs to another company, not to the applicant (45123879).',
+      quarantine_reason: 'The tax ID on this document (93052816) belongs to another company, not to the applicant (94123877).',
       validity: { issued_day: 1, expires_day: null, expired: false },
       history: [
         { seq: 112, day: 1, type: 'DOCUMENT_RECEIVED', what: 'Received (upload)' },
