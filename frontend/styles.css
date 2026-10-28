@@ -34,10 +34,12 @@ body {
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);   /* the page can never be wider than the window */
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
+body > * { min-width: 0; }
 h1, h2, h3, h4, p { margin: 0; }
 button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; border-radius: 4px; }
@@ -401,6 +403,11 @@ pre.json { margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.
 .spinner { width: 24px; height: 24px; margin: 0 auto; border: 3px solid var(--rule); border-top-color: var(--pine); border-radius: 50%; animation: spin .8s linear infinite; }
 
 /* ---------------- responsive ---------------- */
+@media (max-width: 1439px) {   /* laptops with display scaling (e.g. 1280–1440 CSS px) */
+  .top { grid-template-columns: 250px minmax(0, 1fr) auto; }
+  .layout { grid-template-columns: 250px minmax(0, 1fr) 330px; gap: 12px; }
+  .rail { grid-template-columns: minmax(0, 1fr) 120px; gap: 14px; }
+}
 @media (max-width: 1099px) {
   body { display: block; height: auto; overflow: auto; }
   .top { grid-template-columns: 1fr; }
