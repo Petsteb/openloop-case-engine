@@ -1,5 +1,5 @@
-/* OpenLoop frontend: vanilla JS, no build step.
-   Every POST returns a full Bundle; the whole UI is re-rendered from it. */
+/* OpenLoop frontend v2: vanilla JS, no build step.
+   Every POST returns a full Bundle; the whole UI is re-rendered from it. Spec: docs/ui-design.md */
 (() => {
   'use strict';
 
@@ -8,29 +8,39 @@
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const DAY_MS = 86400000;
 
-  const REQ_STATUS = {
-    SATISFIED:    { cls: 'ok',      label: 'Satisfied' },
-    OPEN_WAITING: { cls: 'wait',    label: 'Open · waiting' },
-    CONTRADICTED: { cls: 'bad',     label: 'Contradicted' },
-    NEEDS_REVIEW: { cls: 'review',  label: 'Needs review' },
-    EXPIRED:      { cls: 'expired', label: 'Expired' },
+  const STATUS = {
+    SATISFIED:    { word: 'Verified',     cls: 'st-ok',      icon: 'check' },
+    OPEN_WAITING: { word: 'Waiting',      cls: 'st-wait',    icon: 'clock' },
+    CONTRADICTED: { word: 'Conflict',     cls: 'st-bad',     icon: 'cross' },
+    NEEDS_REVIEW: { word: 'Needs review', cls: 'st-review',  icon: 'question' },
+    EXPIRED:      { word: 'Expired',      cls: 'st-expired', icon: 'hourglass' },
   };
-  const TIMER_STATUS = {
-    PENDING:   { cls: 'wait',  label: 'Pending' },
-    FIRED:     { cls: 'bad',   label: 'Fired' },
-    CANCELLED: { cls: 'muted', label: 'Cancelled' },
-  };
+  const statusOf = (s) => STATUS[s] || { word: sentence(humanize(s || 'Unknown')), cls: 'st-wait', icon: 'clock' };
   const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+  const JUDGE_LABELS = {
+    same_address: 'Same place', different_address: 'Different place',
+    same_person: 'Same person', different_person: 'Different person',
+  };
+  const ICONS = {
+    check: '<path d="M3.5 8.5l3 3 6-7"/>',
+    cross: '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>',
+    question: '<path d="M5.8 5.9a2.3 2.3 0 1 1 3.4 2c-.8.45-1.2.95-1.2 1.75v.35"/><circle cx="8" cy="12.6" r=".6" fill="currentColor"/>',
+    clock: '<circle cx="8" cy="8" r="5.8"/><path d="M8 4.9V8l2.2 1.4"/>',
+    hourglass: '<path d="M4.5 2.5h7M4.5 13.5h7M5.3 2.5c0 3.2 5.4 3.4 5.4 5.5s-5.4 2.3-5.4 5.5M10.7 2.5c0 3.2-5.4 3.4-5.4 5.5s5.4 2.3 5.4 5.5"/>',
+  };
+  const icon = (name, extra = '') => `<svg class="ico ${extra}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 
   const S = {
     bundle: null,
-    prev: null,        // snapshot of the previous render, for "what is new"
-    tab: 'triage',
+    prev: null,          // snapshot of the previous render, for "what is new"
+    tab: 'reasoning',
     busy: false,
-    verify: null,      // {ok, length, broken_at} until the next bundle arrives
-    open: new Set(),   // keys of expanded collapsibles (survive re-renders)
+    verify: null,        // {ok, length, broken_at} until the next bundle arrives
+    open: new Set(),     // keys of expanded disclosures (survive re-renders)
+    sel: null,           // selected requirement id
     resetArmed: false,
     resetTimer: null,
+    railReady: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -41,70 +51,70 @@
   ));
   const pad2 = (n) => String(n).padStart(2, '0');
   const arr = (x) => (Array.isArray(x) ? x : []);
+  const humanize = (s) => String(s ?? '').replace(/_/g, ' ');
+  const sentence = (s) => { s = String(s ?? ''); return s ? s[0].toUpperCase() + s.slice(1) : s; };
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const uniq = (xs) => [...new Set(xs)];
+  // Plain-language clean-up for labels that come from the API.
+  const joinPlus = (s) => {
+    const parts = s.split(/\s+\+\s+/);
+    return parts.length < 2 ? s : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  };
+  const tidy = (s) => joinPlus(String(s ?? '')
+    .replace(/\s*(→|->)\s*/g, ', ')
+    .replace(/\s+·\s+/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim());
 
-  // All dates are formatted in UTC by hand so the projector laptop's locale/timezone cannot change the demo.
+  // Agent and ledger text sometimes carries raw status codes; show the plain words instead.
+  const CODE_WORDS = { SATISFIED: 'verified', OPEN_WAITING: 'waiting', CONTRADICTED: 'in conflict', NEEDS_REVIEW: 'needs review', EXPIRED: 'expired' };
+  const CODES = 'SATISFIED|OPEN_WAITING|CONTRADICTED|NEEDS_REVIEW|EXPIRED';
+  const plain = (s) => String(s ?? '')
+    .replace(new RegExp(`\\b(R\\d+)\\s*(?:→|->)\\s*(${CODES})\\b`, 'g'), (m, r, c) => `${r} now ${CODE_WORDS[c]}`)
+    .replace(new RegExp(`\\bis (${CODES})\\b`, 'g'), (m, c) => (c === 'NEEDS_REVIEW' ? 'needs review' : `is ${CODE_WORDS[c]}`))
+    .replace(new RegExp(`\\b(${CODES})\\b`, 'g'), (m) => CODE_WORDS[m]);
+
+  // All dates are formatted in UTC by hand so the projector laptop's locale cannot change the demo.
   function parseDate(iso) {
+    if (!iso) return null;
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? null : d;
   }
-  function fmtFull(iso) { // 31 Oct 2026 09:00
+  function fmtShort(iso) { // 31 Oct, 09:00
     const d = parseDate(iso);
-    if (!d) return iso ? String(iso) : '–';
-    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+    if (!d) return '';
+    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
   }
-  function fmtShort(iso) { // 31 Oct 09:00
-    const d = parseDate(iso);
-    if (!d) return iso ? String(iso) : '–';
-    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
-  }
-  function fmtDate(iso) { // 31 Oct 2026
-    const d = parseDate(iso);
-    if (!d) return iso ? String(iso) : '–';
-    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  }
-  function dayOf(iso, b) {
+  function dayFloat(iso, b) {
     const t = parseDate(iso), o = parseDate(b.case && b.case.opened_at);
     if (!t || !o) return null;
-    return Math.floor((t.getTime() - o.getTime()) / DAY_MS);
+    return (t.getTime() - o.getTime()) / DAY_MS;
   }
-  function whenLabel(iso, b) { // Day 2 · 30 Oct 09:00
-    const n = dayOf(iso, b);
-    return (n === null ? '' : `Day ${n} · `) + fmtShort(iso);
-  }
-  function rel(due, now) {
-    const a = parseDate(due), n = parseDate(now);
-    if (!a || !n) return '';
-    const h = Math.round((a - n) / 36e5);
-    if (h === 0) return 'now';
-    const abs = Math.abs(h);
-    const txt = abs < 24 ? `${abs}h` : `${Math.round(abs / 24)}d`;
-    return h > 0 ? `in ${txt}` : `${txt} ago`;
+  function dayOf(iso, b) {
+    const f = dayFloat(iso, b);
+    return f === null ? null : Math.floor(f + 1e-6);
   }
   const shortHash = (h) => (h ? `${String(h).slice(0, 4)}…` : '–');
-  const humanize = (s) => String(s ?? '').replace(/_/g, ' ');
-
-  function typeClass(t) {
-    t = String(t || '').toUpperCase();
-    if (/DENY|DENIED|REJECT|BLOCK/.test(t)) return 't-deny';
-    if (/EXCEPTION/.test(t)) return /RESOLV|CLOS/.test(t) ? 't-ok' : 't-exc';
-    if (/RESOLV|SATISF/.test(t)) return 't-ok';
-    if (/TIMER|CLOCK|TIME|ADVANCE/.test(t)) return 't-time';
-    if (/DOCUMENT|EMAIL|INBOUND|RECEIVED/.test(t)) return 't-doc';
-    if (/AGENT|TOOL|STEP|JUDGE/.test(t)) return 't-agent';
-    if (/REQUIREMENT/.test(t)) return 't-req';
-    return 't-sys';
-  }
-
+  const parseMaybe = (v) => {
+    if (typeof v !== 'string') return v;
+    const t = v.trim();
+    if (!/^[[{]/.test(t)) return v;
+    try { return JSON.parse(t); } catch (e) { return v; }
+  };
   function docLabel(b, id) {
     const d = arr(b.documents).find((x) => x.id === id);
     return (d && d.name) || id || 'Document';
   }
+  const openExc = (b) => arr(b.exceptions).filter((x) => x.status === 'OPEN')
+    .sort((p, q) => (SEV_RANK[String(p.severity).toLowerCase()] ?? 9) - (SEV_RANK[String(q.severity).toLowerCase()] ?? 9));
+  const reqById = (b, id) => arr(b.requirements).find((r) => r.id === id);
 
-  /* ---------------- collapsibles that survive re-render ---------------- */
+  /* ---------------- disclosures that survive re-render ---------------- */
   function coll(key, head, body, extra = '') {
     const o = S.open.has(key);
-    return `<div class="coll ${o ? 'open' : ''} ${extra}" data-key="${esc(key)}">` +
-      `<button type="button" class="coll-head" data-toggle aria-expanded="${o}">${head}</button>` +
+    return `<div class="coll ${extra} ${o ? 'open' : ''}" data-key="${esc(key)}">` +
+      `<button type="button" class="coll-head" data-toggle aria-expanded="${o}"><span class="chev" aria-hidden="true"></span>${head}</button>` +
       `<div class="coll-body">${body}</div></div>`;
   }
 
@@ -143,32 +153,51 @@
     setTimeout(() => el.remove(), type === 'error' ? 7000 : 4000);
   }
 
-  /* ---------------- diff against previous render ---------------- */
-  const reqSig = (r) => `${r.status}|${r.updated_at}|${r.reason}`;
-  const traceKey = (t) => `${t.seq}|${t.sim_time}|${t.tool}`;
+  /* ---------------- tooltip ---------------- */
+  const tip = $('tip');
+  function showTip(el) {
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    tip.textContent = text;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const x = clamp(r.left + r.width / 2 - tw / 2, 8, window.innerWidth - tw - 8);
+    let y = r.top - th - 8;
+    if (y < 8) y = r.bottom + 8;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+  }
+  const hideTip = () => { tip.hidden = true; };
+  document.addEventListener('mouseover', (e) => { const t = e.target.closest('[data-tip]'); if (t) showTip(t); });
+  document.addEventListener('mouseout', (e) => {
+    const t = e.target.closest('[data-tip]');
+    if (t && !t.contains(e.relatedTarget)) hideTip();
+  });
+  document.addEventListener('focusin', (e) => { const t = e.target.closest('[data-tip]'); if (t) showTip(t); });
+  document.addEventListener('focusout', hideTip);
 
+  /* ---------------- diff against previous render ---------------- */
+  const traceKey = (t) => `${t.seq}|${t.sim_time}|${t.tool}`;
   function snapshot(b) {
     return {
+      caseId: b.case && b.case.id,
+      opened: b.case && b.case.opened_at,
       sim: b.case && b.case.sim_now,
-      hashes: new Set(arr(b.events).map((e) => e.hash)),
-      reqSig: new Map(arr(b.requirements).map((r) => [r.id, reqSig(r)])),
       trace: new Set(arr(b.trace).map(traceKey)),
+      timers: new Map(arr(b.timers).map((t) => [t.id, t.status])),
       openExc: new Set(arr(b.exceptions).filter((x) => x.status === 'OPEN').map((x) => x.id)),
     };
   }
-
   function diffOf(b) {
     const p = S.prev;
-    const d = { first: !p, newHashes: new Set(), changedReq: new Set(), newTrace: new Set(), freshOpen: [], simChanged: false };
+    const d = { first: !p, newTrace: new Set(), newlyFired: new Set(), freshOpen: [], simChanged: false, reset: false };
     if (!p) return d;
-    const events = arr(b.events);
-    // Tracked by hash, not seq: a reset restarts seq at 1.
-    events.forEach((e) => { if (!p.hashes.has(e.hash)) d.newHashes.add(e.hash); });
-    if (events.length && d.newHashes.size === events.length) d.newHashes.clear(); // full replacement (reset): no flash storm
-    arr(b.requirements).forEach((r) => { if (p.reqSig.get(r.id) !== reqSig(r)) d.changedReq.add(r.id); });
+    d.reset = p.opened !== (b.case && b.case.opened_at) || arr(b.events).length < 3;
     const tr = arr(b.trace);
     tr.forEach((t) => { if (!p.trace.has(traceKey(t))) d.newTrace.add(traceKey(t)); });
     if (tr.length && d.newTrace.size === tr.length) d.newTrace.clear();
+    arr(b.timers).forEach((t) => { if (t.status === 'FIRED' && p.timers.get(t.id) === 'PENDING') d.newlyFired.add(t.id); });
     d.freshOpen = arr(b.exceptions).filter((x) => x.status === 'OPEN' && !p.openExc.has(x.id));
     d.simChanged = p.sim !== (b.case && b.case.sim_now);
     return d;
@@ -184,277 +213,518 @@
     const d = diffOf(b);
     S.bundle = b;
     S.verify = null; // the chain may have changed
+    if (d.reset) { S.sel = null; S.open.clear(); }
+    if (S.sel && !reqById(b, S.sel)) S.sel = null;
+    hideTip();
 
-    if (d.freshOpen.length && S.tab !== 'triage') {
-      S.tab = 'triage';
-      toast(`New exception for review: ${d.freshOpen[0].title || d.freshOpen[0].id}`, 'info');
-      requestAnimationFrame(() => {
-        const t = $('tab-triage');
-        t.classList.remove('ping'); void t.offsetWidth; t.classList.add('ping');
-      });
-    }
-
-    safe('header', () => renderHeader(b, d));
+    safe('header', () => renderHeader(b));
+    safe('rail', () => renderRail(b, d));
+    safe('checklist', () => renderChecklist(b));
+    safe('summary', () => renderSummary(b));
     safe('inbound', () => renderInbound(b));
-    safe('ledger', () => renderLedger(b, d));
-    safe('requirements', () => renderRequirements(b, d));
-    safe('timers', () => renderTimers(b));
-    safe('documents', () => renderDocuments(b));
-    safe('metrics', () => renderMetrics(b));
-    safe('triage', () => renderTriage(b, d));
-    safe('trace', () => renderTrace(b, d));
+    safe('center', () => renderCenter(b, d));
+    safe('reasoning', () => renderReasoning(b, d));
+    safe('ledger', () => renderLedger(b));
     safe('tabs', renderTabs);
 
+    if (d.freshOpen.length) $('center').scrollTop = 0;
     S.prev = snapshot(b);
     hideBoot();
   }
 
-  function renderHeader(b, d) {
+  /* ---------- header ---------- */
+  function splitTitle(c) {
+    const t = String(c.title || '');
+    const parts = t.split(/\s+[—–]\s+/);
+    if (parts.length >= 2) {
+      let sub = parts[0].replace(/\s*&\s*/g, ' and ').trim();
+      if (/\bKYB$/.test(sub)) sub += ' check';
+      return { name: parts.slice(1).join(' '), sub };
+    }
+    return { name: t || 'Case', sub: c.goal || '' };
+  }
+  // READY_FOR_DECISION is only trusted when every check is verified (a certificate can expire afterwards).
+  const isComplete = (b) => (b.case || {}).status === 'READY_FOR_DECISION'
+    && arr(b.requirements).every((r) => r.status === 'SATISFIED');
+  function statusLine(b) {
+    if (isComplete(b)) return { cls: 'done', text: 'File complete. The credit decision is yours.' };
+    const n = openExc(b).length;
+    if (n) return { cls: 'need', text: `${n} ${n === 1 ? 'decision needs' : 'decisions need'} you` };
+    const bad = arr(b.requirements).filter((r) => ['EXPIRED', 'CONTRADICTED', 'NEEDS_REVIEW'].includes(r.status));
+    if (bad.length) {
+      const r = bad[0];
+      return { cls: 'wait', text: `${r.title}: ${statusOf(r.status).word.toLowerCase()}${bad.length > 1 ? `, and ${bad.length - 1} more` : ''}` };
+    }
+    const waits = uniq(arr(b.requirements).filter((r) => r.status === 'OPEN_WAITING')
+      .flatMap((r) => String(r.reason || '').replace(/^waiting for:?\s*/i, '').split(/[;,]\s*(?![^()]*\))/))
+      .map((s) => s.replace(/\s*\([^)]*\)\s*/g, ' ').trim()).filter(Boolean));
+    if (waits.length) {
+      let list = waits.slice(0, 3).join(', ');
+      if (waits.length > 3) list += ` and ${waits.length - 3} more`;
+      return { cls: 'wait', text: `Waiting on the client for: ${list}` };
+    }
+    return { cls: 'wait', text: 'The agent is working the file.' };
+  }
+  function renderHeader(b) {
     const c = b.case || {};
     const cfg = b.config || {};
-    $('case-title').textContent = c.title || '–';
-    $('case-title').title = c.goal ? `Goal: ${c.goal}` : '';
-    const st = $('case-status');
-    st.textContent = c.status || '';
-    st.className = `status-chip st-${String(c.status || '').toLowerCase()}`;
-    $('clock-day').textContent = `Day ${c.day ?? '?'}`;
-    $('clock-date').textContent = fmtFull(c.sim_now);
-    if (d.simChanged && !d.first) pulseClock();
-
-    const mk = (label, val, liveVal) => {
-      const v = val || '?';
-      return `<span class="badge ${v === liveVal ? 'live' : ''}">${esc(label)}: ${esc(v)}</span>`;
-    };
-    const thr = cfg.judge_threshold != null ? ` title="Judge threshold ${esc(cfg.judge_threshold)}"` : '';
-    $('badges').innerHTML =
-      mk('Agent', cfg.agent_mode, 'bedrock') +
-      mk('Judge', cfg.judge_mode, 'featherless').replace('<span', `<span${thr}`);
+    const t = splitTitle(c);
+    $('case-name').textContent = t.name;
+    $('case-sub').textContent = t.sub;
+    $('case-sub').title = c.goal ? `Goal: ${c.goal}` : '';
+    document.title = `${t.name}, OpenLoop`;
+    const st = statusLine(b);
+    const line = $('case-line');
+    line.className = `case-line ${st.cls}`;
+    line.innerHTML = `<span class="dot" aria-hidden="true"></span><span>${esc(st.text)}</span>`;
+    $('mode-agent').innerHTML = `Agent: <b>${esc(cfg.agent_mode || 'unknown')}</b>`;
+    $('mode-judge').innerHTML = `Judge: <b>${esc(cfg.judge_mode || 'unknown')}</b>`;
     $('mock-flag').hidden = !MOCK;
     renderVerify();
   }
-
-  function pulseClock() {
-    const el = $('clock');
-    el.classList.remove('pulse');
-    void el.offsetWidth; // restart the animation
-    el.classList.add('pulse');
-  }
-
-  function renderVerify() {
-    const el = $('verify-result');
+  function verifyText() {
     const v = S.verify;
-    if (!v) { el.textContent = ''; el.className = 'verify'; return; }
-    if (v.ok) {
-      el.textContent = `✓ chain intact (${v.length} events)`;
-      el.className = 'verify ok';
-    } else {
-      el.textContent = `✗ broken at #${v.broken_at}`;
-      el.className = 'verify bad';
-    }
+    if (!v) return null;
+    return v.ok
+      ? { cls: 'ok', text: `Chain intact, ${v.length} events` }
+      : { cls: 'bad', text: `Chain broken at event #${v.broken_at}` };
+  }
+  function renderVerify() {
+    const v = verifyText();
+    const el = $('top-verify');
+    el.textContent = v ? v.text : '';
+    el.className = `verify-text ${v ? v.cls : ''}`;
+    document.querySelectorAll('[data-verify-slot]').forEach((n) => {
+      n.textContent = v ? v.text : '';
+      n.className = `verify-text ${v ? v.cls : ''}`;
+    });
   }
 
+  /* ---------- timeline rail ---------- */
+  function shortTimerLabel(t, count) {
+    const kind = String(t.kind || '');
+    if (kind === 'legal_deadline') return /amlr/i.test(t.label || '') ? 'AMLR report due' : tidy(t.label);
+    if (kind === 'doc_expiry') return /trade register|onrc/i.test(t.label || '') ? 'Certificate expires' : 'Document expires';
+    if (kind === 'reminder') return count > 1 ? `${count} reminders` : 'Reminder';
+    const l = tidy(t.label || humanize(kind));
+    if (l.length <= 30) return l;
+    const cut = l.slice(0, 30);
+    return `${cut.slice(0, cut.lastIndexOf(' ') > 12 ? cut.lastIndexOf(' ') : 29)}…`;
+  }
+  const AXIS_Y = 64; // keep in sync with .rail-axis in styles.css
+  const flagKind = (k) => (k === 'legal_deadline' ? 'k-legal' : k === 'doc_expiry' ? 'k-expiry' : k === 'reminder' ? 'k-reminder' : 'k-other');
+
+  function renderRail(b, d) {
+    const scale = $('rail-scale');
+    const width = scale.clientWidth || 1000;
+    const c = b.case || {};
+    const today = Math.max(0, dayFloat(c.sim_now, b) ?? Number(c.day) ?? 0);
+    const timers = arr(b.timers);
+    const pending = timers.filter((t) => t.status === 'PENDING');
+    const lastDue = pending.reduce((m, t) => Math.max(m, dayFloat(t.due, b) ?? 0), 0);
+    const span = Math.max(1, Math.ceil(Math.max(today + 7, pending.length ? lastDue + 2 : 0)));
+    const pct = (x) => (clamp(x, 0, span) / span) * 100;
+    const px = (x) => (clamp(x, 0, span) / span) * width;
+    const dayW = width / span;
+    let h = '';
+
+    // axis, ticks and day labels
+    h += '<div class="rail-axis"></div>';
+    const pillHalf = 52;
+    for (let i = 0; i <= span; i++) {
+      h += `<span class="rail-tick ${i % 7 === 0 ? 'week' : ''}" style="left:${pct(i)}%"></span>`;
+      const nearToday = Math.abs(i - today) * dayW < pillHalf + 10;
+      if (nearToday && i !== 0) continue;
+      if (i === 0 && today * dayW < pillHalf + 26 && today > 0) continue;
+      if (i === 0 && today === 0) continue;
+      const crowded = dayW < 26 && i % 2 === 1;
+      if (crowded) continue;
+      if (i > 0 && i * dayW < 46) continue; // keep clear of the wider "Day 0" label
+      h += `<span class="rail-day ${i === 0 ? 'first' : ''}" style="left:${pct(i)}%">${i === 0 ? 'Day 0' : i}</span>`;
+    }
+
+    // things that happened, above the axis
+    const marks = [];
+    arr(b.events).forEach((e) => {
+      const t = String(e.type || '').toUpperCase();
+      const actor = String((e.actor && e.actor.type) || '').toLowerCase();
+      if (t === 'DOCUMENT_RECEIVED') marks.push({ kind: 'doc', x: dayFloat(e.sim_time, b), seq: e.seq, tip: `Day ${dayOf(e.sim_time, b)}: ${e.summary}` });
+      else if (/EXCEPTION_RESOLVED/.test(t) && actor !== 'agent' && actor !== 'system') {
+        const exId = (String(e.summary || '').match(/EX-\d+/) || [])[0];
+        const ex = arr(b.exceptions).find((x) => x.id === exId);
+        const what = ex ? `${ex.title}\n${resolutionText(ex, b, true)}` : e.summary;
+        marks.push({ kind: 'decision', x: dayFloat(e.sim_time, b), seq: e.seq, tip: `Day ${dayOf(e.sim_time, b)}, analyst decision\n${what}` });
+      }
+    });
+    arr(b.trace).forEach((s) => {
+      if (String(s.gate || '').startsWith('DENY')) {
+        const rule = String(s.gate).replace(/^DENY:?\s*/, '');
+        marks.push({ kind: 'blocked', x: dayFloat(s.sim_time, b), seq: s.seq, tip: `Day ${dayOf(s.sim_time, b)}, blocked by ${rule}: ${s.reason || humanize(s.tool)}` });
+      }
+    });
+    const groups = new Map();
+    marks.filter((m) => m.x !== null).forEach((m) => {
+      const k = Math.round(m.x * 100) / 100;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(m);
+    });
+    const ORDER = { decision: 0, doc: 1, blocked: 2 };
+    // Stacks are at most 3 high; a fourth mark starts a second column so nothing reaches the day labels.
+    // Stacks are at most 3 high and up to 3 columns wide, so nothing reaches the day labels.
+    const MAX_SHOWN = 9;
+    const COL_DX = { 1: [0], 2: [-6, 6], 3: [-12, 0, 12] };
+    groups.forEach((all, x) => {
+      all.sort((a, c2) => (ORDER[a.kind] - ORDER[c2.kind]) || (a.seq - c2.seq));
+      const list = all.filter((m) => m.kind !== 'blocked');
+      const shown = list.length > MAX_SHOWN ? list.slice(0, MAX_SHOWN - 1) : list;
+      const PER_COL = shown.length <= 3 ? 3 : shown.length <= 6 ? Math.ceil(shown.length / 2) : 3;
+      const cols = Math.max(1, Math.ceil(shown.length / PER_COL));
+      shown.forEach((m, i) => {
+        const col = Math.floor(i / PER_COL), row = i % PER_COL;
+        const dx = COL_DX[cols][col];
+        const top = (AXIS_Y - 6) - (row + 1) * 9 - row * 3;
+        h += `<button type="button" class="mark m-${m.kind}" style="left:calc(${pct(x)}% + ${dx}px);top:${top}px" data-tip="${esc(m.tip)}" aria-label="${esc(m.tip)}"></button>`;
+      });
+      let right = COL_DX[cols][cols - 1] + 10;
+      if (list.length > shown.length) {
+        const rest = list.slice(shown.length);
+        h += `<span class="mark-more" style="left:calc(${pct(x)}% + ${right}px);top:${AXIS_Y - 22}px" data-tip="${esc(rest.map((m) => m.tip).join('\n'))}" tabindex="0">+${rest.length}</span>`;
+        right += 18;
+      }
+      // Blocked actions sit in their own short column to the right, so they never hide behind the today line.
+      all.filter((m) => m.kind === 'blocked').slice(0, 3).forEach((m, i) => {
+        h += `<button type="button" class="mark m-blocked" style="left:calc(${pct(x)}% + ${right + i * 8}px);top:${AXIS_Y - 21}px" data-tip="${esc(m.tip)}" aria-label="${esc(m.tip)}"></button>`;
+      });
+    });
+
+    // things that will happen, below the axis: pending timers grouped by day
+    const byDay = new Map();
+    pending.forEach((t) => {
+      const x = dayFloat(t.due, b);
+      if (x === null) return;
+      const key = `${Math.round(x * 100) / 100}|${t.kind === 'reminder' ? 'reminder' : t.id}`;
+      if (!byDay.has(key)) byDay.set(key, { x, list: [] });
+      byDay.get(key).list.push(t);
+    });
+    const flags = [...byDay.values()].map((g) => {
+      const t0 = g.list[0];
+      const label = shortTimerLabel(t0, g.list.length);
+      const dueDay = dayOf(t0.due, b);
+      const tipText = g.list.map((t) => `${tidy(t.label)}`).join('\n') + `\nDue day ${dueDay}, ${fmtShort(t0.due)}`;
+      const prio = t0.kind === 'legal_deadline' ? 0 : t0.kind === 'doc_expiry' ? 1 : t0.kind === 'reminder' ? 3 : 2;
+      return { x: g.x, label, sub: `day ${dueDay}`, tipText, kind: flagKind(t0.kind), prio };
+    }).sort((a, c2) => a.x - c2.x || a.prio - c2.prio);
+    const rows = [[], []];
+    const ROW_TOP = [8, 28];
+    flags.forEach((f) => {
+      const w = (f.label.length + f.sub.length) * 6.6 + 30;
+      const x0 = px(f.x);
+      const left = x0 + w > width + 30;
+      const span2 = left ? [x0 - w, x0] : [x0, x0 + w];
+      let row = rows.findIndex((r) => r.every(([a, z]) => span2[1] + 6 < a || span2[0] > z + 6));
+      if (row === -1) row = 1;
+      rows[row].push(span2);
+      const top = ROW_TOP[row];
+      h += `<button type="button" class="flag ${f.kind} ${left ? 'left' : ''}" style="left:${pct(f.x)}%" data-tip="${esc(f.tipText)}" aria-label="${esc(f.tipText)}">` +
+        `<span class="stem" style="height:${top + 2}px"></span>` +
+        `<span class="flab" style="top:${top}px">${esc(f.label)}<small>${esc(f.sub)}</small></span></button>`;
+    });
+
+    // fired or cancelled timers: small, grey, struck through
+    const goneGroups = new Map();
+    timers.filter((t) => t.status === 'FIRED' || t.status === 'CANCELLED').forEach((t) => {
+      const x = dayFloat(t.due, b);
+      if (x === null) return;
+      const k = Math.round(x * 100) / 100;
+      if (!goneGroups.has(k)) goneGroups.set(k, []);
+      goneGroups.get(k).push(t);
+    });
+    goneGroups.forEach((list, x) => {
+      const pulse = list.some((t) => d.newlyFired.has(t.id));
+      const tipText = list.map((t) => `${t.status === 'FIRED' ? 'Fired' : 'Cancelled'}: ${tidy(t.label)}`).join('\n') + `\nDay ${dayOf(list[0].due, b)}`;
+      const nearToday = Math.abs(x - today) * dayW < 8;
+      h += `<button type="button" class="gone-mark ${pulse ? 'pulse' : ''}" style="left:calc(${pct(x)}% ${nearToday ? '- 10px' : '+ 0px'})" data-tip="${esc(tipText)}" aria-label="${esc(tipText)}"></button>`;
+    });
+
+    $('rail-layer').innerHTML = h;
+
+    // persistent elements so the today marker can slide
+    const todayEl = $('rail-today');
+    const past = $('rail-past');
+    const instant = !S.railReady || d.reset;
+    todayEl.classList.toggle('instant', instant);
+    past.style.transition = instant ? 'none' : '';
+    todayEl.style.left = `${pct(today)}%`;
+    past.style.width = `calc(${pct(today)}% + 30px)`;
+    $('today-pill').textContent = `Today, day ${Math.floor(today + 1e-6)}`;
+    todayEl.classList.toggle('edge-start', px(today) < 40);
+    todayEl.classList.toggle('edge-end', width - px(today) < 40);
+    if (instant) {
+      void todayEl.offsetWidth; // commit the position before transitions come back on
+      todayEl.classList.remove('instant');
+      past.style.transition = '';
+    }
+    S.railReady = true;
+  }
+
+  /* ---------- checklist (left) ---------- */
+  function defaultSel(b) {
+    const reqs = arr(b.requirements);
+    if (S.sel && reqById(b, S.sel)) return S.sel;
+    const pick = reqs.find((r) => r.status === 'CONTRADICTED' || r.status === 'NEEDS_REVIEW' || r.status === 'EXPIRED')
+      || reqs.find((r) => r.status === 'OPEN_WAITING') || reqs[0];
+    return pick ? pick.id : null;
+  }
+  function renderChecklist(b) {
+    const reqs = arr(b.requirements);
+    if (!reqs.length) { $('checklist').innerHTML = '<p class="empty">No checks yet.</p>'; return; }
+    const sel = defaultSel(b);
+    const withDecision = new Set(openExc(b).map((x) => x.requirement_id));
+    $('checklist').innerHTML = reqs.map((r) => {
+      const s = statusOf(r.status);
+      const flag = withDecision.has(r.id) ? '<span class="ck-flag" aria-hidden="true"></span><span class="sr-only">, decision open</span>' : '';
+      return `<button type="button" class="ck-row ${r.id === sel ? 'sel' : ''}" data-act="select" data-id="${esc(r.id)}" aria-pressed="${r.id === sel}">` +
+        `<span class="ck-glyph ${s.cls}" title="${esc(s.word)}">${icon(s.icon)}</span>` +
+        `<span class="ck-text"><span class="ck-title"><span class="sr-only">${esc(s.word)}: </span>${esc(r.title)}${flag}</span>` +
+        `<span class="ck-reason" title="${esc(r.reason)}">${esc(r.reason || s.word)}</span></span></button>`;
+    }).join('');
+  }
+
+  function renderSummary(b) {
+    const m = b.metrics || {};
+    const calls = Number(m.tool_calls ?? 0), auto = Number(m.auto_resolved ?? 0);
+    const human = Number(m.sent_to_human ?? 0), denied = Number(m.denied_actions ?? 0);
+    $('summary').textContent =
+      `${plural(calls, 'tool call')}. ${plural(auto, 'check')} verified automatically, ${human} sent to you, ` +
+      `${denied ? plural(denied, 'action') + ' blocked' : 'no actions blocked'}.`;
+  }
+
+  const scenarioLabel = (s) => tidy(String(s || '').replace(/^Day\s+\d+\s*·\s*/i, ''));
   function renderInbound(b) {
     const items = arr(b.scenario);
-    if (!items.length) { $('inbound').innerHTML = '<p class="empty">No scripted items.</p>'; return; }
-    const nextId = (items.find((i) => !i.delivered) || {}).id;
-    $('inbound').innerHTML = items.map((it) => {
-      if (it.delivered) {
-        return `<button type="button" class="inb done" disabled><span class="ico">✓</span><span>${esc(it.label)}</span></button>`;
+    if (!items.length) { $('inbound').innerHTML = '<p class="caption">No scripted items.</p>'; return; }
+    const next = items.find((i) => !i.delivered);
+    const nextId = (next || {}).id;
+    const sendNext = $('send-next');  // presenter shortcut on the rail: always one click away
+    if (sendNext) {
+      sendNext.hidden = !next;
+      if (next) {
+        sendNext.dataset.id = next.id;
+        sendNext.title = `Send: ${scenarioLabel(next.label)}`;
       }
-      return `<button type="button" class="inb act ${it.id === nextId ? 'next' : ''}" data-act="inbound" data-id="${esc(it.id)}">` +
-        `<span class="ico">▸</span><span>${esc(it.label)}</span></button>`;
+    }
+    $('inbound').innerHTML = items.map((it) => {
+      const label = scenarioLabel(it.label);
+      if (it.delivered) return `<div class="sent">${icon('check', 'sm')}<span>${esc(label)}</span></div>`;
+      return `<button type="button" class="send ${it.id === nextId ? 'next' : ''}" data-act="inbound" data-id="${esc(it.id)}">Send: ${esc(label)}</button>`;
     }).join('');
   }
 
-  function renderLedger(b, d) {
-    const evs = arr(b.events).slice().sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
-    $('ledger-count').textContent = evs.length ? `${evs.length} events` : '';
-    if (!evs.length) { $('ledger').innerHTML = '<p class="empty">No events yet.</p>'; return; }
-    $('ledger').innerHTML = evs.map((e) => {
-      const actor = e.actor && e.actor.id ? ` title="${esc(e.actor.type)}: ${esc(e.actor.id)}"` : '';
-      return `<div class="led ${d.newHashes.has(e.hash) ? 'flash' : ''}"${actor}>` +
-        `<div class="led-top"><span class="chip ${typeClass(e.type)}">${esc(humanize(e.type))}</span>` +
-        `<span class="led-time">${esc(whenLabel(e.sim_time, b))}</span><span class="led-seq">#${esc(e.seq)}</span></div>` +
-        `<div class="led-sum">${esc(e.summary)}</div>` +
-        `<div class="led-hash"><b>${esc(shortHash(e.hash))}</b><span class="arrow">←</span>${esc(shortHash(e.prev_hash))}</div>` +
-        `</div>`;
-    }).join('');
+  /* ---------- center ---------- */
+  // One block per source line, so a wrapped line gets a hanging indent and reads as one entry.
+  const quoteLines = (q) => String(q ?? '').split(/\r?\n/).map((l) => `<span class="ql">${esc(l) || '&nbsp;'}</span>`).join('');
+  function papersHtml(b, list) {
+    if (!list.length) return '';
+    return `<div class="papers ${list.length > 2 ? 'many' : ''}">` + list.map((s) =>
+      `<figure class="paper"><blockquote>${quoteLines(s.quote)}</blockquote>` +
+      `<figcaption>From: ${esc(s.label || docLabel(b, s.doc_id))}</figcaption></figure>`).join('') + '</div>';
   }
-
-  function evidenceHtml(b, r) {
-    const ev = arr(r.evidence);
-    if (!ev.length) return '';
-    return `<div class="ev-list">` + ev.map((x, i) => {
-      const key = `ev:${r.id}:${i}`;
-      const o = S.open.has(key);
-      return `<button type="button" class="ev ${o ? 'open' : ''}" data-key="${esc(key)}" data-toggle aria-expanded="${o}">` +
-        `<span class="ev-meta"><span class="ev-doc">${esc(docLabel(b, x.doc_id))}</span>` +
-        (x.field ? `<span class="ev-field">${esc(x.field)}</span>` : '') +
-        `<span class="ev-caret">▼</span></span>` +
-        `<span class="ev-quote">“${esc(x.quote)}”</span></button>`;
-    }).join('') + `</div>`;
-  }
-
-  function renderRequirements(b, d) {
-    const reqs = arr(b.requirements);
-    const counts = {};
-    reqs.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
-    $('req-legend').innerHTML = Object.keys(REQ_STATUS)
-      .filter((k) => counts[k])
-      .map((k) => `<span class="lg ${REQ_STATUS[k].cls}">${counts[k]} ${esc(REQ_STATUS[k].label.toLowerCase())}</span>`)
-      .join('');
-    if (!reqs.length) { $('requirements').innerHTML = '<p class="empty">No requirements.</p>'; return; }
-    $('requirements').innerHTML = reqs.map((r) => {
-      const s = REQ_STATUS[r.status] || { cls: 'muted', label: r.status || 'Unknown' };
-      return `<article class="req s-${s.cls} ${d.changedReq.has(r.id) ? 'flash' : ''}">` +
-        `<div class="req-head"><h3 class="req-title"><span class="req-id">${esc(r.id)}</span>${esc(r.title)}</h3>` +
-        `<span class="pill ${s.cls}">${esc(s.label)}</span></div>` +
-        (r.reason ? `<p class="req-reason">${esc(r.reason)}</p>` : '') +
-        (arr(r.rule_ids).length ? `<div class="req-rules">${arr(r.rule_ids).map((id) => `<span class="chip rule">${esc(id)}</span>`).join('')}</div>` : '') +
-        evidenceHtml(b, r) +
-        (r.updated_at ? `<div class="req-foot">Updated ${esc(whenLabel(r.updated_at, b))}</div>` : '') +
-        `</article>`;
-    }).join('');
-  }
-
-  function renderTimers(b) {
-    const ts = arr(b.timers).slice().sort((x, y) => String(x.due).localeCompare(String(y.due)));
-    if (!ts.length) { $('timers').innerHTML = '<li class="empty">No timers.</li>'; return; }
-    const now = b.case && b.case.sim_now;
-    $('timers').innerHTML = ts.map((t) => {
-      const s = TIMER_STATUS[t.status] || { cls: 'muted', label: t.status || '?' };
-      const r = t.status === 'PENDING' ? rel(t.due, now) : '';
-      return `<li class="timer ${esc(String(t.status).toLowerCase())}"><div class="li-main">` +
-        `<div class="kind ${esc(t.kind)}">${esc(humanize(t.kind))}</div>` +
-        `<div class="li-title">${esc(t.label)}</div>` +
-        `<div class="li-sub">Due <b>${esc(fmtFull(t.due))}</b>${r ? ` · ${esc(r)}` : ''}</div></div>` +
-        `<span class="pill ${s.cls}">${esc(s.label)}</span></li>`;
-    }).join('');
-  }
-
-  function renderDocuments(b) {
-    const ds = arr(b.documents);
-    if (!ds.length) { $('documents').innerHTML = '<li class="empty">No documents yet.</li>'; return; }
-    $('documents').innerHTML = ds.map((d) =>
-      `<li><div class="li-main"><div class="li-title">${esc(d.name || d.id)}</div>` +
-      `<div class="li-sub">Received <b>${esc(fmtDate(d.received_at))}</b>` +
-      (d.issued_at ? ` · issued <b>${esc(fmtDate(d.issued_at))}</b>` : '') + `</div></div>` +
-      `<span class="chip">${esc(humanize(d.type))}</span></li>`
-    ).join('');
-  }
-
-  function renderMetrics(b) {
-    const m = b.metrics || {};
-    const tiles = [
-      ['agent_steps', 'Agent steps', ''],
-      ['tool_calls', 'Tool calls', ''],
-      ['auto_resolved', 'Auto-resolved', 'good'],
-      ['sent_to_human', 'Sent to human', ''],
-      ['denied_actions', 'Denied actions', m.denied_actions > 0 ? 'warn' : ''],
-    ];
-    $('metrics').innerHTML = tiles.map(([k, label, cls]) =>
-      `<div class="metric ${cls}"><div class="v">${esc(m[k] ?? 0)}</div><div class="k">${esc(label)}</div></div>`).join('');
-  }
-
-  function snippetsHtml(b, x) {
-    const sn = arr(x.snippets);
-    if (!sn.length) return '';
-    return `<div class="snips">` + sn.map((s) =>
-      `<figure class="snip"><figcaption>${esc(s.label || docLabel(b, s.doc_id))}</figcaption>` +
-      `<blockquote class="doc">${esc(s.quote)}</blockquote></figure>`).join('') + `</div>`;
-  }
-
+  const firstSentence = (q) => {
+    const s = String(q || '').trim();
+    const m = s.match(/^.*?[?.!](\s|$)/);
+    return (m ? m[0] : s).trim();
+  };
   function judgeHtml(x, b) {
     const j = x.judge;
     if (!j || typeof j !== 'object') return '';
     const thr = Number(j.threshold ?? (b.config && b.config.judge_threshold) ?? 0.9);
-    const probs = Object.entries(j.probs || {}).map(([k, v]) => [k, Number(v) || 0]).sort((a, c) => c[1] - a[1]);
+    const probs = Object.entries(j.probs || {}).map(([k, v]) => [k, clamp(Number(v) || 0, 0, 1)]);
     if (!probs.length) return '';
-    const topP = probs[0][1];
-    const pass = topP >= thr;
-    const bars = probs.map(([label, p], i) =>
-      `<div class="bar-row ${i === 0 ? 'top' : ''} ${i === 0 && pass ? 'pass' : ''}">` +
-      `<span class="bar-label" title="${esc(label)}">${esc(humanize(label))}</span>` +
-      `<div class="bar" role="img" aria-label="${esc(label)} ${Math.round(p * 100)}%"><div class="fill" style="width:${Math.max(0, Math.min(100, p * 100))}%"></div>` +
-      `<div class="thr" style="left:${Math.max(0, Math.min(100, thr * 100))}%"></div></div>` +
-      `<span class="pct">${Math.round(p * 100)}%</span></div>`).join('');
-    return `<div class="judge"><div class="judge-head"><span class="judge-tag">Judge</span>` +
-      `<span class="judge-q">${esc(j.question || 'Fuzzy match')}</span></div>${bars}` +
-      `<div class="judge-note"><span class="sw"></span>Threshold ${thr.toFixed(2)} · ` +
-      (pass ? 'above threshold' : `top label ${Math.round(topP * 100)}% is below it, so an analyst decides`) + `</div></div>`;
-  }
-
-  function excCard(x, b, d) {
-    const sev = String(x.severity || 'low').toLowerCase();
-    const fresh = d.freshOpen.some((f) => f.id === x.id);
-    const rule = x.rule && (x.rule.id || x.rule.text)
-      ? `<div class="rulebox"><span class="chip rule">${esc(x.rule.id)}</span><span>${esc(x.rule.text)}</span></div>` : '';
-    const actions = arr(x.actions).map((a, i) => {
-      const secondary = /dismiss|reject|false|ignore/i.test(a.id || '');
-      return `<button type="button" class="btn act ${secondary || i > 0 ? '' : 'primary'}" data-act="resolve" data-exc="${esc(x.id)}" data-action="${esc(a.id)}">${esc(a.label || a.id)}</button>`;
+    const rows = probs.map(([k, p]) => {
+      const lab = JUDGE_LABELS[k] || sentence(humanize(k));
+      return `<div class="jrow"><span class="jlab">${esc(lab)}</span>` +
+        `<span class="jbar" role="img" aria-label="${esc(lab)} ${Math.round(p * 100)}%">` +
+        `<span class="jfill ${p >= thr ? 'pass' : ''}" style="width:${p * 100}%"></span>` +
+        `<span class="jthr" style="left:${clamp(thr, 0, 1) * 100}%"></span></span>` +
+        `<span class="jpct">${Math.round(p * 100)}%</span></div>`;
     }).join('');
-    return `<article class="exc sev-${esc(sev)} ${fresh ? 'flash' : ''}">` +
-      `<div class="exc-head"><span class="sev ${esc(sev)}">${esc(sev)}</span>` +
-      `<span class="exc-id">${esc(x.id)}${x.requirement_id ? ` · ${esc(x.requirement_id)}` : ''}</span></div>` +
-      `<h3 class="exc-title">${esc(x.title)}</h3>` +
-      `<p class="exc-sum">${esc(x.summary)}</p>` + rule + snippetsHtml(b, x) + judgeHtml(x, b) +
+    const q = firstSentence(j.question);
+    const src = j.source || (b.config && b.config.judge_mode) || 'unknown';
+    return `<section class="judge"><h4 class="sub">What the judge thinks</h4>` +
+      (q ? `<p class="jq" title="${esc(j.question)}">${esc(q)}</p>` : '') +
+      `<div class="jrows">${rows}</div>` +
+      `<div class="jfoot"><span class="jlegend"><span class="jdash" aria-hidden="true"></span>Needed to accept automatically: ${Math.round(thr * 100)}%</span>` +
+      `<span>Judge: ${esc(src)}</span></div></section>`;
+  }
+  const noteText = (n) => (typeof n === 'string' ? n : (n && (n.text || n.note || n.summary)) || '');
+  function decisionCard(x, b) {
+    const sev = String(x.severity || 'low').toLowerCase();
+    const req = reqById(b, x.requirement_id);
+    const rule = x.rule && (x.rule.id || x.rule.text)
+      ? `<div class="rulebox"><b>${esc(x.rule.id || 'Rule')}</b>${esc(x.rule.text || '')}</div>` : '';
+    const notes = arr(x.notes).map(noteText).filter(Boolean)
+      .map((n) => `<p class="note">Agent note: ${esc(n)}</p>`).join('');
+    const actions = arr(x.actions).map((a, i) =>
+      `<button type="button" class="btn ${i === 0 ? 'primary' : 'secondary'}" data-act="resolve" data-exc="${esc(x.id)}" data-req="${esc(x.requirement_id || '')}" data-action="${esc(a.id)}">${esc(tidy(a.label || humanize(a.id)))}</button>`).join('');
+    return `<article class="decision" id="exc-${esc(x.id)}" aria-label="Decision: ${esc(x.title)}">` +
+      `<div class="d-topline"><span class="chip sev-${esc(sev)}">${esc(sentence(sev))}</span>` +
+      `<span>${esc(req ? req.title : (x.requirement_id || ''))}</span></div>` +
+      `<h2 class="d-title">${esc(x.title)}</h2>` +
+      `<div class="why"><h3 class="sub">Why it stopped</h3><p>${esc(x.summary)}</p></div>` +
+      rule +
+      (arr(x.snippets).length ? `<div class="evidence">${papersHtml(b, arr(x.snippets))}</div>` : '') +
+      judgeHtml(x, b) + notes +
       `<div class="actions">${actions}</div></article>`;
   }
-
-  function renderTriage(b, d) {
-    const exs = arr(b.exceptions);
-    const open = exs.filter((x) => x.status === 'OPEN')
-      .sort((p, q) => (SEV_RANK[String(p.severity).toLowerCase()] ?? 9) - (SEV_RANK[String(q.severity).toLowerCase()] ?? 9));
-    const done = exs.filter((x) => x.status !== 'OPEN');
-    let html = open.length
-      ? open.map((x) => excCard(x, b, d)).join('')
-      : `<div class="empty-state"><b>No open exceptions</b>The agent is working the file. Anything it cannot settle by rule will appear here.</div>`;
-    if (done.length) {
-      const body = done.map((x) =>
-        `<div class="res-card"><h3><span class="tick">✓</span>${esc(x.title)}<span class="exc-id" style="margin-left:auto">${esc(x.id)}</span></h3>` +
-        `<p>${esc(x.summary)}</p></div>`).join('');
-      html += coll('resolved', `Resolved <span class="count">${done.length}</span>`, body, 'resolved-sec');
+  function resolutionText(x, b, short) {
+    const r = x.resolution;
+    if (!r) return 'Resolved';
+    if (typeof r === 'string') return tidy(r);
+    const id = r.action_id || r.action;
+    const act = arr(x.actions).find((a) => a.id === id);
+    let s = tidy(r.label || r.action_label || (act && act.label) || sentence(humanize(id)) || 'Resolved');
+    const by = r.by && r.by.type ? String(r.by.type).toLowerCase() : '';
+    const day = b && r.at ? dayOf(r.at, b) : null;
+    if (!short && (by || day !== null)) s += `. Decided${by ? ` by the ${by}` : ''}${day !== null ? ` on day ${day}` : ''}.`;
+    const note = r.note && String(r.note).trim();
+    if (note) s += ` Note: ${note}`;
+    return s;
+  }
+  function resolvedHtml(b) {
+    const done = arr(b.exceptions).filter((x) => x.status !== 'OPEN');
+    if (!done.length) return '';
+    const body = `<ul class="res-list">` + done.map((x) =>
+      `<li>${icon('check', 'sm')}<div><div>${esc(x.title)}</div><div class="res-what">${esc(resolutionText(x, b))}</div></div></li>`).join('') + '</ul>';
+    return coll('resolved', `Resolved (${done.length})`, body, 'resolved');
+  }
+  function ruleTexts(b) {
+    const m = new Map();
+    arr(b.exceptions).forEach((x) => { if (x.rule && x.rule.id) m.set(x.rule.id, x.rule.text || ''); });
+    return m;
+  }
+  function detailHtml(b, r) {
+    if (!r) return '<p class="empty">Nothing to show yet.</p>';
+    const s = statusOf(r.status);
+    const texts = ruleTexts(b);
+    const rules = arr(r.rule_ids).map((id) => {
+      const t = texts.get(id);
+      return `<span class="rule-chip" tabindex="0" ${t ? `data-tip="${esc(`${id}: ${t}`)}"` : `data-tip="${esc(`Rule ${id}`)}"`}>${esc(id)}</span>`;
+    }).join('');
+    const ev = arr(r.evidence);
+    const upd = r.updated_at ? dayOf(r.updated_at, b) : null;
+    return `<section class="detail">` +
+      `<div class="d-topline"><span class="chip ${s.cls}">${icon(s.icon, 'sm')}${esc(s.word)}</span></div>` +
+      `<h2 class="d-title">${esc(r.title)}</h2>` +
+      (r.reason ? `<p class="d-reason">${esc(r.reason)}</p>` : '') +
+      (rules ? `<div class="d-rules">Rules checked: ${rules}</div>` : '') +
+      `<div class="d-section"><h3 class="sub">Evidence</h3>` +
+      (ev.length ? `<div class="evidence">${papersHtml(b, ev)}</div>`
+        : `<p class="d-empty">No evidence yet. The agent is waiting for the document and will check it as soon as it arrives.</p>`) +
+      `</div>` +
+      (upd !== null ? `<p class="d-updated">Last updated day ${upd}</p>` : '') +
+      `</section>`;
+  }
+  function completionHtml(b) {
+    const reqs = arr(b.requirements);
+    const v = verifyText();
+    return `<section class="complete">` +
+      `<div class="complete-mark">${icon('check')}</div>` +
+      `<h2>File complete</h2>` +
+      `<p class="complete-body">All ${reqs.length} checks are verified. The agent has stopped here because the credit decision belongs to a person.</p>` +
+      `<ul class="sum-list">` + reqs.map((r) => {
+        const s = statusOf(r.status);
+        return `<li><span class="${s.cls}">${icon(s.icon)}</span><div><div class="s-title">${esc(r.title)}</div><div class="s-reason">${esc(r.reason)}</div></div></li>`;
+      }).join('') + `</ul>` +
+      `<div class="ledger-line"><span>Ledger: ${plural(arr(b.events).length, 'event')}, each linked to the one before.</span>` +
+      `<button type="button" class="btn secondary sm" data-act="verify">Check ledger</button>` +
+      `<span data-verify-slot class="verify-text ${v ? v.cls : ''}">${v ? esc(v.text) : ''}</span></div>` +
+      `</section>`;
+  }
+  function renderCenter(b) {
+    const open = openExc(b);
+    let html;
+    if (open.length) {
+      html = open.map((x) => decisionCard(x, b)).join('') + resolvedHtml(b);
+    } else if (isComplete(b)) {
+      html = completionHtml(b) + resolvedHtml(b);
+    } else {
+      html = detailHtml(b, reqById(b, defaultSel(b))) + resolvedHtml(b);
     }
-    $('pane-triage').innerHTML = html;
+    $('center').innerHTML = html;
   }
 
-  function gateHtml(g) {
-    g = String(g ?? '-');
-    if (g === 'ALLOW') return '<span class="gate allow">ALLOW</span>';
-    if (g.startsWith('DENY')) return `<span class="gate deny" title="${esc(g)}">${esc(g)}</span>`;
-    return `<span class="gate none">${esc(g)}</span>`;
+  /* ---------- activity (right) ---------- */
+  function prettyJson(v) {
+    const p = parseMaybe(v);
+    return typeof p === 'string' ? p : JSON.stringify(p, null, 2);
   }
-
-  function renderTrace(b, d) {
+  function renderReasoning(b, d) {
     const tr = arr(b.trace).slice().sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
-    if (!tr.length) { $('pane-trace').innerHTML = '<div class="empty-state">No agent steps yet.</div>'; return; }
-    $('pane-trace').innerHTML = tr.map((t) => {
+    if (!tr.length) { $('pane-reasoning').innerHTML = '<p class="empty">No agent steps yet.</p>'; return; }
+    let html = '';
+    let lastTime = null;
+    tr.forEach((t) => {
+      if (t.sim_time !== lastTime) {
+        const day = dayOf(t.sim_time, b);
+        html += `<h3 class="day-head">${day === null ? 'Undated' : `Day ${day}`}</h3>`;
+        lastTime = t.sim_time;
+      }
       const k = traceKey(t);
       const g = String(t.gate ?? '-');
-      const cls = g === 'ALLOW' ? 'allow' : g.startsWith('DENY') ? 'deny' : '';
-      const hasInput = t.input !== undefined && t.input !== null && !(typeof t.input === 'object' && !Object.keys(t.input).length);
-      const input = hasInput ? coll(`in:${k}`, 'Input JSON', `<pre class="json">${esc(JSON.stringify(t.input, null, 2))}</pre>`) : '';
-      const outText = t.output == null ? '' : (typeof t.output === 'string' ? t.output : JSON.stringify(t.output, null, 2));
-      const ko = `out:${k}`;
-      const out = outText
-        ? `<button type="button" class="out ${S.open.has(ko) ? 'open' : ''}" data-key="${esc(ko)}" data-toggle>${esc(outText)}</button>` : '';
-      return `<article class="step ${cls} ${d.newTrace.has(k) ? 'flash' : ''}">` +
-        `<div class="step-top"><span class="step-seq">#${esc(t.seq)}</span><code class="tool">${esc(t.tool)}</code>${gateHtml(t.gate)}</div>` +
-        `<p class="step-reason">${esc(t.reason)}</p>${input}${out}` +
-        `<div class="step-time">${esc(whenLabel(t.sim_time, b))}</div></article>`;
-    }).join('');
+      let gate = '';
+      let blocked = false;
+      if (g === 'ALLOW') gate = '<span class="gate allow">Allowed</span>';
+      else if (g.startsWith('DENY')) {
+        blocked = true;
+        const rule = g.replace(/^DENY:?\s*/, '') || 'rule';
+        const out = parseMaybe(t.output);
+        const why = (out && typeof out === 'object' && (out.blocked || out.reason || out.error)) || (typeof t.output === 'string' ? t.output : g);
+        gate = `<span class="gate deny" tabindex="0" data-tip="${esc(why)}">Blocked: ${esc(rule)}</span>`;
+      }
+      const hasIn = t.input !== undefined && t.input !== null && !(typeof t.input === 'object' && !Object.keys(t.input).length);
+      const hasOut = t.output !== undefined && t.output !== null && t.output !== '';
+      const body = `<div class="json-wrap">` +
+        (hasIn ? `<div class="json-label">Input</div><pre class="json">${esc(prettyJson(t.input))}</pre>` : '') +
+        (hasOut ? `<div class="json-label">Output</div><pre class="json">${esc(prettyJson(t.output))}</pre>` : '') +
+        (!hasIn && !hasOut ? '<div class="json-label">No input or output recorded.</div>' : '') + '</div>';
+      html += `<article class="step ${blocked ? 'blocked' : ''} ${d.newTrace.has(k) ? 'fresh' : ''}">` +
+        `<p class="step-reason">${esc(plain(t.reason) || 'No reason recorded')}</p>` +
+        `<div class="step-meta"><span>${esc(humanize(t.tool))}</span>${gate}${coll(`step:${k}`, 'Details', body, 'disc')}</div>` +
+        `</article>`;
+    });
+    $('pane-reasoning').innerHTML = html;
   }
-
+  function renderLedger(b) {
+    const evs = arr(b.events).slice().sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
+    const v = verifyText();
+    let html = `<div class="ledger-top"><button type="button" class="btn secondary sm" data-act="verify">Check integrity</button>` +
+      `<span data-verify-slot class="verify-text ${v ? v.cls : ''}">${v ? esc(v.text) : ''}</span></div>`;
+    if (!evs.length) html += '<p class="empty">No events yet.</p>';
+    html += evs.map((e) => {
+      const day = dayOf(e.sim_time, b);
+      const who = e.actor && e.actor.type ? `${sentence(e.actor.type)}${e.actor.id ? ` (${e.actor.id})` : ''}` : '';
+      let sum;
+      if (e.type === 'AGENT_STEP') {
+        const [tool, gate = '-'] = String(e.summary || '').split(/\s*(?:→|->)\s*/);
+        sum = `Agent step: ${humanize(tool)}` +
+          (gate === 'ALLOW' ? ', allowed' : gate.startsWith('DENY') ? `, blocked by ${gate.replace(/^DENY:?\s*/, '')}` : '');
+      } else {
+        sum = tidy(plain(e.summary)).replace(/(EX-\d+): ([a-z_]+)$/, (m, id, a) => `${id}: ${humanize(a)}`);
+      }
+      return `<div class="led" title="${esc(who)}"><div class="led-sum">${esc(sum)}</div>` +
+        `<div class="led-day">${day === null ? '' : `Day ${day}`}</div>` +
+        `<div class="led-hash" title="Event #${esc(e.seq)}: hash, then the previous event's hash"><b>${esc(shortHash(e.hash))}</b> ← ${esc(shortHash(e.prev_hash))}</div></div>`;
+    }).join('');
+    $('pane-ledger').innerHTML = html;
+  }
   function renderTabs() {
     const b = S.bundle || {};
-    const nOpen = arr(b.exceptions).filter((x) => x.status === 'OPEN').length;
-    const nSteps = arr(b.trace).length;
-    $('tab-triage').textContent = `Triage (${nOpen} open)`;
-    $('tab-trace').textContent = `Agent trace (${nSteps})`;
-    ['triage', 'trace'].forEach((name) => {
+    $('tab-reasoning').innerHTML = `Agent reasoning<span class="n">${arr(b.trace).length}</span>`;
+    $('tab-ledger').innerHTML = `Ledger<span class="n">${arr(b.events).length}</span>`;
+    ['reasoning', 'ledger'].forEach((name) => {
       const on = S.tab === name;
-      $(`tab-${name}`).classList.toggle('active', on);
       $(`tab-${name}`).setAttribute('aria-selected', String(on));
+      $(`tab-${name}`).tabIndex = on ? 0 : -1;
       $(`pane-${name}`).hidden = !on;
     });
   }
@@ -471,7 +741,7 @@
   function bootLoading() {
     const el = $('boot');
     el.classList.remove('gone', 'error');
-    $('boot-msg').textContent = 'Loading case…';
+    $('boot-msg').textContent = 'Loading case';
     $('boot-actions').hidden = true;
   }
 
@@ -481,7 +751,7 @@
     if (MOCK) { toast(`Mock mode: "${label}" does nothing here`, 'info'); return; }
     S.busy = true;
     document.body.classList.add('is-busy');
-    if (btn) btn.classList.add('loading');
+    if (btn) { btn.classList.add('loading'); btn.setAttribute('aria-busy', 'true'); }
     try {
       await fn();
     } catch (err) {
@@ -490,10 +760,10 @@
     } finally {
       S.busy = false;
       document.body.classList.remove('is-busy');
-      if (btn) btn.classList.remove('loading');
+      // btn may have been replaced by a re-render; clear the state on whatever is still in the DOM
+      document.querySelectorAll('.loading').forEach((n) => { n.classList.remove('loading'); n.removeAttribute('aria-busy'); });
     }
   }
-
   const post = async (path, body) => applyBundle(await api('POST', path, body));
 
   function disarmReset() {
@@ -505,7 +775,6 @@
   }
 
   function onClick(e) {
-    // collapsibles
     const tg = e.target.closest('[data-toggle]');
     if (tg) {
       const host = tg.closest('[data-key]');
@@ -518,7 +787,6 @@
       }
       return;
     }
-    // tabs
     const tab = e.target.closest('[data-tab]');
     if (tab) { S.tab = tab.dataset.tab; renderTabs(); return; }
 
@@ -526,19 +794,35 @@
     if (!btn || btn.disabled) return;
     const act = btn.dataset.act;
     const id = (S.bundle && S.bundle.case && S.bundle.case.id) || CASE_ID;
-
     if (act !== 'reset' && S.resetArmed) disarmReset();
 
-    if (act === 'advance') {
+    if (act === 'select') {
+      S.sel = btn.dataset.id;
+      const b = S.bundle;
+      renderChecklist(b);
+      const exc = openExc(b).find((x) => x.requirement_id === S.sel);
+      if (exc) {
+        const card = $(`exc-${exc.id}`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          card.classList.remove('focus'); void card.offsetWidth; card.classList.add('focus');
+        }
+      } else if (!openExc(b).length) {
+        renderCenter(b);
+        $('center').scrollTop = 0;
+      }
+    } else if (act === 'advance') {
       const days = Number(btn.dataset.days);
-      run(btn, `+${days} day${days > 1 ? 's' : ''}`, () => post(`/api/cases/${id}/advance`, { days }));
+      run(btn, days === 7 ? 'Skip a week' : `Skip ${plural(days, 'day')}`, () => post(`/api/cases/${id}/advance`, { days }));
     } else if (act === 'inbound') {
-      run(btn, 'Deliver item', () => post(`/api/cases/${id}/inbound`, { item_id: btn.dataset.id }));
+      run(btn, 'Send', () => post(`/api/cases/${id}/inbound`, { item_id: btn.dataset.id }));
     } else if (act === 'resolve') {
-      run(btn, 'Resolve exception', () =>
-        post(`/api/cases/${id}/exceptions/${encodeURIComponent(btn.dataset.exc)}/resolve`, { action_id: btn.dataset.action, note: '' }));
+      run(btn, 'Decision', async () => {
+        await post(`/api/cases/${id}/exceptions/${encodeURIComponent(btn.dataset.exc)}/resolve`, { action_id: btn.dataset.action, note: '' });
+        if (btn.dataset.req && !openExc(S.bundle).length) { S.sel = btn.dataset.req; renderChecklist(S.bundle); renderCenter(S.bundle); }
+      });
     } else if (act === 'verify') {
-      run(btn, 'Verify ledger', async () => {
+      run(btn, 'Ledger check', async () => {
         S.verify = await api('GET', `/api/cases/${id}/verify`);
         renderVerify();
       });
@@ -547,15 +831,17 @@
       if (!S.resetArmed) {
         S.resetArmed = true;
         btn.classList.add('armed');
-        btn.textContent = 'Click again to confirm';
-        S.resetTimer = setTimeout(disarmReset, 3500);
+        btn.textContent = 'Click again to reset';
+        S.resetTimer = setTimeout(disarmReset, 5000);
         return;
       }
       disarmReset();
       run(btn, 'Reset demo', async () => {
-        S.tab = 'triage';
+        S.tab = 'reasoning';
+        S.sel = null;
+        S.open.clear();
         await post('/api/demo/reset', {});
-        toast('Demo reset to Day 0', 'success');
+        toast('Demo reset to day 0', 'success');
       });
     }
   }
@@ -584,6 +870,11 @@
     }
   }
 
+  let resizeT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { if (S.bundle) safe('rail', () => renderRail(S.bundle, { newlyFired: new Set(), reset: false })); }, 120);
+  });
   document.addEventListener('click', onClick);
   $('boot-retry').addEventListener('click', load);
   load();

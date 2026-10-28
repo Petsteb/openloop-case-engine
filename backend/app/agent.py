@@ -7,7 +7,7 @@ import json
 import os
 
 from . import template as T
-from .engine import TOOLS, Case, allowed_actions
+from .engine import TOOLS, Case, _key_label, allowed_actions
 
 FOLLOW_UP_ORDER = ["start_legal_clock", "escalate_to_analyst", "request_document", "mark_ready_for_decision"]
 
@@ -20,7 +20,7 @@ def _reason_for(action: dict, st: dict) -> str:
         r = st["reqs"][p["req_id"]]
         return f"{p['req_id']} is {r['status']} — a human must decide; build a triage card with only the conflicting evidence"
     if tool == "request_document":
-        return f"{p['key'].replace('_', ' ')} missing or expired — request it from the client (reminder in {T.REMINDER_AFTER_DAYS} days)"
+        return f"{_key_label(p['key'])} missing or expired — request it from the client (reminder in {T.REMINDER_AFTER_DAYS} days)"
     return "All requirements satisfied and no open exceptions — hand the file to a human for the credit decision"
 
 
@@ -64,7 +64,7 @@ class ScriptedAgent:
         if t["kind"] == "reminder":
             if case.state()["requests"].get(t["key"], {}).get("status") == "PENDING":
                 case.run_tool("send_reminder", {"key": t["key"]},
-                              f"{t['key'].replace('_', ' ')} still missing after {T.REMINDER_AFTER_DAYS} days — remind the client")
+                              f"{_key_label(t['key'])} still missing after {T.REMINDER_AFTER_DAYS} days — remind the client")
         elif t["kind"] == "doc_expiry":
             case.run_tool("check_requirement", {"req_id": t["req_id"]}, "A certificate's validity window just ended — re-check")
         elif t["kind"] == "legal_deadline":

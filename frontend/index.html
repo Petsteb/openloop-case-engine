@@ -3,104 +3,96 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenLoop · AI case agent</title>
+  <title>OpenLoop case agent</title>
   <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <header class="topbar">
-    <div class="tb-left">
-      <div class="brand-row">
-        <span class="logo" aria-hidden="true"></span>
-        <span class="brand">OpenLoop</span>
-        <span id="case-status" class="status-chip"></span>
-        <span id="mock-flag" class="badge mock" hidden>MOCK DATA</span>
-      </div>
-      <div id="case-title" class="case-title">Loading case…</div>
-      <div id="badges" class="badges"></div>
+  <header class="top">
+    <div class="brand">
+      <span class="wordmark">OpenLoop</span>
+      <span class="brand-sub">Case agent</span>
     </div>
-
-    <div class="tb-center">
-      <div id="clock" class="clock" aria-live="polite" aria-label="Simulated clock">
-        <span id="clock-day" class="clock-day">Day –</span>
-        <span class="clock-sep">·</span>
-        <span id="clock-date" class="clock-date">–</span>
-      </div>
+    <div class="case-head">
+      <h1 id="case-name" class="case-name">Loading case</h1>
+      <p id="case-sub" class="case-sub"></p>
+      <p id="case-line" class="case-line" aria-live="polite"></p>
     </div>
-
-    <div class="tb-right">
-      <div class="ctl-row">
-        <span class="ctl-label">Time skip</span>
-        <button type="button" class="btn primary act" data-act="advance" data-days="1">+1 day</button>
-        <button type="button" class="btn primary act" data-act="advance" data-days="3">+3 days</button>
-        <button type="button" class="btn primary act" data-act="advance" data-days="7">+7 days</button>
+    <div class="top-tools">
+      <div class="modes">
+        <span id="mock-flag" class="mock-flag" hidden>Mock data</span>
+        <span id="mode-agent" class="mode"></span>
+        <span id="mode-judge" class="mode"></span>
       </div>
-      <div class="ctl-row">
-        <button type="button" class="btn act" data-act="verify">Verify ledger</button>
-        <span id="verify-result" class="verify" role="status"></span>
-        <button type="button" class="btn ghost act" data-act="reset" id="btn-reset">Reset demo</button>
+      <div class="top-buttons">
+        <span id="top-verify" class="verify-text" role="status"></span>
+        <button type="button" class="btn secondary" data-act="verify" data-from="top">Check ledger</button>
+        <button type="button" class="btn quiet" data-act="reset" id="btn-reset">Reset demo</button>
       </div>
     </div>
   </header>
 
+  <section class="rail" aria-label="Case timeline">
+    <div class="rail-track">
+      <div id="rail-scale" class="rail-scale">
+        <div id="rail-past" class="rail-past"></div>
+        <div id="rail-layer" class="rail-layer"></div>
+        <div id="rail-today" class="rail-today">
+          <span class="today-line"></span>
+          <span id="today-pill" class="today-pill">Today</span>
+        </div>
+      </div>
+    </div>
+    <div class="rail-skip" aria-label="Move the simulated clock">
+      <button type="button" id="send-next" class="btn primary sm" data-act="inbound" data-id="" hidden>Next client event</button>
+      <button type="button" class="btn secondary sm" data-act="advance" data-days="1">Skip 1 day</button>
+      <button type="button" class="btn secondary sm" data-act="advance" data-days="3">Skip 3 days</button>
+      <button type="button" class="btn secondary sm" data-act="advance" data-days="7">Skip a week</button>
+    </div>
+  </section>
+
   <main class="layout">
-
-    <!-- LEFT -->
-    <aside class="col col-left" aria-label="Inbound and ledger">
-      <section class="panel">
-        <h2>Inbound <span class="h2-sub">scripted client items</span></h2>
+    <aside class="col col-left" aria-label="Checklist">
+      <section class="block">
+        <h2 class="block-title">Checklist</h2>
+        <div id="checklist" class="checklist"></div>
+      </section>
+      <section class="block">
+        <h2 class="block-title">Agent activity</h2>
+        <p id="summary" class="summary"></p>
+      </section>
+      <section class="block">
+        <h2 class="block-title">Simulate the client</h2>
         <div id="inbound" class="inbound"></div>
-      </section>
-      <section class="panel grow">
-        <h2>Ledger <span id="ledger-count" class="count"></span></h2>
-        <div id="ledger" class="ledger scroll"></div>
+        <p class="caption">Demo controls. In production these arrive by email and upload.</p>
       </section>
     </aside>
 
-    <!-- CENTER -->
-    <section class="col col-center" aria-label="Case state">
-      <section class="panel">
-        <h2>Requirements <span id="req-legend" class="legend"></span></h2>
-        <div id="requirements" class="req-grid"></div>
-      </section>
+    <section id="center" class="col col-center" aria-label="Focus"></section>
 
-      <div class="two-up">
-        <section class="panel">
-          <h2>Timers</h2>
-          <ul id="timers" class="list"></ul>
-        </section>
-        <section class="panel">
-          <h2>Documents</h2>
-          <ul id="documents" class="list"></ul>
-        </section>
-      </div>
-
-      <section class="panel metrics-panel">
-        <h2>Agent metrics</h2>
-        <div id="metrics" class="metrics"></div>
-      </section>
-    </section>
-
-    <!-- RIGHT -->
-    <aside class="col col-right" aria-label="Triage and agent trace">
+    <aside class="col col-right" aria-label="Activity">
       <div class="tabs" role="tablist">
-        <button type="button" role="tab" id="tab-triage" class="tab active" data-tab="triage" aria-selected="true">Triage</button>
-        <button type="button" role="tab" id="tab-trace" class="tab" data-tab="trace" aria-selected="false">Agent trace</button>
+        <button type="button" role="tab" id="tab-reasoning" class="tab" data-tab="reasoning">Agent reasoning</button>
+        <button type="button" role="tab" id="tab-ledger" class="tab" data-tab="ledger">Ledger</button>
       </div>
-      <div id="pane-triage" class="tabpane" role="tabpanel"></div>
-      <div id="pane-trace" class="tabpane" role="tabpanel" hidden></div>
+      <div id="pane-reasoning" class="pane" role="tabpanel" aria-labelledby="tab-reasoning"></div>
+      <div id="pane-ledger" class="pane" role="tabpanel" aria-labelledby="tab-ledger" hidden></div>
     </aside>
-
   </main>
+
+  <div id="tip" class="tip" role="tooltip" hidden></div>
 
   <div id="boot" class="boot">
     <div class="boot-card">
-      <div id="boot-spin" class="spinner" aria-hidden="true"></div>
-      <div id="boot-msg">Loading case…</div>
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="boot-msg">Loading case</p>
       <div id="boot-actions" class="boot-actions" hidden>
-        <button type="button" class="btn primary" id="boot-retry">Retry</button>
-        <a class="btn" href="?mock=1">Open with mock data</a>
+        <button type="button" class="btn primary" id="boot-retry">Try again</button>
+        <a class="btn secondary" href="?mock=1">Open with mock data</a>
       </div>
     </div>
   </div>
