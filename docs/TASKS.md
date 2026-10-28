@@ -39,6 +39,13 @@ Each task is independent. Take them in order and stop at freeze.
    - **Prompts:** tighten `agent.SYSTEM` and `chat.SYSTEM` wording based on the benchmark.
    - **Speed:** warm the Featherless cache by running the demo once before recording, so the cache file gets committed.
 5. **Rehearsal support (08:00–10:00):** run the offline-mode recording as the backup video, and keep a clean browser profile at 1440×900.
+6. **E2E for the multi-case features**, once the home screens land:
+   - Open a new case from the bank home.
+   - Upload its sample files on the portal until it reads "Ready".
+   - Post a client message with `#doc-1` and `@Name`.
+   - Check that the bell counts go up and clear.
+   - Use `POST /api/demo/reset?all=true` before each run. The portal stores read state in localStorage under `openloop-seen:<role>:<caseId>`.
+7. **Last, only if everything else is done:** an admin editor for case templates (Petru parked it on purpose). Templates live in `backend/app/template.py` (`TEMPLATES`, `REQUIREMENTS`, `RULES`).
 
 ## Petru + Claude (two sessions)
 - [x] Backend tasks 1–4, 9, 12 + docs (`docs/design.md` → "API additions (v2)")
