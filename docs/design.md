@@ -93,6 +93,7 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
     ```
   - **Read-only:** the chat appends one `CHAT_TURN` event to the ledger and changes nothing else.
   - **Client role:** never receives internal review details.
+- **`GET /api/cases/{case_id}/client-view`:** returns `{"overview", "missing_documents", "issues", "timeline", "emails"}`. Everything the applicant may see, from the same allow-list as the client chat. Use it for an optional customer page.
 - **`case.status`:** may also be `ON_HOLD` (show as "On hold", brick red). It is set when an insider-pattern card is escalated to compliance.
 - **`exceptions[]` with `kind: "sequence_insider"`** (rule `SR-01`):
   - `requirement_id` is `"MON"`, meaning monitoring, not one of R1–R6.
