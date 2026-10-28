@@ -6,15 +6,15 @@ and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate v
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import extract, extractors, learner, registry, rules, sequence
+from . import extract, extractors, learner, profiles, registry, rules, sequence
 from . import template as T
 from .judge import judge
 from .ledger import Ledger
-from .scenario import CASE_START, SCENARIO, materialise
+from .scenario import CASE_START, materialise
 
 ENGINE = {"type": "system", "id": "engine"}
 AGENT = {"type": "agent", "id": "case-agent"}
-CLIENT = {"type": "client", "id": "brutaria-aurora"}
+CLIENT = {"type": "client", "id": "brutaria-aurora"}  # the demo bakery; other cases use Case.client
 ANALYST = {"type": "analyst", "id": "analyst-1"}
 
 ACTION_TOOLS = {"request_document", "send_reminder", "escalate_to_analyst", "start_legal_clock",
@@ -31,16 +31,25 @@ def _key_label(key: str) -> str:
 
 
 # ----------------------------------------------------------------------------- reducer
+def _initial_reqs(template_id: str) -> dict:
+    active = T.TEMPLATES[template_id]["requirements"]
+    return {r["id"]: {"id": r["id"], "title": r["title"], "status": "OPEN_WAITING",
+                      "reason": "Waiting for: " + ", ".join(T.DOC_LABELS[d] for d in r["needs"]),
+                      "rule_ids": r["rule_ids"], "evidence": [], "details": {}, "updated_at": None, "seq": 0}
+            for r in T.REQUIREMENTS if r["id"] in active}
+
+
 def reduce(events: list[dict]) -> dict:
     st = {"now": CASE_START, "status": "OPEN", "docs": {}, "extractions": {}, "registry": None,
-          "reqs": {r["id"]: {"id": r["id"], "title": r["title"], "status": "OPEN_WAITING",
-                             "reason": "Waiting for: " + ", ".join(T.DOC_LABELS[d] for d in r["needs"]),
-                             "rule_ids": r["rule_ids"], "evidence": [], "details": {}, "updated_at": None, "seq": 0}
-                   for r in T.REQUIREMENTS},
+          "template": "sme_loan", "profile": profiles.snapshot("aurora"), "reqs": _initial_reqs("sme_loan"),
           "exceptions": {}, "timers": {}, "requests": {}, "precedents": [], "trace": [], "delivered": set()}
     for e in events:
         p, st["now"] = e["payload"], max(st["now"], _dt(e["sim_time"]))
         match e["type"]:
+            case "CASE_OPENED":
+                st["template"] = "sme_loan" if p.get("template", "sme_loan") == "kyb_sme_v1" else p["template"]
+                st["profile"] = p.get("profile") or st["profile"]
+                st["reqs"] = _initial_reqs(st["template"])
             case "DOCUMENT_RECEIVED":
                 doc = {**p, "received_at": e["sim_time"], "seq": e["seq"]}
                 st["docs"][p["id"]] = doc
@@ -97,10 +106,10 @@ def _issued_from_text(text: str) -> datetime | None:
     return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
 
 
-def _quarantine_reason(doc_type: str, person: str, text: str) -> str | None:
+def _quarantine_reason(doc_type: str, person: str, text: str, cui: str = T.CASE_CUI) -> str | None:
     """Another company's document, or an ID card for another person, is never used as evidence."""
     m = CUI_RE.search(text or "")
-    if m and m.group(1) != T.CASE_CUI:
+    if m and m.group(1) != cui:
         return "it shows another company's tax ID"  # the other firm's number stays out of every summary
     if doc_type == "id_card" and person:
         last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
@@ -160,19 +169,22 @@ def doc_expired(st: dict, doc: dict) -> bool:
 
 # ----------------------------------------------------------------------------- gate
 def needed_doc_keys(st: dict) -> list[str]:
+    """Documents the file still needs, for this case's template (missing, expired, or asked for by a rule)."""
     keys = []
-    for t in ("application", "financial_statement", "onrc_certificate", "fiscal_certificate"):
+    for t in T.template_docs(st.get("template", "sme_loan")):
         d = latest_doc(st, t)
-        if d is None or doc_expired(st, d):
+        if (d is None and t != "ubo_declaration") or (d is not None and doc_expired(st, d)):
             keys.append(t)
-    r2 = st["reqs"]["R2"]
-    if r2["details"].get("kind") == "awaiting_corrected_declaration":
+    none = {"details": {}}
+    r2 = st["reqs"].get("R2", none)
+    if "R2" in st["reqs"] and (r2["details"].get("kind") == "awaiting_corrected_declaration"
+                               or latest_doc(st, "ubo_declaration") is None):
         keys.append("ubo_declaration")
     for name in r2["details"].get("owners_without_id", []):
         keys.append(f"id_card:{name.title()}")
-    if st["reqs"]["R3"]["details"].get("kind") == "address_differs":
+    if st["reqs"].get("R3", none)["details"].get("kind") == "address_differs":
         keys.append("address_proof")
-    if st["reqs"]["R5"]["details"].get("kind") == "signatory_differs":
+    if st["reqs"].get("R5", none)["details"].get("kind") == "signatory_differs":
         keys.append("signatory_mandate")
     return keys
 
@@ -191,7 +203,7 @@ def allowed_actions(st: dict) -> list[dict]:
     for key in ([] if on_hold else needed_doc_keys(st)):
         if not _pending(st, key):
             acts.append({"tool": "request_document", "params": {"key": key}})
-    r2 = st["reqs"]["R2"]
+    r2 = st["reqs"].get("R2", {"status": None})
     # one legal clock per discrepancy: a FIRED deadline is never silently restarted
     if r2["status"] == "CONTRADICTED" and not any(t["kind"] == "legal_deadline" and t["status"] in ("PENDING", "FIRED")
                                                   for t in st["timers"].values()):
@@ -237,12 +249,28 @@ def gate(st: dict, tool: str, params: dict) -> tuple[bool, str]:
 
 # ----------------------------------------------------------------------------- case
 class Case:
-    def __init__(self, case_id: str, persist_dir=None):
+    def __init__(self, case_id: str, store=None, *, template: str = "sme_loan", profile_id: str = "aurora",
+                 events: list[dict] | None = None):
+        """A new case (opens its ledger), or with `events` a stored case reloaded as-is."""
         self.id = case_id
-        self.ledger = Ledger(case_id, persist_dir)
-        self.now = CASE_START
-        self.emit("CASE_OPENED", ENGINE, {"title": T.CASE_TITLE, "goal": T.CASE_GOAL, "template": "kyb_sme_v1"},
-                  "Case opened from template kyb_sme_v1")
+        self.ledger = Ledger(case_id, store, events)
+        if events:
+            st = self.state()
+            self.now, self.template, self.profile = st["now"], st["template"], st["profile"]
+            return
+        self.now, self.template, self.profile = CASE_START, template, profiles.snapshot(profile_id)
+        t = T.TEMPLATES[template]
+        title = f"{t['title']} — {self.profile['name']}"
+        self.emit("CASE_OPENED", ENGINE, {"title": title, "goal": t["goal"], "template": template, "profile": self.profile},
+                  f"Case opened from template {template} for {self.profile['name']}")
+
+    @property
+    def client(self) -> dict:
+        return {"type": "client", "id": self.profile.get("actor_id", self.profile["id"])}
+
+    @property
+    def scenario(self) -> list[dict]:
+        return profiles.scenario_for(self.profile["id"], self.template)
 
     # --- low level
     def emit(self, type_: str, actor: dict, payload: dict, summary: str) -> dict:
@@ -256,7 +284,7 @@ class Case:
 
     # --- inbound world events
     def deliver(self, item_id: str) -> list[dict]:
-        item = next(i for i in SCENARIO if i["id"] == item_id)
+        item = next(i for i in self.scenario if i["id"] == item_id)
         self.emit("SCENARIO_DELIVERED", ENGINE, {"item_id": item_id}, f"Inbound: {item['label']}")
         received = []
         for spec in item.get("events", []):  # internal bank events (staff actions), checked by sequence rules
@@ -266,7 +294,7 @@ class Case:
             doc_id = self._next_id("doc", "docs")
             payload = {"id": doc_id, **doc}
             noun = "Email" if doc["type"] == "email" else "Document"
-            received.append(self.emit("DOCUMENT_RECEIVED", CLIENT, payload, f"{noun} received: {doc['name']}"))
+            received.append(self.emit("DOCUMENT_RECEIVED", self.client, payload, f"{noun} received: {doc['name']}"))
             self._cancel_reminders(payload)
         return received
 
@@ -284,16 +312,16 @@ class Case:
         payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
                    "issued_at": (_issued_from_text(text) or self.now).isoformat(), "source": "upload",
                    "filename": filename, **({"person": person} if person else {})}
-        reason = _quarantine_reason(doc_type, person, text)
+        reason = _quarantine_reason(doc_type, person, text, self.profile["cui"])
         if reason:
             payload.update(quarantined=True, quarantine_reason=reason)
-            if (m := CUI_RE.search(text or "")) and m.group(1) != T.CASE_CUI:
+            if (m := CUI_RE.search(text or "")) and m.group(1) != self.profile["cui"]:
                 payload["quarantine_cui"] = m.group(1)  # for the bank's viewer only
         elif pdf:
             payload.update(unreadable=True, **pdf)
         summary = (f"Upload not accepted: {name} ({reason})" if reason else
                    f"PDF uploaded, waiting for manual reading: {name}" if pdf else f"Document uploaded by client: {name}")
-        ev = self.emit("DOCUMENT_RECEIVED", CLIENT, payload, summary)
+        ev = self.emit("DOCUMENT_RECEIVED", self.client, payload, summary)
         if not (reason or pdf):
             self._cancel_reminders(payload)
         return ev
@@ -304,19 +332,19 @@ class Case:
         if item is None:
             raise ValueError("nothing to confirm")
         if kind == "credit_check_consent":
-            return self.emit("CLIENT_CONSENT", CLIENT, {"scope": "credit_bureau", "granted": answer == "yes",
+            return self.emit("CLIENT_CONSENT", self.client, {"scope": "credit_bureau", "granted": answer == "yes",
                                                        "channel": "portal"},
                              f"Client {'gave' if answer == 'yes' else 'refused'} consent for the credit bureau check")
         change = next(e for e in self.ledger.events if e["seq"] == item["ref_seq"])
         payload = {"client_id": change["payload"]["client_id"], "channel": "portal", "ref_seq": change["seq"]}
         if answer == "yes":
-            ev = self.emit("CLIENT_CONFIRMATION", CLIENT, payload, "Client confirmed the contact change in the portal")
+            ev = self.emit("CLIENT_CONFIRMATION", self.client, payload, "Client confirmed the contact change in the portal")
             for x in self.state()["exceptions"].values():
                 if x["kind"] == "sequence_insider" and x["status"] == "OPEN" and x.get("first_seq") == change["seq"]:
                     self.emit("EXCEPTION_ANNOTATED", ENGINE, {"id": x["id"], "note": f"Client confirmed this change in "
                               f"the portal (#{ev['seq']}), after the credit action"}, f"Note added to {x['id']}")
             return ev
-        ev = self.emit("CLIENT_DISPUTE", CLIENT, payload, "Client says they did not request the contact change")
+        ev = self.emit("CLIENT_DISPUTE", self.client, payload, "Client says they did not request the contact change")
         ex_id = self._next_id("EX", "exceptions")
         staff, field = change["actor"].get("id"), change["payload"].get("field", "contact details")
         self.emit("EXCEPTION_RAISED", ENGINE, {
@@ -736,8 +764,17 @@ def t_annotate_exception(case: Case, exception_id: str, note: str) -> dict:
 
 
 def t_classify_email(case: Case, doc_id: str) -> dict:
-    text = rules.norm_text(case.state()["docs"][doc_id]["text"])
-    if any(w in text for w in ("asociat", "actionariat", "beneficiar real")):
+    return classify_text(case.state()["docs"][doc_id]["text"])
+
+
+def t_classify_message(case: Case, seq: int) -> dict:
+    e = next(e for e in case.ledger.events if e["seq"] == int(seq) and e["type"] == "MESSAGE_POSTED")
+    return classify_text(e["payload"]["text"])
+
+
+def classify_text(raw: str) -> dict:
+    text = rules.norm_text(raw)
+    if any(w in text for w in ("asociat", "actionariat", "beneficiar real", "shareholder", "new owner", "co owner")):
         return {"intent": "ownership_change", "affects": "R2"}
     if any(w in text for w in ("adresa", "sediu")):
         return {"intent": "address_change", "affects": "R3"}
@@ -751,7 +788,7 @@ def t_approve_credit(case: Case) -> dict:  # never reachable: the gate always de
 TOOLS = {
     "get_case_state": t_get_case_state, "get_allowed_actions": t_get_allowed_actions, "get_document": t_get_document,
     "extract_fields": t_extract_fields, "lookup_registry": t_lookup_registry, "check_requirement": t_check_requirement,
-    "classify_email": t_classify_email, "annotate_exception": t_annotate_exception,
+    "classify_email": t_classify_email, "classify_message": t_classify_message, "annotate_exception": t_annotate_exception,
     "request_document": t_request_document, "send_reminder": t_send_reminder, "start_legal_clock": t_start_legal_clock,
     "escalate_to_analyst": t_escalate_to_analyst, "mark_ready_for_decision": t_mark_ready_for_decision,
     "approve_credit": t_approve_credit,

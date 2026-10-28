@@ -1,14 +1,12 @@
 """Mock trade-register (ONRC) API — stands in for the real external service."""
+from .profiles import registry_entries
 
 
 class RegistryUnavailable(Exception):
     pass
 
 
-_COMPANIES = {
-    "45123879": {"cui": "45123879", "name": "BRUTĂRIA AURORA S.R.L.", "status": "ACTIVĂ",
-                 "postal_code": "400127", "administrator": "MUNTEANU ANDREI"},
-}
+_COMPANIES = registry_entries()
 
 state = {"down": False}
 

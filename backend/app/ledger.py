@@ -2,7 +2,6 @@
 import hashlib
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 GENESIS = "0" * 64
 
@@ -16,14 +15,12 @@ def _hash(body: dict) -> str:
 
 
 class Ledger:
-    def __init__(self, case_id: str, persist_dir: Path | None = None):
+    """In memory, optionally backed by a Store (SQLite). `events` reloads a stored ledger as-is."""
+
+    def __init__(self, case_id: str, store=None, events: list[dict] | None = None):
         self.case_id = case_id
-        self.events: list[dict] = []
-        self.path = None
-        if persist_dir:
-            persist_dir.mkdir(parents=True, exist_ok=True)
-            self.path = persist_dir / f"{case_id}.jsonl"
-            self.path.write_text("", encoding="utf-8")
+        self.store = store
+        self.events: list[dict] = list(events or [])
 
     def append(self, type_: str, sim_time: datetime, actor: dict, payload: dict, summary: str) -> dict:
         body = {
@@ -38,10 +35,9 @@ class Ledger:
             "prev_hash": self.events[-1]["hash"] if self.events else GENESIS,
         }
         event = {**body, "hash": _hash(body)}
+        if self.store is not None:
+            self.store.append(self.case_id, event, _canonical(event))
         self.events.append(event)
-        if self.path:
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(_canonical(event) + "\n")
         return event
 
     def verify(self) -> dict:

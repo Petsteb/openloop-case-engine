@@ -66,6 +66,11 @@ class ScriptedAgent(BaseAgent):
             self._email(case, p) if p["type"] == "email" else self._document(case, p)
         elif trigger["type"] == "TIMER_FIRED":
             self._timer(case, p)
+        elif trigger["type"] == "MESSAGE_POSTED" and p.get("role") == "client":
+            intent = case.run_tool("classify_message", {"seq": trigger["seq"]},
+                                   "Client wrote in the case thread — what is it about?", PIPELINE)["output"]
+            if intent.get("intent") == "ownership_change":
+                self._ownership_change(case, "Client message")
         elif trigger["type"] == "EXCEPTION_RESOLVED" and p["requirement_id"] in case.state()["reqs"]:
             case.run_tool("check_requirement", {"req_id": p["requirement_id"]},
                           f"Analyst resolved {p['id']} ({p['action_id']}) — re-evaluate {p['requirement_id']}", PIPELINE)
@@ -80,20 +85,24 @@ class ScriptedAgent(BaseAgent):
         if doc["type"] == "onrc_certificate":
             case.run_tool("lookup_registry", {"cui": out.get("cui", "")}, "Cross-check company status with the trade register API",
                           PIPELINE)
-        for rid in T.requirements_needing(doc["type"]):
+        for rid in T.requirements_needing(doc["type"], case.state()["reqs"]):
             case.run_tool("check_requirement", {"req_id": rid}, f"{label} is evidence for {rid} — re-evaluate its rules", PIPELINE)
 
     def _email(self, case: Case, doc: dict) -> None:
         intent = case.run_tool("classify_email", {"doc_id": doc["id"]}, "Client email arrived — what is it about?",
                                PIPELINE)["output"]
-        if intent.get("intent") != "ownership_change":
+        if intent.get("intent") == "ownership_change":
+            self._ownership_change(case, "Client email")
+
+    def _ownership_change(self, case: Case, source: str) -> None:
+        if "R2" not in case.state()["reqs"]:
             return
         st = case.state()
         open_ex = [x for x in st["exceptions"].values() if x["requirement_id"] == "R2" and x["status"] == "OPEN"]
         if open_ex:
             case.run_tool("annotate_exception", {"exception_id": open_ex[0]["id"],
-                                                 "note": "Client email confirms a new shareholder — consistent with the register"},
-                          "Email explains the open beneficial-owner discrepancy — attach it for the analyst", PIPELINE)
+                                                 "note": f"{source} confirms a new shareholder — consistent with the register"},
+                          f"{source} explains the open beneficial-owner discrepancy — attach it for the analyst", PIPELINE)
         case.run_tool("request_document", {"key": "ubo_declaration", "note": "Client announced an ownership change"},
                       "Client reports an ownership change — ask for the corrected UBO declaration", PIPELINE)
 

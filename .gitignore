@@ -9,3 +9,6 @@ node_modules/
 data/ledger/*.jsonl
 .DS_Store
 .playwright-mcp/
+data/*.db
+data/*.db-journal
+data/*.db-wal
