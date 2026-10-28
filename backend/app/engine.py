@@ -454,6 +454,11 @@ def _ev(doc: dict, ext: dict, name: str) -> list[dict]:
     return [{"doc_id": doc["id"], "label": doc["name"], "field": name, "quote": f["quote"]}] if f else []
 
 
+def _id_quote(d: dict) -> str:
+    m = re.search(r"^Nume\s*:.*$", d.get("text") or "", re.M)
+    return m.group(0) if m else d["name"]
+
+
 def _evaluate(st: dict, req_id: str) -> dict:
     """Pure evaluation of one requirement against the current documents + rules."""
     X = st["extractions"]
@@ -487,7 +492,9 @@ def _evaluate(st: dict, req_id: str) -> dict:
                 "details": {"doc_id": onrc["id"], "expires_at": rules.doc_expires_at(_dt(onrc['issued_at'])).isoformat()}}
 
     if req_id == "R2":
-        ids = [d["person"] for d in st["docs"].values() if d["type"] == "id_card"]
+        id_docs = [d for d in st["docs"].values()  # a quarantined or unread ID card identifies nobody
+                   if d["type"] == "id_card" and not d.get("quarantined") and not d.get("unreadable")]
+        ids = [d["person"] for d in id_docs]
         if not have(ubo):
             return wait(T.DOC_LABELS["ubo_declaration"])
         declared = X[ubo["id"]].get("declared_owners", [])
@@ -525,7 +532,8 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if missing_ids:
             return {**wait(*[f"ID — {n.title()}" for n in missing_ids]), "details": {"owners_without_id": missing_ids}}
         return {"status": "SATISFIED", "reason": f"{len(res['ubos'])} beneficial owners match the register and have IDs",
-                "evidence": [{"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}],
+                "evidence": [{"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
+                + [{"doc_id": d["id"], "label": d["name"], "quote": _id_quote(d)} for d in id_docs],  # HR-05 evidence
                 "details": {}}
 
     if req_id == "R3":

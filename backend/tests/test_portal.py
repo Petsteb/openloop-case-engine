@@ -63,6 +63,12 @@ def test_id_card_for_another_person_is_quarantined():
                                                  "content_b64": b64(text)}).json()
     assert any(d["status_word"] == "Not accepted" for d in v["documents"])
     assert "id_card:Elena Munteanu" in {m["key"] for m in v["missing_documents"]}
+    case = CASES["demo-1"]
+    case.run_tool("check_requirement", {"req_id": "R2"}, "re-check after the upload")
+    assert "Elena" in case.state()["reqs"]["R2"]["reason"]                              # still missing her ID
+    bad = next(d for d in v["documents"] if d["status_word"] == "Not accepted")
+    client = c.get(f"/api/cases/demo-1/documents/{bad['id']}").json()
+    assert any("another person" in h["what"] for h in client["history"])
 
 
 def test_pdf_upload_waits_for_manual_reading():
