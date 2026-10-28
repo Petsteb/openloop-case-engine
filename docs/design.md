@@ -133,6 +133,38 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
   - **Hide from the timeline rail; show in the Ledger tab only:** `CHAT_TURN`, `EMAIL_SENT`, `EMAIL_FAILED`.
   - **Bank-internal; show in the Ledger tab:** `STAFF_CONTACT_CHANGE`, `CREDIT_ACTION`, `CLIENT_CONFIRMATION`.
 
+### API additions (v3: many cases, messages, notifications)
+- **Storage:** every ledger lives in one SQLite table (`data/openloop.db`, git-ignored; `OPENLOOP_DB` overrides it, tests use `:memory:`). Cases survive a restart. In production the same table lives in PostgreSQL on the bank's own servers.
+- **Synthetic companies** (`backend/app/profiles.py`, all fictional): each has a full document set and one `story`, the rule path it exercises.
+  - `aurora` (demo-1): the scripted demo.
+  - `verde`: clean file.
+  - `carpatic`: tax debt.
+  - `delta`: suspended company.
+  - `nord`: DSCR 1.06.
+  - `medica`: signatory is not the administrator.
+  - `solaris`: certificate already 45 days old.
+  - `atelier`: annual review.
+- **Templates** (`template.TEMPLATES`): `sme_loan` (R1–R6) and `kyb_review` (R1, R2, R6). The requested documents follow the template.
+- **`GET /api/version`** → `{cases, events}`, a global change detector.
+- **`GET /api/templates`** → `[{id, title, description, requirements}]`.
+- **`GET /api/companies`** → `[{id, name, cui, city, county, product, story, templates}]`.
+- **`GET /api/cases?role=employee`** → the work queue, needs-you first.
+  - **Row:** `{id, title, template, template_title, company_id, company, product, status, state, status_text, needs_you, open_decisions, waiting_on_client, day, events, last_message_seq, last_action_seq, last_activity}`.
+  - **Client:** `?role=client&company_id=aurora` → that company's files, client wording, no `open_decisions`.
+- **`POST /api/cases`** `{template, company_id}` → the new case's bundle. The agent immediately requests the starting documents. Returns 422 if the company has no documents for that template.
+- **Bundle `case{}`** gains `template, template_title, company_id, company, product`. `scenario` (the demo dock) is per case.
+- **`GET /api/cases/{id}/sample-files`** and **`/{filename}`**: that company's synthetic files plus the wrong-company file. Keys are spelled like the case's pending requests.
+- **`GET /api/cases/{id}/messages?role=`** → the thread, oldest first.
+  - **Item:** `[{seq, day, sim_time, kind: "message"|"email", author: {role, name}, text, subject, body, refs: [{kind: "doc"|"event"|"person", id, label}]}]`.
+  - **Filtering:** refs are filtered per reader; a client never gets a link to an internal event.
+- **`POST /api/cases/{id}/messages`** `{role, text, author?, refs?}` → the thread.
+  - **Refs:** validated against what the author may see; `#doc-N`, `#N` and `@Name` typed in the text are recognised.
+  - **Client messages** go through the agent pipeline like emails (`classify_message`).
+- **`GET /api/cases/{id}/mentionables?role=`** → `{people, docs, events}`, role-filtered.
+- **`GET /api/notifications?role=employee`** (or `role=client&company_id=`) → newest first `[{case_id, company, kind: "action"|"message", text, seq, day}]`. Read state is kept by the UI.
+- **`POST /api/demo/reset?all=true`** wipes the database and reseeds every synthetic file; without `all` only demo-1 resets.
+- **New event type:** `MESSAGE_POSTED` (bank timeline: shown; client timeline: shown in the thread instead).
+
 ## Rulings made under time pressure (MVP, 80 min)
 - The controller (Claude) writes the backend inline; one subagent builds the frontend in parallel against this contract; one review at the end. Cost if wrong: less per-task review, so the bugs get caught later.
 - Commits go straight to `main` in a new repo; the user asked for one shared repo. Cost if wrong: switching to branches later is trivial.
