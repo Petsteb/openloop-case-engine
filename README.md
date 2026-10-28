@@ -58,7 +58,9 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **The ledger is the only truth.** State = `reduce(events)`, each event hashes the previous one, and `GET /api/cases/{id}/verify` checks the chain.
 - **Hard rules are code** (`backend/app/rules.py`) and each has a rule ID: HR-01 CUI checksum through HR-08 fiscal certificate.
 - **Gate** (`engine.gate`): only state-allowed actions run. The only approve tool is hard-wired to DENY (GATE-02), and duplicate requests are denied (GATE-03).
-- **No model overrides a hard rule.** The judge only settles fuzzy matches (name and address variants). It auto-accepts only above its threshold, and only after the hard facts (postal code, tax ID) already match; otherwise it escalates.
+- **No model overrides a hard rule.** The judge only settles fuzzy matches (name and address variants), and only after the hard facts (postal code, tax ID) already match.
+  - It auto-accepts only when the Featherless classifier (≥ 0.9) **and** an independent similarity check (≥ 0.8) agree; otherwise it escalates.
+  - **Measured on 150 labelled pairs** (`backend/eval/`): the classifier alone auto-approved 7 wrong matches, for example "Str. Gării" vs "Calea Gării" at p = 1.0. Requiring both gave **0 false approvals** on the tune and test splits, with the same coverage.
 - **Code enforces the obligations.** Document expiry, legal clocks, escalations and missing-document requests run in code whatever the model does. A ready file reopens when evidence goes stale.
 - **Every agent step is logged** with its reason, tool, input, output and gate verdict, including failed calls.
 - **Quotes are verified:** every extracted field carries a verbatim quote. A field whose quote isn't in the document text is dropped and can never serve as evidence.

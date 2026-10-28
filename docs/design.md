@@ -108,6 +108,10 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
 - **`scenario[].internal`:** `true` for bank-internal events (staff actions), as opposed to client uploads. Suggested label prefix: "Internal: …".
 - **`outbox[]`, newest first:** `{"seq", "sim_time", "status": "sent" | "failed", "to", "subject", "body", "mode": "outbox" | "gmail", "error"}`. These are client emails, in Romanian.
 - **`config.agent_status`:** `"ok"` or `"fallback (<Error>)"`.
+- **`exceptions[].judge.second_opinion`:** `{"method": "string similarity", "p_same": 0.48, "threshold": 0.8}`.
+  - Auto-accept needs the classifier (`probs`, ≥ `threshold`) **and** this second opinion to agree.
+  - Show it as a second bar labelled "Similarity check".
+  - Calibration on 150 labelled pairs: the classifier alone had 7 false approvals; with both required, 0. See `backend/eval/calibration.json` and `docs/pitch/calibration.png`.
 - **Learning loop:** analyst rulings become a check; promotion requires a second person.
   - **`GET /api/learning`** returns `{"proposals": [...], "checks": [...]}`.
     - A proposal is `{"id": "P-address-variant", "kind", "support": 3, "ruled_by": ["analyst-1", ...], "description", "examples": [{"a", "b", "source"}]}`.
