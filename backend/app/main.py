@@ -268,4 +268,8 @@ def toggle_registry(body: RegistryToggle):
 
 reset_demo()  # a fresh demo case exists from startup, so the first page load never 404s
 
-app.mount("/", StaticFiles(directory=ROOT / "frontend", html=True), name="frontend")
+# The React app (web/, built to web/dist) when it has been built; the original static UI otherwise.
+# Every /api route is registered above this catch-all mount.
+WEB_DIST = ROOT / "web" / "dist"
+STATIC = WEB_DIST if (WEB_DIST / "index.html").exists() else ROOT / "frontend"
+app.mount("/", StaticFiles(directory=STATIC, html=True), name="frontend")
