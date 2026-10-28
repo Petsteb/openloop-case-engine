@@ -65,6 +65,10 @@ export const cleanTitle = (s: unknown) => tidy(String(s ?? '')
   .replace(/\s*≥\s*/g, ' of at least ')
   .replace(/\s*≤\s*/g, ' of at most '))
 export const shortHash = (h: unknown) => (h ? `${String(h).slice(0, 4)}…` : '–')
+/** Register-style names in summaries ("POP RADU", "MUNTEANU ANDREI") read as names ("Pop Radu").
+ *  Only runs of two or more capitalised words change, so acronyms like UBO, AMLR, ONRC stay. Never use on document quotes. */
+export const softCaps = (s: string) => s.replace(/\b[A-ZĂÂÎȘȚŞŢ]{2,}(?:\s+[A-ZĂÂÎȘȚŞŢ]{2,})+\b/g,
+  (run) => run.split(/\s+/).map((w) => w[0] + w.slice(1).toLowerCase()).join(' '))
 
 export function splitTitle(b: Bundle): { name: string; sub: string } {
   const t = String(b.case?.title || '')
@@ -175,7 +179,7 @@ export function checklist(b: Bundle): CheckItem[] {
       const asked = arr(b.events).some((e) => e.type === 'DOCUMENT_REQUESTED' && (ms(e.sim_time) ?? 0) >= since)
       next = { type: 'waiting', text: asked ? 'A fresh document was requested' : 'A fresh document is needed', days }
     } else if (kind !== 'verified') next = { type: 'waiting', text: days ? `Waiting ${plural(days, 'day')}` : 'Waiting since today', days }
-    return { id: r.id, title: cleanTitle(r.title), kind, reason: tidy(plain(r.reason || STATUS[kind].word)), attention: isAttention(kind), next, req: r }
+    return { id: r.id, title: cleanTitle(r.title), kind, reason: softCaps(tidy(plain(r.reason || STATUS[kind].word))), attention: isAttention(kind), next, req: r }
   })
 }
 export const byAttention = (a: CheckItem, b: CheckItem) => STATUS[a.kind].rank - STATUS[b.kind].rank
@@ -219,6 +223,8 @@ export function displayTimes(b: Bundle): Map<number, number> {
 const actorType = (e: { actor?: { type?: unknown } }) => String(e.actor?.type ?? '').toLowerCase()
 const HUMAN_STAFF = new Set(['analyst', 'employee', 'staff', 'reviewer'])
 const SKIP_AGENT_LANE = new Set(['AGENT_STEP', 'SCENARIO_DELIVERED', 'CLOCK_ADVANCED', 'TIMER_SET', 'TIMER_FIRED', 'TIMER_CANCELLED', 'CHAT_TURN'])
+// Routine bookkeeping stays off the agent lane (it is in the ledger tab); the lane shows what the agent did that matters.
+const ROUTINE_AGENT = new Set(['FIELDS_EXTRACTED', 'REGISTRY_CHECKED', 'REQUIREMENT_UPDATED'])
 
 export function gateRule(gate: unknown): string | null {
   const g = String(gate ?? '')
@@ -306,6 +312,7 @@ export function timelineItems(b: Bundle, opts: { steps: boolean }): TLItem[] {
       return
     }
     if (SKIP_AGENT_LANE.has(e.type)) return
+    if (ROUTINE_AGENT.has(e.type) && !opts.steps) return
     out.push({ ...base, lane: 'agent', kind: 'agent', title: eventText(b, e), detail: who === 'system' ? 'Rules engine' : undefined })
   })
   arr(b.trace).forEach((s) => {

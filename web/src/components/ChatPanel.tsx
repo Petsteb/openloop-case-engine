@@ -53,8 +53,10 @@ export function ChatPanel({ bundle, caseId, onCite, onAnswered }: Props) {
   const [pending, setPending] = useState(false)
   const [unavailable, setUnavailable] = useState(false)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const msgsRef = useRef<HTMLDivElement | null>(null)
   const nextId = useRef(1)
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }) }, [msgs, pending])
+  // scroll only the message list, never the page (scrollIntoView made the whole page jump on load)
+  useEffect(() => { const el = msgsRef.current; if (el) el.scrollTop = el.scrollHeight }, [msgs, pending])
 
   const switchRole = (r: string) => {
     if (r !== 'client' && r !== 'employee') return
@@ -98,7 +100,7 @@ export function ChatPanel({ bundle, caseId, onCite, onAnswered }: Props) {
         <p className="unavailable" role="status">Chat is not available on this server yet.</p>
       ) : (
         <>
-          <div className="msgs" aria-live="polite">
+          <div className="msgs" aria-live="polite" ref={msgsRef}>
             {msgs.map((m) => (
               <div key={m.id} className={`msg ${m.who}`}>
                 {m.who === 'ai' && !m.error ? renderAnswer(m.text, m.citations ?? [], onCite, bundle) : m.text}

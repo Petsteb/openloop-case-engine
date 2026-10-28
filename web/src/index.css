@@ -205,6 +205,7 @@ button { font: inherit; color: inherit; }
 .decision .why, .decision .dec-why { color: var(--ink-2); max-width: none; font-size: 15px; margin-top: -8px; }
 .props { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px 20px; margin: 0; min-width: 0; }
 .props div { min-width: 0; }
+@media (min-width: 1100px) { .props > div:first-child { grid-column: span 2; } } /* the check name is the longest value */
 .props dt { font-size: 12px; color: var(--muted); }
 .props dd { margin: 2px 0 0; font-size: 13px; color: var(--ink); display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; min-width: 0; }
 .props dd .mono { font-size: 11px; color: var(--ink-2); }
@@ -276,6 +277,14 @@ button { font: inherit; color: inherit; }
 .rule-ids { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
 .linkish { border: 0; background: transparent; padding: 0 4px; min-height: 28px; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .linkish:hover { color: var(--ink); }
+/* on/off switch (role="switch"): track + knob, label beside it */
+.switch { display: inline-flex; align-items: center; gap: 10px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; }
+.switch:hover { color: var(--ink); }
+.switch-track { position: relative; width: 30px; height: 18px; border-radius: 999px; border: 1px solid var(--field); background: transparent; transition: background .2s ease, border-color .2s ease; flex: none; }
+.switch-knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform .2s ease, background .2s ease; }
+.switch[aria-checked="true"] { color: var(--ink); }
+.switch[aria-checked="true"] .switch-track { background: var(--attn); border-color: var(--attn); }
+.switch[aria-checked="true"] .switch-knob { transform: translateX(12px); background: var(--attn-ink); }
 .complete { display: flex; flex-direction: column; gap: 12px; padding: 26px 26px 18px; min-width: 0; }
 .complete h2 { font-family: var(--display); font-size: 36px; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
 .complete .row { cursor: default; }
@@ -310,8 +319,9 @@ button { font: inherit; color: inherit; }
 .rail-split .rail-time { padding: 6px 4px; }
 
 /* ---------- right panel ---------- */
-.rtabs { display: flex; gap: 4px 16px; flex-wrap: wrap; min-width: 0; background: transparent; padding: 0; height: auto; border-radius: 0; }
-.rtab { border: 0; background: transparent; padding: 4px 0; font-size: 14px; font-weight: 400; color: var(--muted); cursor: pointer; position: relative; box-shadow: none; height: auto; flex: none; border-radius: 0; }
+.rtabs { display: flex; gap: 14px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; background: transparent; padding: 0 0 4px; height: auto; border-radius: 0; }
+.rtabs::-webkit-scrollbar { display: none; }
+.rtab { border: 0; background: transparent; padding: 4px 0; font-size: 13.5px; white-space: nowrap; font-weight: 400; color: var(--muted); cursor: pointer; position: relative; box-shadow: none; height: auto; flex: none; border-radius: 0; }
 .rtab:hover { color: var(--ink); }
 .rtab[data-state="active"] { color: var(--ink); background: transparent; box-shadow: none; border-color: transparent; }
 .rtab[data-state="active"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; background: var(--ink); border-radius: 2px; opacity: 1; }

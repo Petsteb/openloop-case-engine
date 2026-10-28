@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import {
   actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, DAY, decisionEvidence, fTime, humanize, JUDGE_LABELS,
-  linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, tidy, type CompareSlip,
+  linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, softCaps, tidy, type CompareSlip,
 } from '@/lib/derive'
 import type { Bundle, Exception_ } from '@/lib/types'
 import { Btn } from './Btn'
@@ -72,7 +72,7 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
   const j = x.judge && typeof x.judge === 'object' ? x.judge : null
   const thr = Number(j?.threshold ?? bundle.config?.judge_threshold ?? 0.9)
   const probs = j ? Object.entries(j.probs || {}).map(([k, v]) => [k, clamp(Number(v) || 0, 0, 1)] as const) : []
-  const why = tidy(plain(String(x.summary || '').replace(/\s*\((?:HR|JQ|SR|GATE)-\d+\)\s*$/, '')))
+  const why = softCaps(tidy(plain(String(x.summary || '').replace(/\s*\((?:HR|JQ|SR|GATE)-\d+\)\s*$/, ''))))
   const busyHere = busy?.startsWith(`resolve:${x.id}:`) ? busy.split(':')[2] : null
   const ruleId = x.rule?.id ? String(x.rule.id) : null
   const [showSame, setShowSame] = useState(false)
@@ -120,8 +120,9 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
         ) : null}
 
         {!insider && hasSame ? (
-          <div><button type="button" className="linkish" aria-expanded={showSame} onClick={() => setShowSame((v) => !v)}>
-            {showSame ? 'Hide what already matches' : 'Show what already matches'}
+          <div><button type="button" role="switch" aria-checked={showSame} className="switch" onClick={() => setShowSame((v) => !v)}>
+            <span className="switch-track" aria-hidden="true"><span className="switch-knob" /></span>
+            Show what already matches
           </button></div>
         ) : null}
 
