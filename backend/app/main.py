@@ -27,6 +27,15 @@ from .scenario import CASE_START, WRONG_COMPANY  # noqa: E402
 from .store import Store  # noqa: E402
 
 app = FastAPI(title="OpenLoop", version="0.2.0")
+
+
+@app.middleware("http")
+async def revalidate_pages(request, call_next):
+    """HTML pages are always revalidated, so a rebuilt UI shows at once (the hashed JS/CSS assets stay cacheable)."""
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 CASES: dict[str, Case] = {}
 AGENT = make_agent()
 LOCK = threading.Lock()  # one writer at a time keeps the hash chain linear (e.g. laptop + projector tabs)

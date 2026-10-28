@@ -160,3 +160,10 @@ def test_notifications_for_both_roles():
     assert all(n["case_id"] in CASES and CASES[n["case_id"]].profile["id"] == "aurora" for n in client)
     blob = json.dumps(client).lower()
     assert "decision needed" not in blob and "insider" not in blob
+
+
+def test_pages_are_revalidated_so_a_rebuilt_ui_is_never_stale():
+    for path in ("/", "/client/"):
+        r = c.get(path)
+        if r.status_code == 200 and r.headers["content-type"].startswith("text/html"):
+            assert r.headers["cache-control"] == "no-cache", path
