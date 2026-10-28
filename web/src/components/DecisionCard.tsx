@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import {
-  actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, DAY, decisionEvidence, fTime, humanize, JUDGE_LABELS,
-  linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, softCaps, tidy, type CompareSlip,
+  actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, confirmedBetween, DAY, decisionEvidence, fTime, gapText, humanize,
+  JUDGE_LABELS, linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, softCaps, tidy, type CompareSlip,
 } from '@/lib/derive'
 import type { Bundle, Exception_ } from '@/lib/types'
 import { Btn } from './Btn'
@@ -35,6 +35,23 @@ function SlipView({ s, showSame }: { s: CompareSlip; showSame: boolean }) {
         ))}
       </ol>
     </figure>
+  )
+}
+
+const pct = (p: number) => Math.round(p * 100)
+const num01 = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : clamp(Number(v), 0, 1))
+
+/** One confidence track; the dashed tick is the mark it must pass to accept automatically. */
+function Bar({ label, p, thr, title }: { label: string; p: number; thr: number | null; title?: string }) {
+  return (
+    <div className="jrow" title={title}>
+      <span>{label}</span>
+      <span className="jbar" role="img" aria-label={`${label} ${pct(p)}%${thr !== null ? `, mark at ${pct(thr)}%` : ''}`}>
+        <i style={{ width: `${p * 100}%` }} />
+        {thr !== null ? <span className="th" style={{ left: `${thr * 100}%` }} /> : null}
+      </span>
+      <b>{pct(p)}%</b>
+    </div>
   )
 }
 
@@ -72,6 +89,14 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
   const j = x.judge && typeof x.judge === 'object' ? x.judge : null
   const thr = Number(j?.threshold ?? bundle.config?.judge_threshold ?? 0.9)
   const probs = j ? Object.entries(j.probs || {}).map(([k, v]) => [k, clamp(Number(v) || 0, 0, 1)] as const) : []
+  // v2: an independent similarity check must also pass its own mark. The classifier's mark sits on its "same" row only.
+  const so = j?.second_opinion && typeof j.second_opinion === 'object' ? j.second_opinion : null
+  const soP = num01(so?.p_same)
+  const soThr = num01(so?.threshold)
+  const sameKey = probs.find(([k]) => k.startsWith('same'))?.[0]
+  const src = j?.source ? String(j.source) : ''
+  // A card is only raised when auto-accept failed, so a missing flag still means "not accepted".
+  const verdict = j?.auto_accept === true ? 'Accepted automatically.' : 'Not accepted automatically.'
   const why = softCaps(tidy(plain(String(x.summary || '').replace(/\s*\((?:HR|JQ|SR|GATE)-\d+\)\s*$/, ''))))
   const busyHere = busy?.startsWith(`resolve:${x.id}:`) ? busy.split(':')[2] : null
   const ruleId = x.rule?.id ? String(x.rule.id) : null
@@ -100,15 +125,31 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
         </dl>
 
         {insider ? (
-          <div className="linked" aria-label="Linked events">
-            {links.length ? links.map((l, i) => (
-              <div key={i} className="linked-row">
-                <button type="button" className="cite" onClick={() => onOpenLedger(l.seq)} disabled={l.seq === null}>{l.seq !== null ? `#${l.seq}` : 'event'}</button>
-                <span style={{ minWidth: 0 }}>{l.text}</span>
-                {l.when !== null ? <span className="when">{clock.fWhen(l.when)}</span> : null}
-              </div>
-            )) : <p className="empty">The linked events are listed in the ledger.</p>}
-          </div>
+          links.length ? (
+            <ol className="seq" aria-label="The two linked events, in order">
+              {links.map((l, i) => {
+                const prev = i > 0 ? links[i - 1] : null
+                const gap = prev ? gapText(prev.when, l.when) : null
+                return (
+                  <Fragment key={i}>
+                    {prev ? (
+                      <li className="seq-gap">
+                        {sentence(gap || 'later')}, {confirmedBetween(bundle, prev.seq, l.seq) ? 'after a client confirmation' : 'with no client confirmation in between'}
+                      </li>
+                    ) : null}
+                    <li className="seq-ev">
+                      <span className="seq-step">{i === 0 ? 'First' : 'Then'}</span>
+                      <p>{l.text}</p>
+                      <span className="seq-meta">
+                        <button type="button" className="cite" onClick={() => onOpenLedger(l.seq)} disabled={l.seq === null}>{l.seq !== null ? `#${l.seq}` : 'event'}</button>
+                        {l.when !== null ? <span>{clock.fWhen(l.when)}</span> : null}
+                      </span>
+                    </li>
+                  </Fragment>
+                )
+              })}
+            </ol>
+          ) : <p className="empty">The linked events are listed in the ledger.</p>
         ) : pair ? (
           <div className="compare" aria-label="The document on file compared with the new document">
             <SlipView s={slips[0]} showSame={showSame} />
@@ -132,23 +173,24 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
           </div>
         ) : null}
 
-        {probs.length ? (
+        {probs.length || soP !== null ? (
           <div className="judge">
-            <span className="judge-h">Judge confidence{j?.source ? ` (${String(j.source)})` : ''}</span>
-            {probs.map(([k, p]) => {
-              const lab = JUDGE_LABELS[k] || sentence(humanize(k))
-              return (
-                <div key={k} className="jrow">
-                  <span>{lab}</span>
-                  <span className="jbar" role="img" aria-label={`${lab} ${Math.round(p * 100)}%`}>
-                    <i style={{ width: `${p * 100}%` }} />
-                    <span className="th" style={{ left: `${clamp(thr, 0, 1) * 100}%` }} />
-                  </span>
-                  <b>{Math.round(p * 100)}%</b>
-                </div>
-              )
-            })}
-            <span className="muted tiny">Needed to accept automatically: {Math.round(thr * 100)}%</span>
+            <span className="judge-h">
+              Judge confidence
+              {src ? <span className={'judge-src' + (/fail|error|fallback/i.test(src) ? ' c-review' : '')}>{src}</span> : null}
+            </span>
+            {probs.map(([k, p]) => (
+              <Bar key={k} label={JUDGE_LABELS[k] || sentence(humanize(k))} p={p} thr={!sameKey || k === sameKey ? clamp(thr, 0, 1) : null} />
+            ))}
+            {soP !== null ? (
+              <Bar label="Similarity check" p={soP} thr={soThr} title={so?.method ? `Second opinion: ${String(so.method)}` : undefined} />
+            ) : null}
+            {so ? (
+              <p className="judge-note">
+                <b>{verdict}</b> Auto-accept needs both bars past their marks
+                {soThr !== null ? ` (classifier ${pct(clamp(thr, 0, 1))}%, similarity check ${pct(soThr)}%)` : ''}.
+              </p>
+            ) : <span className="muted tiny">Needed to accept automatically: {pct(clamp(thr, 0, 1))}%</span>}
           </div>
         ) : null}
 

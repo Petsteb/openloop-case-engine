@@ -54,6 +54,8 @@ export const inbound = (id: string, itemId: string) => call<Bundle>('POST', `${c
 export const advance = (id: string, days: number) => call<Bundle>('POST', `${c(id)}/advance`, { days })
 export const resolve = (id: string, exId: string, actionId: string, note = '') =>
   call<Bundle>('POST', `${c(id)}/exceptions/${encodeURIComponent(exId)}/resolve`, { action_id: actionId, note })
+/** Compliance lifts an ON_HOLD (409 when the file is not on hold). */
+export const releaseHold = (id: string, by: string, note = '') => call<Bundle>('POST', `${c(id)}/release-hold`, { by, note })
 export const verify = (id: string) => call<VerifyResult>('GET', `${c(id)}/verify`)
 export const chat = (id: string, role: ChatRole, message: string, history: ChatHistoryItem[]) =>
   call<ChatResponse>('POST', `${c(id)}/chat`, { role, message, history: history.slice(-10) })

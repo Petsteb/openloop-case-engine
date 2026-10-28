@@ -71,6 +71,14 @@ export interface Snippet {
   [k: string]: unknown
 }
 
+/** Independent check that must agree before a fuzzy match is accepted automatically (v2). */
+export interface SecondOpinion {
+  method?: string
+  p_same?: number
+  threshold?: number
+  [k: string]: unknown
+}
+
 export interface Judge {
   question?: string
   probs?: Record<string, number>
@@ -78,6 +86,8 @@ export interface Judge {
   source?: string
   a?: string
   b?: string
+  second_opinion?: SecondOpinion | null
+  auto_accept?: boolean
   [k: string]: unknown
 }
 
@@ -111,6 +121,9 @@ export interface Exception_ {
   created_at?: string
   notes?: unknown[]
   resolution?: Resolution | null
+  /** `sequence_insider` only: the two linked ledger events. */
+  first_seq?: number
+  then_seq?: number
   [k: string]: unknown
 }
 
@@ -151,6 +164,8 @@ export interface TraceStep {
   input?: unknown
   output?: unknown
   gate?: string
+  /** Who acted: pipeline (code) | claude | planner | safety-net; null on older events. */
+  by?: string | null
   [k: string]: unknown
 }
 
@@ -158,6 +173,21 @@ export interface ScenarioItem {
   id: string
   label: string
   delivered: boolean
+  /** Bank-internal staff event rather than a client upload. */
+  internal?: boolean
+  [k: string]: unknown
+}
+
+/** A client email (Romanian), from EMAIL_SENT / EMAIL_FAILED events. `mode: "outbox"` means queued, never sent. */
+export interface OutboxEmail {
+  seq: number
+  sim_time: string
+  status: 'sent' | 'failed' | (string & {})
+  to?: string | null
+  subject?: string | null
+  body?: string | null
+  mode?: 'outbox' | 'gmail' | (string & {})
+  error?: string | null
   [k: string]: unknown
 }
 
@@ -188,6 +218,8 @@ export interface Bundle {
   trace?: TraceStep[]
   scenario?: ScenarioItem[]
   learning?: BundleLearning
+  /** Newest first. */
+  outbox?: OutboxEmail[]
   [k: string]: unknown
 }
 

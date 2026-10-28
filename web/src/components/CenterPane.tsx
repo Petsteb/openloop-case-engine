@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import {
-  actionLabel, arr, caseClock, checklist, cleanTitle, docName, isComplete, isOnHold, kindOf, ms, openExceptions, plain,
-  tidy, type CheckItem,
+  actionLabel, arr, caseClock, checklist, cleanTitle, docName, fTime, holdInfo, isComplete, isOnHold, kindOf, linkedEvents, ms,
+  openExceptions, plain, tidy, type CheckItem,
 } from '@/lib/derive'
 import type { Bundle, Exception_, Requirement } from '@/lib/types'
 import { Btn } from './Btn'
@@ -19,6 +20,7 @@ interface Props {
   onOpenDoc: (docId: string) => void
   onVerify: () => void
   verifyText: string | null
+  onRelease: (note: string) => void
 }
 
 function ruleTexts(b: Bundle) {
@@ -95,6 +97,73 @@ export function RequirementDetail({ bundle, r, onOpenDoc }: { bundle: Bundle; r:
   )
 }
 
+/** While ON_HOLD this owns the centre: nothing else may read as "all clear". Release takes a second click and an optional note. */
+function HoldBanner({ bundle, busy, onRelease, onOpenLedger }: {
+  bundle: Bundle; busy: string | null; onRelease: (note: string) => void; onOpenLedger: (seq: number | null) => void
+}) {
+  const clock = caseClock(bundle)
+  const { x, since, seq } = holdInfo(bundle)
+  const [confirming, setConfirming] = useState(false)
+  const [note, setNote] = useState('')
+  const input = useRef<HTMLInputElement | null>(null)
+  useEffect(() => { if (confirming) input.current?.focus() }, [confirming])
+  const insider = x?.kind === 'sequence_insider' || x?.rule?.id === 'SR-01'
+  const ruleId = x?.rule?.id ? String(x.rule.id) : insider ? 'SR-01' : null
+  const links = x && insider ? linkedEvents(bundle, x) : []
+  const by = String(x?.resolution?.by?.type || '')
+  const cancel = () => { setConfirming(false); setNote('') }
+  const release = () => { if (!busy) onRelease(note.trim()) }
+  return (
+    <article className="decision hold" style={{ ['--tone' as string]: 'var(--conflict)' }} aria-label="File on hold">
+      <header className="dec-head">
+        <div className="dec-flags"><span className="st st-hold"><i aria-hidden="true" />On hold</span></div>
+        {x ? <span className="dec-id">{x.id}</span> : null}
+      </header>
+      <div className="dec-main">
+        <h2>On hold — escalated to compliance</h2>
+        <p className="why dec-why">
+          {insider
+            ? `The agent is paused. A bank employee changed the client's contact details and then started a credit action for the same client (insider pattern ${ruleId}). Nothing moves on this file until compliance releases it.`
+            : 'The agent is paused. Nothing moves on this file until compliance releases it.'}
+        </p>
+        <dl className="props">
+          {since !== null ? (
+            <div><dt>Escalated</dt><dd>Day {clock.dayNo(since)}, {fTime(since)}{by === 'analyst' ? ', by the analyst' : ''}</dd></div>
+          ) : null}
+          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{insider ? 'Insider sequence' : 'Rule'}</dd></div> : null}
+          {links.length ? (
+            <div><dt>Linked events</dt><dd>
+              {links.map((l, i) => (
+                <button key={i} type="button" className="cite" onClick={() => onOpenLedger(l.seq)} disabled={l.seq === null} title={l.text}>
+                  {l.seq !== null ? `#${l.seq}` : 'event'}
+                </button>
+              ))}
+            </dd></div>
+          ) : null}
+          <div><dt>Waiting for</dt><dd>Compliance</dd></div>
+        </dl>
+      </div>
+      <footer className="dec-actions">
+        {confirming ? (
+          <>
+            <input ref={input} className="release-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)}
+              placeholder="Note for the ledger (optional)" aria-label="Note for the ledger (optional)"
+              onKeyDown={(e) => { if (e.key === 'Enter') release(); else if (e.key === 'Escape') cancel() }} />
+            <Btn variant="primary" loading={busy === 'release'} disabled={!!busy} onClick={release}>
+              Confirm release<span className="kbd" aria-hidden="true">⏎</span>
+            </Btn>
+            <Btn variant="quiet" disabled={busy === 'release'} onClick={cancel}>Cancel</Btn>
+          </>
+        ) : (
+          <Btn variant="primary" disabled={!!busy} onClick={() => setConfirming(true)}>Release hold</Btn>
+        )}
+        <span className="spacer" />
+        <button type="button" className="linkish" onClick={() => onOpenLedger(seq)}>Open in ledger</button>
+      </footer>
+    </article>
+  )
+}
+
 function CheckRows({ items }: { items: CheckItem[] }) {
   return (
     <div className="cl">
@@ -116,6 +185,10 @@ export function CenterPane(p: Props) {
   const items = checklist(bundle)
   const sel = selected ? arr(bundle.requirements).find((r) => r.id === selected) : undefined
   const selEx = sel ? open.find((x) => x.requirement_id === sel.id) : undefined
+  // On hold, the banner comes first in every branch (a selected row or a leftover open card must not hide it).
+  const hold = isOnHold(bundle)
+    ? <HoldBanner bundle={bundle} busy={p.busy} onRelease={p.onRelease} onOpenLedger={p.onOpenLedger} />
+    : null
 
   const back = selected ? (
     <button type="button" className="linkish" onClick={p.onClearSelection}>
@@ -127,6 +200,7 @@ export function CenterPane(p: Props) {
   if (sel) {
     return (
       <div className="stack">
+        {hold}
         {back}
         {selEx ? <DecisionCard bundle={bundle} x={selEx} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} />
           : <RequirementDetail bundle={bundle} r={sel} onOpenDoc={p.onOpenDoc} />}
@@ -136,19 +210,16 @@ export function CenterPane(p: Props) {
   if (open.length) {
     return (
       <div className="stack">
+        {hold}
         {open.map((x) => <DecisionCard key={x.id} bundle={bundle} x={x} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} />)}
         <ResolvedList bundle={bundle} />
       </div>
     )
   }
-  if (isOnHold(bundle)) {
+  if (hold) {
     return (
       <div className="stack">
-        <section className="hold-card">
-          <span className="st st-hold"><i aria-hidden="true" />On hold</span>
-          <h2>File on hold</h2>
-          <p className="why">The file was escalated to compliance. The agent takes no further action until compliance releases it.</p>
-        </section>
+        {hold}
         <ResolvedList bundle={bundle} />
       </div>
     )

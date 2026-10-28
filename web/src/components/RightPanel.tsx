@@ -1,12 +1,12 @@
 import { arr, feedItems } from '@/lib/derive'
 import type { Bundle, Citation } from '@/lib/types'
-import { ActivityFeed, LedgerList, ReasoningList } from './ActivityTabs'
+import { ActivityFeed, LedgerList, OutboxList, ReasoningList } from './ActivityTabs'
 import { ChatPanel } from './ChatPanel'
 import { PanelHead } from './Checklist'
 import { Boundary } from './Btn'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 
-export type RightTab = 'ask' | 'activity' | 'reasoning' | 'ledger'
+export type RightTab = 'ask' | 'activity' | 'reasoning' | 'ledger' | 'outbox'
 
 interface Props {
   bundle: Bundle
@@ -30,8 +30,9 @@ export function RightPanel(p: Props) {
     activity: String(feedItems(bundle).length),
     reasoning: String(arr(bundle.trace).length),
     ledger: String(arr(bundle.events).length),
+    outbox: String(arr(bundle.outbox).length),
   }
-  const labels: Record<RightTab, string> = { ask: 'Ask', activity: 'Activity', reasoning: 'Reasoning', ledger: 'Ledger' }
+  const labels: Record<RightTab, string> = { ask: 'Ask', activity: 'Activity', reasoning: 'Reasoning', ledger: 'Ledger', outbox: 'Email' }
   return (
     <Tabs value={p.tab} onValueChange={(v) => p.onTab(v as RightTab)} className="right-tabs" style={{ gap: 0 }}>
       <PanelHead side="right" title="Ask and activity" onHide={p.onHide}>
@@ -51,6 +52,7 @@ export function RightPanel(p: Props) {
           <LedgerList bundle={bundle} highlight={p.highlight} verifyText={p.verifyText} verifyOk={p.verifyOk} onVerify={p.onVerify} verifying={p.verifying} />
         </Boundary>
       </TabsContent>
+      <TabsContent value="outbox" className="tabpane"><Boundary name="outbox"><OutboxList bundle={bundle} /></Boundary></TabsContent>
     </Tabs>
   )
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '@/lib/api'
 import { isUnavailable } from '@/lib/api'
-import { arr, checklist, fTime, latestActivity, plural, resolveToast } from '@/lib/derive'
+import { arr, checklist, checklistNote, fTime, latestActivity, plural, resolveToast } from '@/lib/derive'
 import type { Citation, Exception_, LearningState, VerifyResult } from '@/lib/types'
 import { isTyping, store } from '@/lib/store'
 import { failureText, useCase } from '@/hooks/useCase'
@@ -85,6 +85,10 @@ export default function App() {
   const onAdvance = useCallback((days: number) => {
     void act(`advance:${days}`, () => api.advance(caseId, days), `Skipped ${plural(days, 'day')}`).then((b) => { if (b) setSelected(null) })
   }, [act, caseId])
+  const onRelease = useCallback((note: string) => {
+    void act('release', () => api.releaseHold(caseId, 'compliance-1', note), 'Hold released. The agent resumes the file.')
+      .then((b) => { if (b) setSelected(null) })
+  }, [act, caseId])
   const onReset = useCallback(() => {
     void act('reset', () => api.reset(), 'Demo reset. A fresh case is open.').then((b) => { if (b) { setSelected(null); setHighlight(null) } })
   }, [act])
@@ -135,7 +139,7 @@ export default function App() {
               <PanelHead title="Checklist" count={items.length} side="left" onHide={() => setLeft(false)} />
               <div className="panel-body">
                 <Boundary name="checklist">
-                  <ChecklistAttention items={items} selected={selected} onSelect={(id) => setSelected((s) => (s === id ? null : id))} />
+                  <ChecklistAttention items={items} selected={selected} onSelect={(id) => setSelected((s) => (s === id ? null : id))} note={checklistNote(bundle)} />
                 </Boundary>
               </div>
             </section>
@@ -143,7 +147,7 @@ export default function App() {
           <section className="center-col" aria-label="Decision">
             <Boundary name="centre">
               <CenterPane bundle={bundle} selected={selected} busy={busy} onClearSelection={() => setSelected(null)} onResolve={onResolve}
-                onOpenLedger={openLedger} onOpenDoc={setDocOpen} onVerify={doVerify} verifyText={v?.text ?? null} />
+                onOpenLedger={openLedger} onOpenDoc={setDocOpen} onVerify={doVerify} verifyText={v?.text ?? null} onRelease={onRelease} />
             </Boundary>
           </section>
           <section className="panel side-panel right-col" aria-label="Ask and activity" hidden={!right}>

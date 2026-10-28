@@ -25,6 +25,9 @@ export function CaseHeader({ bundle, verify, verifying, onVerify, theme, onTheme
   const s = headerStats(bundle)
   const cfg = bundle.config || {}
   const v = verifyLabel(verify)
+  const agentStatus = cfg.agent_status ? String(cfg.agent_status) : ''
+  // "fallback (<Error>)": the configured planner failed and the scripted one took over. Worth a glance, not an alarm.
+  const fallback = /^fallback/i.test(agentStatus)
   return (
     <header className="casehead">
       <div className="casehead-main">
@@ -43,7 +46,10 @@ export function CaseHeader({ bundle, verify, verifying, onVerify, theme, onTheme
         </div>
         <div className="case-tools">
           <span className="modes">
-            <span>Agent: <b>{String(cfg.agent_mode || 'unknown')}</b>{cfg.agent_status && cfg.agent_status !== 'ok' ? ` (${String(cfg.agent_status)})` : ''}</span>
+            <span>Agent: <b>{String(cfg.agent_mode || 'unknown')}</b>
+              {fallback ? <span className="c-review" title={`The agent is running on its fallback: ${agentStatus}`}> {agentStatus}</span>
+                : agentStatus && agentStatus !== 'ok' ? ` (${agentStatus})` : ''}
+            </span>
             <span>Judge: <b>{String(cfg.judge_mode || 'unknown')}</b></span>
           </span>
           {v ? <span className={v.ok ? 'verify-ok' : 'verify-bad'} role="status">{v.text}</span> : null}

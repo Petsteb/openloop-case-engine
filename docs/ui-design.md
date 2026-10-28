@@ -145,6 +145,8 @@ Keep the custom tokens above as well.
     - close events cluster into a count bubble;
     - clicking a marker shows details under the timeline.
   - **Data:** comes from `bundle.events` (map event types to lanes and kinds) and `bundle.timers`. `AGENT_STEP` events only appear when "Every agent step" is on (an option in a ⋯ menu).
+    - `CHAT_TURN`, `EMAIL_SENT`, `EMAIL_FAILED`, `CHECK_PROMOTED`, `STAFF_CONTACT_CHANGE`, `CREDIT_ACTION` and `CLIENT_CONFIRMATION` never go on the rail; they stay in the Ledger tab. An employee's insider actions are not analyst work.
+    - A compliance release is a staff marker on the Analyst lane.
 - **Checklist (attention first):**
   - Open items sorted conflict, then review, then expired, then waiting.
   - Each row has: the ID in mono 11px, the title (600 weight when it needs attention), the status word with its dot, a one-line reason (ellipsis, full text in the title attribute), and the next step.
@@ -172,14 +174,24 @@ Keep the custom tokens above as well.
       - The data needs `role` (`onfile`/`new`) per document. Derive it from received times: the document that triggered the check is "new"; the older document it's compared with is "on file".
     - **Only differences by default.** Matching lines (e.g. "Elena Munteanu 30%" in both) and the "what already matches" ✓ facts ("Postal code 400127 in both") are hidden behind a "Show what already matches" text toggle (`aria-expanded`), so the panel shows only what needs a decision.
     - **Judge confidence:** thin tracks with a dashed threshold tick and the label "Needed to accept automatically: 90%".
+      - The classifier's tick uses `judge.threshold` and sits only on its "same" row. With `judge.second_opinion` (v2), a second track "Similarity check" carries its own tick at `second_opinion.threshold`.
+      - Under the tracks: the verdict ("Not accepted automatically." from `judge.auto_accept`; a card only exists when auto-accept failed), then "Auto-accept needs both bars past their marks".
+      - `judge.source` is shown in mono beside the heading, in `--review` when it reports a failure ("heuristic (featherless failed: …)").
     - **Agent note:** a flat `--surface-2` row with a 1px border and an 8px radius, "✳ Agent" in attn, the text, and the time in mono.
     - **Rule:** the rule ID as a mono chip, with the rule text muted.
     - **Footer action bar:** a hairline above, no fill. The primary button carries a `⏎` hint; the rest are outline pills, then a spacer and an "Open in ledger" text link.
     - The data needs `papers[].lines[] {t, k: same|diff|missing|gap, marks[], note}`. Derive it from the exception snippets: the backend gives the raw lines, and the UI marks a line as diff or missing when the `requirement_id` and the rule tell it which values differ. If that can't be derived, show plain lines.
-  - A **`sequence_insider` card** shows the two linked events (summaries with `#seq`) instead of quotes.
+  - A **`sequence_insider` card** shows the two linked events instead of quotes: "First" and "Then" on one thin rail, ordered by `first_seq` / `then_seq`, each with its `#seq` chip and time. Between them sits the gap in `--tone` mono ("At the same time, with no client confirmation in between").
+  - **When `ON_HOLD`:** a hold banner owns the centre, above every other branch (a selected row or an open card never hides it). It is the same flat card in the conflict tone, with:
+    - "On hold — escalated to compliance" and a one-line why (agent paused, insider pattern SR-01);
+    - escalated day/time, the rule and the linked events;
+    - "Release hold", which opens an optional one-line note plus "Confirm release" / "Cancel". This posts `release-hold` with `by: "compliance-1"`, and a 409 shows a toast.
+  - While on hold, the checklist's empty line reads "On hold with compliance…", never "Nothing needs attention".
   - **Otherwise:** the selected requirement's detail (reason, evidence quotes, rule), or a waiting summary.
   - **When `READY_FOR_DECISION`:** "File complete" in display 36px, plus the summary list.
-- **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, with counts in mono superscript.
+- **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, Email, with counts in mono superscript.
+  - All five must fit on one line in the default 340px panel.
+  - The list is start-aligned with `space-between` and a 6px minimum gap. Shadcn's centring clips the first tab on overflow.
   - **Ask (chat):**
     - a role toggle, "Client view" / "Bank employee", which clears history;
     - 3 suggested questions per role as dashed chips;
@@ -189,7 +201,10 @@ Keep the custom tokens above as well.
     - an input pill with a send button, and a typing indicator while waiting;
     - on a 404 from the endpoint: "Chat is not available on this server yet".
   - **Activity:** the feed grouped by day (time in mono, text, actor). Blocked items in `--conflict`.
-  - **Reasoning:** agent steps, newest first. Each shows the reason sentence (15px), then the tool name in mono plus the gate word (Allowed in muted, "Blocked: GATE-01" in conflict with the rule text in a tooltip). "Details" expands the input and output as JSON.
+  - **Email:** `bundle.outbox`, newest first as sent, grouped by day.
+    - Each row shows the subject (verbatim Romanian; a click opens the body in `pre-wrap`), "To" with the address in mono, and a mode tag ("Outbox, not sent" or "Gmail").
+    - A failed row adds "Failed" in `--conflict` plus the error text.
+  - **Reasoning:** agent steps, newest first. Each shows the reason sentence (15px), then a mono `by` tag (code, Claude, planner, safety net; nothing when null), then the tool name in mono plus the gate word (Allowed in muted, "Blocked: GATE-01" in conflict with the rule text in a tooltip). "Details" expands the input and output as JSON.
   - **Ledger:** rows with the summary, day/time and short hash `c27e… ← a91f…` in mono, with "Check ledger integrity" at the top.
 - **Learning sheet:** opened from the header ("Learning" outline pill with a count badge of proposals).
   - Lists proposals (support count, description, "Run backtest" showing n, auto-resolved %, false approvals and manual-review %).
@@ -198,6 +213,7 @@ Keep the custom tokens above as well.
   - Hidden when `/api/learning` returns 404.
 - **Demo dock:** presenter controls, kept out of the product UI.
   - A floating pill at the bottom centre: "Next client event", "Skip 1 day / 3 days / a week", "Reset demo" (confirmed with a second click).
+  - Bank-internal items (`scenario[].internal`) follow the client items in the ⋯ menu. Each drops the "Internal: " prefix and carries an "Internal" tag. When the next item is internal, the button reads "Next internal event".
   - Toggled with `D`. Visible by default unless the URL hash is `#clean`.
 
 ## Behaviour

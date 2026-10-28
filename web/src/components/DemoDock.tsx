@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { arr, tidy } from '@/lib/derive'
+import { arr, sentence, tidy } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
 import { Btn } from './Btn'
 import { Icon } from './Icon'
 
-const label = (s: string) => tidy(String(s || '').replace(/^Day\s+\d+\s*·\s*/i, '').replace(/[“”"]/g, ''))
+// Internal items already say "Internal: …"; the prefix becomes a tag instead.
+const label = (s: string) => sentence(tidy(String(s || '').replace(/^Day\s+\d+\s*·\s*/i, '').replace(/^Internal:\s*/i, '').replace(/[“”"]/g, '')))
 
 interface Props {
   bundle: Bundle
@@ -20,8 +21,9 @@ export function DemoDock({ bundle, busy, onInbound, onAdvance, onReset }: Props)
   const [menu, setMenu] = useState(false)
   const timer = useRef<number | null>(null)
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
-  const items = arr(bundle.scenario)
-  const next = items.find((i) => !i.delivered)
+  // Client items first, then the bank-internal staff events.
+  const items = [...arr(bundle.scenario).filter((i) => !i.internal), ...arr(bundle.scenario).filter((i) => i.internal)]
+  const next = arr(bundle.scenario).find((i) => !i.delivered)
   const reset = () => {
     if (!armed) {
       setArmed(true)
@@ -38,16 +40,20 @@ export function DemoDock({ bundle, busy, onInbound, onAdvance, onReset }: Props)
       <div className="menu-wrap">
         <Btn size="sm" variant="primary" disabled={!next || !!busy} loading={busy === 'inbound'} title={next ? `Send: ${label(next.label)}` : 'Every scripted event was sent'}
           onClick={() => next && onInbound(next.id, label(next.label))}>
-          {next ? 'Next client event' : 'All events sent'}
+          {!next ? 'All events sent' : next.internal ? 'Next internal event' : 'Next client event'}
         </Btn>
       </div>
       <div className="menu-wrap">
         <button type="button" className="btn sm quiet icon-only" aria-label="All scripted events" aria-expanded={menu} onClick={() => setMenu((v) => !v)}><Icon name="more" size={14} /></button>
         {menu ? (
           <div className="menu up" role="menu" onMouseLeave={() => setMenu(false)}>
-            {items.map((i) => (
-              <button key={i.id} type="button" role="menuitem" disabled={i.delivered || !!busy} onClick={() => { setMenu(false); onInbound(i.id, label(i.label)) }}>
-                <span className="tick">{i.delivered ? <Icon name="check" size={14} /> : null}</span>{label(i.label)}
+            {items.map((i, k) => (
+              <button key={i.id} type="button" role="menuitem" disabled={i.delivered || !!busy}
+                className={i.internal && !items[k - 1]?.internal && k > 0 ? 'group-start' : undefined}
+                onClick={() => { setMenu(false); onInbound(i.id, label(i.label)) }}>
+                <span className="tick">{i.delivered ? <Icon name="check" size={14} /> : null}</span>
+                <span className="menu-text">{label(i.label)}</span>
+                {i.internal ? <span className="tag">Internal</span> : null}
               </button>
             ))}
           </div>

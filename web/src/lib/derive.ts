@@ -58,6 +58,7 @@ export const plain = (s: unknown) => String(s ?? '')
   .replace(new RegExp(`\\bis (${CODES})\\b`, 'g'), (_m, c: string) => (c === 'NEEDS_REVIEW' ? 'needs review' : `is ${CODE_WORDS[c]}`))
   .replace(new RegExp(`\\b(${CODES})\\b`, 'g'), (m) => CODE_WORDS[m])
   .replace(/\bACTIVĂ(?=\s|$)/g, 'active')
+  .replace(/\b0 h later\b/g, 'at the same time') // SR-01 summaries on the simulated clock
   .replace(/\s*\(quotes verified: True\)/g, ', every quote verified')
   .replace(/\s*\(quotes verified: False\)/g, ', some quotes could not be verified')
 export const cleanTitle = (s: unknown) => tidy(String(s ?? '')
@@ -118,8 +119,9 @@ export const isComplete = (b: Bundle) => b.case?.status === 'READY_FOR_DECISION'
 export type Tone = 'need' | 'done' | 'wait' | 'hold'
 export function statusLine(b: Bundle): { tone: Tone; text: string } {
   const n = openExceptions(b).length
+  // The hold outranks open decisions: nothing moves on the file until compliance releases it.
+  if (isOnHold(b)) return { tone: 'hold', text: `On hold. The file was escalated to compliance.${n ? ` ${plural(n, 'decision')} still open.` : ''}` }
   if (n) return { tone: 'need', text: `${plural(n, 'decision')} need${n === 1 ? 's' : ''} you` }
-  if (isOnHold(b)) return { tone: 'hold', text: 'On hold. The file was escalated to compliance.' }
   if (isComplete(b)) return { tone: 'done', text: 'File complete. The credit decision is yours.' }
   const reqs = arr(b.requirements)
   if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: 'Waiting for the client to send the application pack' }
@@ -182,6 +184,14 @@ export function checklist(b: Bundle): CheckItem[] {
     return { id: r.id, title: cleanTitle(r.title), kind, reason: softCaps(tidy(plain(r.reason || STATUS[kind].word))), attention: isAttention(kind), next, req: r }
   })
 }
+/** The checklist's empty line must not read as all-clear while the file is held or a monitoring card is open. */
+export function checklistNote(b: Bundle): { text: string; hold: boolean } | null {
+  if (isOnHold(b)) return { text: 'with compliance. No check needs attention until the hold is released.', hold: true }
+  const ids = new Set(arr(b.requirements).map((r) => r.id))
+  const n = openExceptions(b).filter((x) => !ids.has(String(x.requirement_id))).length
+  if (!n) return null
+  return { text: `No check needs attention. ${n === 1 ? 'A monitoring alert needs' : `${n} monitoring alerts need`} your decision.`, hold: false }
+}
 export const byAttention = (a: CheckItem, b: CheckItem) => STATUS[a.kind].rank - STATUS[b.kind].rank
   || a.id.localeCompare(b.id, undefined, { numeric: true })
 
@@ -221,7 +231,10 @@ export function displayTimes(b: Bundle): Map<number, number> {
 }
 
 const actorType = (e: { actor?: { type?: unknown } }) => String(e.actor?.type ?? '').toLowerCase()
-const HUMAN_STAFF = new Set(['analyst', 'employee', 'staff', 'reviewer'])
+const HUMAN_STAFF = new Set(['analyst', 'employee', 'staff', 'reviewer', 'compliance'])
+// Chat, client emails and bank-internal staff events stay in the ledger tab, never on the rail
+// (an employee's insider actions are not analyst work on the file).
+const RAIL_HIDE = new Set(['CHAT_TURN', 'EMAIL_SENT', 'EMAIL_FAILED', 'CHECK_PROMOTED', 'STAFF_CONTACT_CHANGE', 'CREDIT_ACTION', 'CLIENT_CONFIRMATION'])
 const SKIP_AGENT_LANE = new Set(['AGENT_STEP', 'SCENARIO_DELIVERED', 'CLOCK_ADVANCED', 'TIMER_SET', 'TIMER_FIRED', 'TIMER_CANCELLED', 'CHAT_TURN'])
 // Routine bookkeeping stays off the agent lane (it is in the ledger tab); the lane shows what the agent did that matters.
 const ROUTINE_AGENT = new Set(['FIELDS_EXTRACTED', 'REGISTRY_CHECKED', 'REQUIREMENT_UPDATED'])
@@ -281,8 +294,22 @@ export function whoLabel(e: { actor?: { type?: unknown; id?: unknown } }): strin
   if (t === 'agent') return 'Agent'
   if (t === 'analyst') return 'Analyst'
   if (t === 'employee' || t === 'staff') return `Bank employee${e.actor?.id ? ` ${String(e.actor.id)}` : ''}`
-  if (t === 'system') return 'Rules engine'
+  if (t === 'compliance') return `Compliance${e.actor?.id ? ` (${String(e.actor.id)})` : ''}`
+  if (t === 'system') return e.actor?.id === 'notifier' ? 'Email notifier' : 'Rules engine'
   return sentence(t || 'System')
+}
+
+/** trace[].by: which part of the agent took the step (Reasoning tab tag). */
+const BY_LABEL: Record<string, { tag: string; title: string }> = {
+  pipeline: { tag: 'code', title: 'Code that runs on every event' },
+  claude: { tag: 'Claude', title: 'Planned by Claude on Amazon Bedrock' },
+  planner: { tag: 'planner', title: 'Planned by the scripted planner' },
+  'safety-net': { tag: 'safety net', title: 'Code safety net that runs after Claude' },
+}
+export function byTag(by: unknown): { tag: string; title: string } | null {
+  if (by === null || by === undefined || by === '') return null
+  const k = String(by)
+  return BY_LABEL[k] ?? { tag: humanize(k), title: `Step by ${humanize(k)}` }
 }
 
 export function timelineItems(b: Bundle, opts: { steps: boolean }): TLItem[] {
@@ -291,7 +318,7 @@ export function timelineItems(b: Bundle, opts: { steps: boolean }): TLItem[] {
   const blockedSeqs = new Set(arr(b.trace).filter((s) => gateRule(s.gate)).map((s) => s.seq))
   arr(b.events).forEach((e) => {
     const real = ms(e.sim_time)
-    if (real === null || e.type === 'CHAT_TURN') return
+    if (real === null || RAIL_HIDE.has(e.type)) return
     const t = disp.get(e.seq) ?? real
     const who = actorType(e)
     const base = { key: `e${e.seq}`, t, real, seq: e.seq }
@@ -440,8 +467,10 @@ export const JUDGE_LABELS: Record<string, string> = {
 export const noteText = (n: unknown) => (typeof n === 'string' ? n
   : n && typeof n === 'object' ? String((n as Record<string, unknown>).text ?? (n as Record<string, unknown>).note ?? '') : '')
 
-/** For `sequence_insider` cards: the two linked ledger events. */
+/** For `sequence_insider` cards: the two linked ledger events, first then second (`first_seq`, `then_seq`). */
 export function linkedEvents(b: Bundle, x: Exception_): { seq: number | null; text: string; when: number | null }[] {
+  const order = [x.first_seq, x.then_seq].filter((n): n is number => typeof n === 'number')
+  const rank = (seq: number | null) => (seq === null ? 1e9 : order.includes(seq) ? order.indexOf(seq) - 1e6 : seq)
   return arr(x.snippets).map((s) => {
     const raw = String(s.summary ?? s.quote ?? s.text ?? '')
     const seqFromText = Number((String(s.label ?? '') + ' ' + raw).match(/#(\d+)/)?.[1])
@@ -449,7 +478,28 @@ export function linkedEvents(b: Bundle, x: Exception_): { seq: number | null; te
     const ev = seq !== null ? arr(b.events).find((e) => e.seq === seq) : undefined
     const text = tidy(plain(raw.replace(/^#\d+\s*[:,-]?\s*/, ''))) || (ev ? eventText(b, ev) : String(s.label ?? ''))
     return { seq, text, when: ms(String(s.sim_time ?? ev?.sim_time ?? '')) }
-  })
+  }).sort((p, q) => rank(p.seq) - rank(q.seq))
+}
+
+/** The time between two linked events, in words ("at the same time", "3 hours later"). */
+export function gapText(from: number | null, to: number | null): string | null {
+  if (from === null || to === null) return null
+  const d = Math.max(0, to - from)
+  if (d < MIN) return 'at the same time'
+  if (d < HOUR) return `${plural(Math.round(d / MIN), 'minute')} later`
+  if (d < 2 * DAY) return `${plural(Math.round(d / HOUR), 'hour')} later`
+  return `${plural(Math.round(d / DAY), 'day')} later`
+}
+export const confirmedBetween = (b: Bundle, from: number | null, to: number | null) =>
+  from !== null && to !== null && arr(b.events).some((e) => e.type === 'CLIENT_CONFIRMATION' && e.seq > from && e.seq < to)
+
+/** While ON_HOLD: the card that was escalated to compliance and the ledger event that started the hold. */
+export function holdInfo(b: Bundle): { x: Exception_ | undefined; since: number | null; seq: number | null } {
+  const x = arr(b.exceptions).filter((e) => e.resolution?.action_id === 'escalate_compliance')
+    .sort((p, q) => (ms(q.resolution?.at) ?? 0) - (ms(p.resolution?.at) ?? 0))[0]
+  const ev = [...arr(b.events)].sort((p, q) => q.seq - p.seq)
+    .find((e) => e.type === 'CASE_STATUS' && /\bon hold\b/i.test(String(e.summary || '')))
+  return { x, since: ms(ev?.sim_time) ?? ms(x?.resolution?.at), seq: ev?.seq ?? null }
 }
 
 const TOASTS: Record<string, string> = {

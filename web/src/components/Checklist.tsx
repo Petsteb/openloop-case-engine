@@ -20,7 +20,9 @@ function Row({ it, selected, onSelect, showNext = true }: { it: CheckItem; selec
 }
 
 /** Attention first: conflict, review, expired, waiting; verified checks fold into one line. */
-export function ChecklistAttention({ items, selected, onSelect }: { items: CheckItem[]; selected: string | null; onSelect: (id: string) => void }) {
+export function ChecklistAttention({ items, selected, onSelect, note }: {
+  items: CheckItem[]; selected: string | null; onSelect: (id: string) => void; note?: { text: string; hold: boolean } | null
+}) {
   const [showDone, setShowDone] = useState(false)
   const sorted = [...items].sort(byAttention)
   const open = sorted.filter((i) => i.kind !== 'verified')
@@ -28,7 +30,12 @@ export function ChecklistAttention({ items, selected, onSelect }: { items: Check
   return (
     <div className="cl">
       {open.map((it) => <Row key={it.id} it={it} selected={selected === it.id} onSelect={onSelect} />)}
-      {open.length === 0 ? <div className="empty">{items.length ? 'Nothing needs attention.' : 'No checks yet.'}</div> : null}
+      {open.length === 0 ? (
+        <div className="empty">
+          {note ? <>{note.hold ? <><span className="st st-hold"><i aria-hidden="true" />On hold</span>{' '}</> : null}{note.text}</>
+            : items.length ? 'Nothing needs attention.' : 'No checks yet.'}
+        </div>
+      ) : null}
       {done.length ? (
         <button type="button" className="fold" aria-expanded={showDone} onClick={() => setShowDone((v) => !v)}>
           <Icon name="chevron" size={14} />
