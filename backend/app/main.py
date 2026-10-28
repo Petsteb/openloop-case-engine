@@ -196,7 +196,7 @@ class NewCase(BaseModel):
 @app.get("/api/version")
 def global_version():
     """Cheap change detector for the home screens."""
-    return {"cases": len(CASES), "events": sum(len(c.ledger.events) for c in CASES.values())}
+    return {"cases": len(CASES), "events": sum(len(c.ledger.events) for c in list(CASES.values()))}
 
 
 @app.get("/api/templates")
@@ -217,7 +217,7 @@ def list_cases(role: Literal["client", "employee"] = "employee", company_id: str
     """Employee: the work queue, needs-you first. Client: that company's files (identity is simulated in the demo)."""
     if role == "employee":
         _require_staff(x_staff_token)
-    cases = [c for c in CASES.values() if role == "employee" or c.profile["id"] == company_id]
+    cases = [c for c in list(CASES.values()) if role == "employee" or c.profile["id"] == company_id]
     return sorted((case_views.case_row(c, role) for c in cases), key=case_views.queue_sort_key)
 
 
@@ -243,7 +243,7 @@ def list_notifications(role: Literal["client", "employee"] = "employee", company
     """Newest first: actions this role owes and messages for it, across its cases."""
     if role == "employee":
         _require_staff(x_staff_token)
-    cases = [c for c in CASES.values() if role == "employee" or c.profile["id"] == company_id]
+    cases = [c for c in list(CASES.values()) if role == "employee" or c.profile["id"] == company_id]
     items = [n for c in cases for n in case_views.notifications(c, role)]
     return sorted(items, key=lambda n: (n["day"], n["seq"]), reverse=True)[:100]
 
