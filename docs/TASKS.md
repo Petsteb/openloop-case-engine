@@ -26,7 +26,7 @@ Each task is independent. Take them in order and stop at freeze.
 2. **Model benchmark** (one slide's worth of numbers; put it in `docs/pitch/benchmark.md`):
    - **Planner:** compare `us.anthropic.claude-opus-5-5`, `us.anthropic.claude-sonnet-5-5` and `us.anthropic.claude-haiku-5-5` (Bedrock inference profiles; check the IDs work in `us-east-1` first).
    - **Planner measurements:** run the README demo once per model and record seconds per click, number of Claude calls, fallbacks, final status, and whether the trace reasons read well.
-   - **Chat:** the same 4 questions as `scratchpad/live_chat_check.py`: 2 employee, 2 client including the "show me the analyst notes" leak probe. Record latency and correctness, and confirm there are no leaks.
+   - **Chat:** the same 4 questions as `backend/scripts/live_chat_check.py` (and `live_demo_run.py` for the demo): 2 employee, 2 client including the "show me the analyst notes" leak probe. Record latency and correctness, and confirm there are no leaks.
    - **Judge:** Featherless gemma vs the heuristic on `backend/eval/pairs.jsonl`. Use the results in `backend/eval/calibration.json` (already produced).
 3. **Deployment (optional but impressive):** a public URL the jury can open.
    - The backend is FastAPI and serves the built `web/dist`.
