@@ -119,19 +119,22 @@ Decide which tools to call, in which order, to move the file forward. Rules:
 
 
 class BedrockAgent:
-    """Claude on Amazon Bedrock via the Anthropic SDK's Mantle client (Messages API).
+    """Claude on Amazon Bedrock via the Anthropic SDK's Bedrock client (Messages API over bedrock-runtime).
 
-    Auth: a Bedrock API key in AWS_BEARER_TOKEN_BEDROCK (read by the SDK), region from AWS_REGION.
+    Auth: a Bedrock API key in AWS_BEARER_TOKEN_BEDROCK (passed as api_key), region from AWS_REGION.
+    The model ID must be an inference profile (e.g. us.anthropic.claude-opus-5-5 / global.anthropic.claude-opus-5-5).
+    Our hackathon AWS account denies the newer Mantle endpoint and EU regions by policy, hence this path.
     """
     mode = "bedrock"
 
     def __init__(self):
-        from anthropic import AnthropicBedrockMantle
+        from anthropic import AnthropicBedrock
         # short timeout + one retry: a live demo must fall back in seconds, not minutes
-        self.client = AnthropicBedrockMantle(aws_region=os.environ.get("AWS_REGION", "eu-central-1"),
-                                             timeout=float(os.environ.get("AGENT_TIMEOUT_S", "30")), max_retries=1)
+        self.client = AnthropicBedrock(aws_region=os.environ.get("AWS_REGION", "us-east-1"),
+                                       api_key=os.environ.get("AWS_BEARER_TOKEN_BEDROCK") or None,
+                                       timeout=float(os.environ.get("AGENT_TIMEOUT_S", "30")), max_retries=1)
         self.status = "ok"
-        self.model = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-opus-5-5")
+        self.model = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-5-5")
         self.effort = os.environ.get("AGENT_EFFORT", "low")  # short, bounded decisions; raise for harder cases
         self.fallback = ScriptedAgent()
         reason = {"reason": {"type": "string", "description": "One sentence: why this call, shown to auditors."}}

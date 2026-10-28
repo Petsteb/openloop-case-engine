@@ -48,7 +48,9 @@ def featherless_probs(kind: str, a: str, b: str) -> dict:
     url = os.environ.get("FEATHERLESS_URL") or ("https://api.featherless.ai/v1/classifier" if key
                                                  else "https://simple-jev-demo-api.featherless.ai/v1/classifier")
     instructions, criteria = QUESTIONS[kind]
-    body = {"model": os.environ.get("FEATHERLESS_MODEL", "featherless-ai/Qwen3.6-35B-A3B-classifier"),
+    default_model = ("featherless-ai/gemma-4-26B-A4B-classifier" if key  # production endpoint accepts this one
+                     else "featherless-ai/Qwen3.6-35B-A3B-classifier")  # public demo endpoint
+    body = {"model": os.environ.get("FEATHERLESS_MODEL", default_model),
             "state": json.dumps({"value_a": a, "value_b": b}, ensure_ascii=False),
             "questions": {"match": {"type": "choice", "instructions": instructions, "criteria": criteria}}}
     headers = {"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})}
