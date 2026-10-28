@@ -6,6 +6,9 @@ with the same shape; the engine, ledger and agent do not change.
 
 CASE_TITLE = "SME loan & KYB — Brutăria Aurora SRL"
 CASE_GOAL = "File ready for credit decision (the decision itself stays human)"
+CLIENT_COMPANY = "Brutăria Aurora SRL"
+PRODUCT = "Working-capital loan, 500,000 RON"
+CASE_CUI = "45123879"   # uploads with another company's tax ID are quarantined
 
 DOC_VALIDITY_DAYS = 30        # bank policy for registry / fiscal certificates
 UBO_THRESHOLD_PCT = 25        # beneficial-owner threshold (Law 129/2019, AMLR)
