@@ -289,4 +289,16 @@ Keep the custom tokens above as well.
 - **Accessibility:** visible focus (2px attn ring), real buttons, `aria-expanded` and `aria-pressed`, AA contrast in both themes.
 
 ## Client portal (/client)
-P2's notes on the client portal will be added here.
+- **Where it lives:** a second Vite page, `web/client/index.html` with code in `src/client/**` and `pt-`-prefixed styles in `portal.css`.
+- **Look:** it uses the bank screen's tokens and fonts, with more air.
+- **Layout:** one column under 1024 px; two columns from 1024 px, at a 1120 px max width.
+- **Top of page:** it answers "what do I do now?":
+  - the company name in display type;
+  - one status pill: amber `--review` for "We need something from you", neutral for "Under review by the bank", an ink dot for "Complete";
+  - a one-line next action, with the page's only filled button.
+- **Progress:** four steps (Documents, Checks, Bank review, Decision).
+- **Cards:** request and confirmation cards are flat (`--surface`, 1px `--line`, 14 px radius, no shadow) and are the only surfaces on the page.
+- **Rows:** bank emails and documents are hairline rows, with outline status chips (coral = not accepted, violet = send a new one).
+- **Chat:** the bank's chat, with the role fixed to client.
+- **Shared behaviour:** the theme is shared with the bank screen through `openloop-theme`, and the page polls `/version` every 2.5 s.
+- **Copy rule:** client strings never show rule IDs, scores, staff IDs, "judge", "insider", "compliance" or "on hold".
