@@ -29,6 +29,12 @@ DOC_LABELS = {
 # Documents whose validity window is enforced (HR-03).
 EXPIRING_DOCS = {"onrc_certificate", "fiscal_certificate"}
 
+# Sequence rules evaluated over the ledger (sequence.py). Times are simulated time.
+SEQUENCE_RULES = [
+    {"id": "SR-01", "first": "STAFF_CONTACT_CHANGE", "then": "CREDIT_ACTION", "same": ["actor.id", "payload.client_id"],
+     "first_actor_type": "employee", "within_hours": 48, "unless": "CLIENT_CONFIRMATION"},
+]
+
 # Which document AI reads which document type ("bring your own document AI"); see extractors.py.
 EXTRACTOR_ROUTES = {"financial_statement": "bank_docai", "*": "builtin"}
 
@@ -59,6 +65,8 @@ RULES = {
     "HR-08": "Fiscal certificate must show no outstanding tax obligations.",
     "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if p ≥ {JUDGE_THRESHOLD}.",
     "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if p ≥ {JUDGE_THRESHOLD}.",
+    "SR-01": "An employee changed the client's contact details and then started a credit action for the same client "
+             "within 48 hours, without client confirmation.",
     "GATE-01": "Only actions allowed by the current case state may run.",
     "GATE-02": "Credit approval is a human decision — the agent has no such action.",
     "GATE-03": "A document already requested and still pending is not requested again.",

@@ -5,7 +5,7 @@ and every call is recorded as an AGENT_STEP (reason, tool, input, output, gate v
 """
 from datetime import datetime, timedelta
 
-from . import extract, extractors, registry, rules
+from . import extract, extractors, registry, rules, sequence
 from . import template as T
 from .judge import judge
 from .ledger import Ledger
@@ -79,6 +79,17 @@ def reduce(events: list[dict]) -> dict:
             case "AGENT_STEP":
                 st["trace"].append({"seq": e["seq"], "sim_time": e["sim_time"], "by": e["actor"].get("id"), **p})
     return st
+
+
+def _internal_summary(spec: dict) -> str:
+    p, who = spec["payload"], spec["actor"].get("id", "?")
+    if spec["type"] == "STAFF_CONTACT_CHANGE":
+        return f"Employee {who} changed client {p['client_id']} {p['field']}"
+    if spec["type"] == "CREDIT_ACTION":
+        return f"Employee {who} ran a {p['action'].replace('_', ' ')} for client {p['client_id']}"
+    if spec["type"] == "CLIENT_CONFIRMATION":
+        return f"Client {p['client_id']} confirmed the change by {p.get('channel', 'phone')}"
+    return spec["type"].replace("_", " ").lower()
 
 
 def doc_key(doc: dict) -> str:
@@ -198,7 +209,10 @@ class Case:
         item = next(i for i in SCENARIO if i["id"] == item_id)
         self.emit("SCENARIO_DELIVERED", ENGINE, {"item_id": item_id}, f"Inbound: {item['label']}")
         received = []
-        for doc in materialise(item, self.now):
+        for spec in item.get("events", []):  # internal bank events (staff actions), checked by sequence rules
+            received.append(self.emit(spec["type"], spec["actor"], spec["payload"], _internal_summary(spec)))
+            sequence.check(self)
+        for doc in (materialise(item, self.now) if item.get("docs") else []):
             doc_id = self._next_id("doc", "docs")
             payload = {"id": doc_id, **doc}
             noun = "Email" if doc["type"] == "email" else "Document"
@@ -237,6 +251,9 @@ class Case:
         ev = self.emit("EXCEPTION_RESOLVED", ANALYST, {"id": exception_id, "action_id": action_id, "note": note,
                                                        "requirement_id": ex["requirement_id"]},
                        f"Analyst resolved {exception_id}: {action_id}")
+        if ex["kind"] == "sequence_insider" and action_id == "escalate_compliance":
+            self.emit("CASE_STATUS", ENGINE, {"status": "ON_HOLD", "reason": f"Escalated to compliance ({exception_id})"},
+                      f"File on hold: {exception_id} escalated to compliance")
         return ev
 
     # --- tool execution (the agent's only door into the case)
