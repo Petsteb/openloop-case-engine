@@ -28,7 +28,7 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 4. **Tuning:** prompts in `agent.py`/`chat.py`; warm the Featherless cache before recording.
 5. **Backup video:** record one run in offline mode as insurance.
 
-**Resume our context:** `docs/handoff/` has a short handoff from each Claude session and their redacted transcripts, so you can `claude --resume` them (see `docs/handoff/sessions/README.md`).
+**Resume where we left off:** start with `docs/handoff/README.md`. It has the read order, the setup, and a prompt to paste into Claude Code.
 
 **Rules:** never commit `.env` (keys come privately); run the tests before every push; feature freeze is at 08:00 and we submit by 10:30.
 
