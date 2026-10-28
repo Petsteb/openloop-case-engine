@@ -154,21 +154,27 @@ Keep the custom tokens above as well.
   - Clicking a row selects it and the centre shows its detail.
 - **Centre:**
   - **Decision card(s)** (reference: `DecisionCard` in the lab):
-    - **Card:** radius 20px, a 1px `--line` border, a `--surface` fill with a faint `--attn` radial glow in the top-left, and a 1px attn gradient highlight along the top edge. `--tone` is `--conflict` for high severity and `--review` for medium.
-    - **Header strip:** "Needs your decision" (attn dot); a severity outline pill in `--tone`; "AMLR report due in N days" with a clock icon (conflict) while that timer is pending; on the right, `EX-1` in mono and "raised day 3 at 11:21".
+    - **Card:** flat, modelled on the panels in Linear and Vercel's Geist. Elevation is one lightness step (`--surface` on `--bg`), a 1px `--line` border and a 12px radius. **No gradients, glows or shadows anywhere.** `--tone` is `--conflict` for high severity and `--review` for medium.
+    - **Header row** (hairline below): "Needs your decision" (attn dot), a severity outline pill in `--tone`, and `EX-1` in mono on the right.
     - **Body:**
-      - a kicker (`R2` mono chip plus the requirement title);
-      - the title in display type, 24–34px, -0.03em, at most 28ch;
-      - "why" in `--ink-2`, at most 64ch.
-    - **Evidence as document slips:** one per document, on a `--bg` fill with a 14px radius.
-      - The caption has a doc icon, the source name and the `doc-N` ID in mono on the right.
-      - Each line is Source Serif 16px. Lines that **differ** or are **missing** get a `--tone` tint, a 2px `--tone` bar on the left, `<mark>` on the differing words, and a mono 11px note in `--tone` ("declared as 70%", "not in the declaration").
-      - Matching lines stay in `--ink-2`; gap lines are italic muted.
+      - the title in display type, 24–32px, -0.03em, at most 28ch;
+      - "why" in `--ink-2`, at most 64ch;
+      - **meta properties**, Linear-style: a grid of muted 12px labels over 13px values. They are Check (`R2` plus title), Rule (`HR-04`), Deadline ("AMLR report in 14 days" in conflict, only while that timer is pending) and Raised (day and time).
+    - **Comparison, "on file" vs "new":** always two slips, the **on-file document on the left** and the **newly received document on the right**, separated by a dashed vertical rule with a small mono "vs". They stack on narrow screens.
+      - Each slip: radius 8px, a `--bg` fill, 1px `--line`. The **new** slip's border is `--attn` mixed at 55% with `--line`.
+      - Caption row:
+        - an age pill: "New" filled with attn, or "On file" as an outline;
+        - the document name and the `doc-N` ID in mono;
+        - underneath, the source type and timing in muted text: "Official register (ONRC), received day 3 at 11:20", or "Signed by the client, on file since 15 Sep 2026".
+      - Lines in Source Serif 16px:
+        - lines that **differ** or are **missing** get a 2px `--tone` bar on the left (no background tint), `<mark>` on the differing words, and a mono 11px note in `--tone` ("declared as 70%", "not in the declaration");
+        - matching lines stay in `--ink-2`; gap lines are italic muted.
+      - The data needs `role` (`onfile`/`new`) per document. Derive it from received times: the document that triggered the check is "new"; the older document it's compared with is "on file".
     - **"What already matches":** a row of ✓ facts in muted text, e.g. "Postal code 400127 in both".
     - **Judge confidence:** thin tracks with a dashed threshold tick and the label "Needed to accept automatically: 90%".
-    - **Agent note:** an attn-tinted row with "✳ Agent", the text, and the time in mono.
-    - **Rule:** a hairline above, the rule ID as a mono chip, and the text muted.
-    - **Footer action bar:** a hairline above with a slightly darker fill. The primary button carries a `⏎` hint; the rest are outline pills, then a spacer and an "Open in ledger" text link.
+    - **Agent note:** a flat `--surface-2` row with a 1px border and an 8px radius, "✳ Agent" in attn, the text, and the time in mono.
+    - **Rule:** the rule ID as a mono chip, with the rule text muted.
+    - **Footer action bar:** a hairline above, no fill. The primary button carries a `⏎` hint; the rest are outline pills, then a spacer and an "Open in ledger" text link.
     - The data needs `papers[].lines[] {t, k: same|diff|missing|gap, marks[], note}`. Derive it from the exception snippets: the backend gives the raw lines, and the UI marks a line as diff or missing when the `requirement_id` and the rule tell it which values differ. If that can't be derived, show plain lines.
   - A **`sequence_insider` card** shows the two linked events (summaries with `#seq`) instead of quotes.
   - **Otherwise:** the selected requirement's detail (reason, evidence quotes, rule), or a waiting summary.
