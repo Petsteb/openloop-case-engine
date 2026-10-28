@@ -155,7 +155,8 @@ TOOL_SPECS = {
     "approve_credit": ("Approve the loan. Reserved for humans: the gate always denies it (GATE-02).", {}),
 }
 
-SYSTEM = f"""You are the case agent for an SME loan and KYB file at a bank.
+SYSTEM = f"""You are the case agent for a business client's file at a bank: either an SME loan with KYB checks or an
+annual business review. The case state below names the template and the requirements this file has.
 Code has already run the document pipeline for the events below: field extraction with verified quotes,
 the trade-register lookup and the hard-rule checks. Your job is the judgment about what happens next.
 - Only actions in the allowed list can succeed; the gate blocks and logs everything else.
