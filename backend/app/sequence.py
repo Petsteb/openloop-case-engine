@@ -40,11 +40,14 @@ def find_violations(events: list[dict], rule: dict) -> list[tuple[dict, dict]]:
 def check(case) -> list[str]:
     """Raise one exception per new violation; returns the new exception ids."""
     st = case.state()
-    known = {(x.get("first_seq"), x.get("then_seq")) for x in st["exceptions"].values() if x["kind"] == "sequence_insider"}
+    known = {x.get("then_seq") for x in st["exceptions"].values() if x["kind"] == "sequence_insider"}
     new_ids = []
     for rule in T.SEQUENCE_RULES:
-        for f, t in find_violations(case.ledger.events, rule):
-            if (f["seq"], t["seq"]) in known:
+        first_for = {}
+        for f, t in find_violations(case.ledger.events, rule):  # one card per credit action, earliest change shown
+            first_for.setdefault(t["seq"], (f, t))
+        for f, t in first_for.values():
+            if t["seq"] in known:
                 continue
             hours = (datetime.fromisoformat(t["sim_time"]) - datetime.fromisoformat(f["sim_time"])).total_seconds() / 3600
             staff, field = f["actor"].get("id"), f["payload"].get("field", "contact details")

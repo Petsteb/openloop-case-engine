@@ -32,7 +32,8 @@ def ro_label(key: str) -> str:
 
 
 def _already_covered(events: list[dict]) -> int:
-    covered = [s for e in events if e["type"] in ("EMAIL_SENT", "EMAIL_FAILED") for s in e["payload"].get("covers", [])]
+    """Only delivered emails count: after a failure, the next flush retries the same events."""
+    covered = [s for e in events if e["type"] == "EMAIL_SENT" for s in e["payload"].get("covers", [])]
     return max(covered, default=0)
 
 

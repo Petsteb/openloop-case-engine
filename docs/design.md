@@ -94,6 +94,11 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
   - **Read-only:** the chat appends one `CHAT_TURN` event to the ledger and changes nothing else.
   - **Client role:** never receives internal review details.
 - **`GET /api/cases/{case_id}/client-view`:** returns `{"overview", "missing_documents", "issues", "timeline", "emails"}`. Everything the applicant may see, from the same allow-list as the client chat. Use it for an optional customer page.
+- **`POST /api/cases/{case_id}/release-hold`:**
+  - **Body:** `{"by": "compliance-1", "note": "..."}`.
+  - **Effect:** compliance lifts an `ON_HOLD`. Returns the bundle, now with status `OPEN`, and the agent resumes.
+  - **409** if the file is not on hold.
+- **Optional staff token:** if `STAFF_TOKEN` is set, employee chat, `release-hold` and `promote` require the header `X-Staff-Token`. Unset in the demo; production takes identity from the bank's SSO.
 - **`case.status`:** may also be `ON_HOLD` (show as "On hold", brick red). It is set when an insider-pattern card is escalated to compliance.
 - **`exceptions[]` with `kind: "sequence_insider"`** (rule `SR-01`):
   - `requirement_id` is `"MON"`, meaning monitoring, not one of R1–R6.

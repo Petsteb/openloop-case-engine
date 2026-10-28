@@ -43,11 +43,15 @@ def test_check_matches_street_type_variant_only():
     assert not learner.check_matches(a, "Calea Fagului nr. 9, Cluj-Napoca", "400127", "400127")
     assert not learner.check_matches(a, b, "400127", "400134")
     assert not learner.check_matches(a, "Calea Fagului nr. 7, Turda", "400127", "400127")
+    # small town with one postal code for every street: never auto-accepted, even though everything else matches
+    assert not learner.check_matches("Str. Gării nr. 4, Sântana, jud. Arad", "Calea Gării nr. 4, Sântana, Județ Arad",
+                                     "317280", "317280")
 
 
 def test_backtest_reports_zero_false_approvals_on_eval():
     r = learner.backtest(learner.PROPOSAL_ID)
-    assert r["n"] == 40 and r["false_approvals"] == 0 and r["auto_resolved"] >= 10
+    assert r["n"] == 48 and r["false_approvals"] == 0 and r["auto_resolved"] >= 10
+    assert r["naive_rule_false_approvals"] == 8          # the counterexamples the city condition exists for
 
 
 def test_promote_rejects_maker_as_checker():

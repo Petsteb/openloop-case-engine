@@ -35,26 +35,14 @@ def _reason_for(action: dict, st: dict) -> str:
     return "All requirements satisfied and no open exceptions — hand the file to a human for the credit decision"
 
 
-class ScriptedAgent:
-    mode = "scripted"
-    status = "ok"
+class BaseAgent:
+    """One click = the pipeline for every event, then one planning step."""
 
-    # --- pipeline: deterministic, always runs, whatever planner is in charge
-    def pipeline(self, case: Case, trigger: dict, emails: bool = True) -> None:
-        p = trigger["payload"]
-        if trigger["type"] == "DOCUMENT_RECEIVED":
-            if p["type"] != "email":
-                self._document(case, p)
-            elif emails:
-                self._email(case, p)
-        elif trigger["type"] == "TIMER_FIRED":
-            self._timer(case, p)
-        elif trigger["type"] == "EXCEPTION_RESOLVED" and p["requirement_id"] in case.state()["reqs"]:
-            case.run_tool("check_requirement", {"req_id": p["requirement_id"]},
-                          f"Analyst resolved {p['id']} ({p['action_id']}) — re-evaluate {p['requirement_id']}", PIPELINE)
+    def pipeline(self, case: Case, trigger: dict) -> None:
+        raise NotImplementedError
 
     def plan(self, case: Case, events: list[dict]) -> None:
-        self.follow_up(case, PLANNER)
+        raise NotImplementedError
 
     def handle_batch(self, case: Case, events: list[dict]) -> None:
         for e in events:
@@ -63,6 +51,25 @@ class ScriptedAgent:
 
     def handle(self, case: Case, trigger: dict) -> None:
         self.handle_batch(case, [trigger])
+
+
+class ScriptedAgent(BaseAgent):
+    mode = "scripted"
+    status = "ok"
+
+    # --- pipeline: deterministic, always runs, whatever planner is in charge
+    def pipeline(self, case: Case, trigger: dict) -> None:
+        p = trigger["payload"]
+        if trigger["type"] == "DOCUMENT_RECEIVED":
+            self._email(case, p) if p["type"] == "email" else self._document(case, p)
+        elif trigger["type"] == "TIMER_FIRED":
+            self._timer(case, p)
+        elif trigger["type"] == "EXCEPTION_RESOLVED" and p["requirement_id"] in case.state()["reqs"]:
+            case.run_tool("check_requirement", {"req_id": p["requirement_id"]},
+                          f"Analyst resolved {p['id']} ({p['action_id']}) — re-evaluate {p['requirement_id']}", PIPELINE)
+
+    def plan(self, case: Case, events: list[dict]) -> None:
+        self.follow_up(case, PLANNER)
 
     def _document(self, case: Case, doc: dict) -> None:
         label = T.DOC_LABELS.get(doc["type"], doc["type"])
@@ -76,7 +83,7 @@ class ScriptedAgent:
 
     def _email(self, case: Case, doc: dict) -> None:
         intent = case.run_tool("classify_email", {"doc_id": doc["id"]}, "Client email arrived — what is it about?",
-                               PLANNER)["output"]
+                               PIPELINE)["output"]
         if intent.get("intent") != "ownership_change":
             return
         st = case.state()
@@ -84,9 +91,9 @@ class ScriptedAgent:
         if open_ex:
             case.run_tool("annotate_exception", {"exception_id": open_ex[0]["id"],
                                                  "note": "Client email confirms a new shareholder — consistent with the register"},
-                          "Email explains the open beneficial-owner discrepancy — attach it for the analyst", PLANNER)
+                          "Email explains the open beneficial-owner discrepancy — attach it for the analyst", PIPELINE)
         case.run_tool("request_document", {"key": "ubo_declaration", "note": "Client announced an ownership change"},
-                      "Client reports an ownership change — ask for the corrected UBO declaration", PLANNER)
+                      "Client reports an ownership change — ask for the corrected UBO declaration", PIPELINE)
 
     def _timer(self, case: Case, t: dict) -> None:
         if t["kind"] == "reminder":
@@ -150,7 +157,7 @@ the trade-register lookup and the hard-rule checks. Your job is the judgment abo
 Requirements: {', '.join(r['id'] + ' ' + r['title'] for r in T.REQUIREMENTS)}."""
 
 
-class BedrockAgent:
+class BedrockAgent(BaseAgent):
     """Claude on Amazon Bedrock as the planner; see llm.py for the client."""
     mode = "bedrock"
 
@@ -182,14 +189,6 @@ class BedrockAgent:
         # Safety net: obligations (legal clocks, escalations, missing documents) are guaranteed by code,
         # whatever the model chose to do.
         self.scripted.follow_up(case, SAFETY_NET)
-
-    def handle_batch(self, case: Case, events: list[dict]) -> None:
-        for e in events:
-            self.pipeline(case, e)
-        self.plan(case, events)
-
-    def handle(self, case: Case, trigger: dict) -> None:
-        self.handle_batch(case, [trigger])
 
     def _brief(self, case: Case, events: list[dict]) -> str:
         lines = [f"- #{e['seq']} {e['type']}: {e['summary']}"

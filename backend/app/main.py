@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from typing import Literal  # noqa: E402
 
@@ -166,9 +166,38 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
         return bundle(case)
 
 
+class Release(BaseModel):
+    by: str = Field(min_length=1, max_length=80)
+    note: str = Field(default="", max_length=500)
+
+
+@app.post("/api/cases/{case_id}/release-hold")
+def release_hold(case_id: str, body: Release, x_staff_token: str | None = Header(default=None)):
+    """Compliance lifts an ON_HOLD (e.g. the insider pattern turned out legitimate)."""
+    _require_staff(x_staff_token)
+    case = _case(case_id)
+    with LOCK:
+        try:
+            event = case.release_hold(body.by, body.note)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        AGENT.handle_batch(case, [event])
+        notifier.flush(case)
+        return bundle(case)
+
+
+def _require_staff(token: str | None) -> None:
+    """Demo has no login; set STAFF_TOKEN to require X-Staff-Token on staff-only calls (production: bank SSO)."""
+    expected = os.environ.get("STAFF_TOKEN", "")
+    if expected and token != expected:
+        raise HTTPException(403, "staff token required")
+
+
 @app.post("/api/cases/{case_id}/chat")
-def chat_endpoint(case_id: str, body: ChatIn):
+def chat_endpoint(case_id: str, body: ChatIn, x_staff_token: str | None = Header(default=None)):
     """Read-only Q&A about the case for a client or an employee; only the audit append takes the write lock."""
+    if body.role == "employee":
+        _require_staff(x_staff_token)
     case = _case(case_id)
     result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
     with LOCK:
@@ -207,8 +236,10 @@ def learning_backtest(proposal_id: str):
 
 
 @app.post("/api/learning/proposals/{proposal_id}/promote")
-def learning_promote(proposal_id: str, body: Promote):
-    """Maker-checker: 409 when the promoter is one of the analysts whose rulings created the proposal."""
+def learning_promote(proposal_id: str, body: Promote, x_staff_token: str | None = Header(default=None)):
+    """Maker-checker: 409 when the promoter is one of the analysts whose rulings created the proposal.
+    Identity here is the typed name (no login in the demo); production takes it from the bank's SSO."""
+    _require_staff(x_staff_token)
     case = _learning_case()
     with LOCK:
         try:

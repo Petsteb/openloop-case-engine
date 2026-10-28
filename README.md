@@ -65,6 +65,11 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **Every agent step is logged** with its reason, tool, input, output and gate verdict, including failed calls.
 - **Quotes are verified:** every extracted field carries a verbatim quote. A field whose quote isn't in the document text is dropped and can never serve as evidence.
 
+## Known limitations (demo scope)
+- **Identity is simulated.** Roles (client, employee, compliance) and names (analyst, supervisor) come from the request; there is no login. `STAFF_TOKEN` can gate staff-only calls. Production would take identity from the bank's SSO, which is what makes the maker-checker rule binding.
+- **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.
+- **Learned check backtest.** It runs on a synthetic labelled set (`backend/eval/address_cases.jsonl`) that includes small-town counterexamples, where the naive rule makes 8 false approvals. It is evidence for the demo, not a substitute for backtesting on the bank's historical rulings.
+
 ## Domain evidence
 `research/` holds sourced findings: Raiffeisen fines, the AMLR/DORA/AI Act timelines, prior art, and 13 processes where the
 same engine applies (`research/07-impact-synthesis.md`).

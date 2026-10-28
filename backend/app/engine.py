@@ -261,6 +261,14 @@ class Case:
                       f"File on hold: {exception_id} escalated to compliance")
         return ev
 
+    def release_hold(self, by: str, note: str = "") -> dict:
+        """Compliance clears the file: back to OPEN so the agent and the client flow resume."""
+        if self.state()["status"] != "ON_HOLD":
+            raise ValueError("file is not on hold")
+        return self.emit("CASE_STATUS", {"type": "compliance", "id": by},
+                         {"status": "OPEN", "reason": f"Hold released by compliance ({by})", "note": note},
+                         f"Hold released by compliance ({by})")
+
     # --- tool execution (the agent's only door into the case)
     def run_tool(self, tool: str, params: dict, reason: str, actor: dict = AGENT) -> dict:
         st = self.state()

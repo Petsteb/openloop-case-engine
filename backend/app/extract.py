@@ -5,7 +5,7 @@ same shape; `verify_quotes` then proves every quote really appears in the source
 """
 import re
 
-from .rules import parse_amount
+from .rules import norm_text, parse_amount
 
 # document type -> {line key (lowercase, Romanian) -> field name}
 FIELD_MAP = {
@@ -43,16 +43,28 @@ def extract_scripted(doc_type: str, text: str) -> dict:
             fields.append({"field": mapping[k], "value": value, "quote": line})
     if doc_type == "email":
         body = "\n".join(l for l in text.splitlines() if ":" not in l.split(" ")[0])
-        fields.append({"field": "body", "value": body.strip(), "quote": body.strip().splitlines()[0] if body.strip() else ""})
+        if body.strip():
+            fields.append({"field": "body", "value": body.strip(), "quote": body.strip()})
     return {"fields": fields, **owners}
 
 
+def _supports(quote: str, *values) -> bool:
+    nq = norm_text(quote)
+    return all(norm_text(str(v)) in nq for v in values if str(v).strip())
+
+
 def verify_quotes(text: str, extraction: dict) -> list[str]:
-    """Return the quotes that do NOT appear verbatim in the document (should be empty)."""
-    quotes = [f["quote"] for f in extraction.get("fields", [])]
+    """Return the quotes that fail verification (should be empty).
+
+    A quote passes only if it is non-empty, appears verbatim in the document, AND actually contains the
+    extracted value (owners: name and share). A real quote paired with a forged value fails too.
+    """
+    bad = [f["quote"] for f in extraction.get("fields", [])
+           if not f.get("quote") or f["quote"] not in text or not _supports(f["quote"], f.get("value", ""))]
     for key in OWNER_KEYS.values():
-        quotes += [o["quote"] for o in extraction.get(key, [])]
-    return [q for q in quotes if q and q not in text]
+        bad += [o["quote"] for o in extraction.get(key, [])
+                if not o.get("quote") or o["quote"] not in text or not _supports(o["quote"], o["name"], f"{o['pct']:g}")]
+    return bad
 
 
 def scan_injection(text: str) -> list[str]:

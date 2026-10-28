@@ -87,12 +87,25 @@ def cache_key(model: str, kind: str, a: str, b: str) -> str:
     return hashlib.sha256(f"{model}|{kind}|{a}|{b}".encode("utf-8")).hexdigest()
 
 
+_MEMO: dict = {"path": None, "mtime": None, "data": {}}
+
+
 def _cache_load() -> dict:
+    """Parsed once per file version (path + mtime), not on every judge() call."""
+    path = cache_path()
     try:
-        data = json.loads(cache_path().read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):  # missing or corrupt file is an empty cache
+        mtime = path.stat().st_mtime
+    except OSError:  # missing file is an empty cache
         return {}
+    if _MEMO["path"] == str(path) and _MEMO["mtime"] == mtime:
+        return _MEMO["data"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data = data if isinstance(data, dict) else {}
+    except (OSError, ValueError):  # corrupt file is an empty cache
+        data = {}
+    _MEMO.update(path=str(path), mtime=mtime, data=data)
+    return data
 
 
 def _cache_get(key: str) -> dict | None:

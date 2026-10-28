@@ -19,15 +19,21 @@ HISTORY = EVAL / "history_rulings.jsonl"
 CASES = EVAL / "address_cases.jsonl"
 MIN_SUPPORT = 3
 PROPOSAL_ID = "P-address-variant"
-DESCRIPTION = ("Same street name and number, same city and postal code; only the street type differs "
-               "(Str./Calea/Bd.) and building details (bl., sc., ap.) may be omitted")
+DESCRIPTION = ("In cities whose postal codes identify the street: same street name and number, same city and postal "
+               "code; only the street type differs (Str./Calea/Bd.) and building details (bl., sc., ap.) may be omitted")
 BUILDING = {"bl", "sc", "ap", "et"}
+# Romanian municipalities use street-level postal codes; small localities often share one code for every street,
+# so there "Str. Gării" and "Calea Gării" with the same code can still be different streets.
+STREET_LEVEL_POSTAL_CITIES = [("cluj", "napoca"), ("timisoara",), ("sibiu",), ("oradea",), ("constanta",), ("craiova",),
+                              ("galati",), ("ploiesti",), ("arad",), ("bacau",), ("brasov",), ("iasi",), ("bucuresti",)]
 PROMOTED: list[dict] = []
 
 
 def _core(address: str) -> set[str]:
     toks, out, skip = norm_text(address).split(), set(), False
     for t in toks:
+        if t in ("jud", "judet", "judetul"):  # the county is not the locality ("Sântana, jud. Arad" is not Arad)
+            break
         if skip:
             skip = False
             continue
@@ -40,10 +46,14 @@ def _core(address: str) -> set[str]:
     return out
 
 
-def check_matches(a: str, b: str, postal_a: str, postal_b: str) -> bool:
-    """The composite check: postal codes equal and identical street name, number and city once types are ignored."""
+def check_matches(a: str, b: str, postal_a: str, postal_b: str, street_level_only: bool = True) -> bool:
+    """The composite check: postal codes equal and identical street name, number and city once types are ignored,
+    and (by default) only in cities whose postal codes are street-level."""
     pa, pb = re.sub(r"\D", "", postal_a or ""), re.sub(r"\D", "", postal_b or "")
-    return bool(pa) and pa == pb and _core(a) == _core(b) and bool(_core(a))
+    core = _core(a)
+    if not (pa and pa == pb and core and core == _core(b)):
+        return False
+    return not street_level_only or any(set(city) <= core for city in STREET_LEVEL_POSTAL_CITIES)
 
 
 def _rows(path: Path) -> list[dict]:
@@ -73,10 +83,13 @@ def backtest(proposal_id: str) -> dict:
     rows = _rows(CASES)
     hits = [r for r in rows if check_matches(r["a"], r["b"], r["postal_a"], r["postal_b"])]
     false_approvals = [r["id"] for r in hits if r["label"] != "same"]
+    naive = [r for r in rows if check_matches(r["a"], r["b"], r["postal_a"], r["postal_b"], street_level_only=False)]
     return {"n": len(rows), "auto_resolved": len(hits), "false_approvals": len(false_approvals),
             "false_approval_ids": false_approvals, "manual_review_rate": round(1 - len(hits) / len(rows), 3) if rows else None,
             "same_pairs_caught": sum(1 for r in hits if r["label"] == "same"),
-            "same_pairs_total": sum(1 for r in rows if r["label"] == "same")}
+            "same_pairs_total": sum(1 for r in rows if r["label"] == "same"),
+            # what the rule would have done without the street-level-postal-code condition (small-town counterexamples)
+            "naive_rule_false_approvals": sum(1 for r in naive if r["label"] != "same")}
 
 
 def promote(st: dict, proposal_id: str, by: str) -> dict:
