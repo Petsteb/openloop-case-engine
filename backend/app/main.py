@@ -11,9 +11,11 @@ load_dotenv(ROOT / ".env")
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from typing import Literal  # noqa: E402
 
-from . import notifier, registry  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from . import chat, notifier, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import make_agent  # noqa: E402
 from .engine import Case  # noqa: E402
@@ -40,6 +42,17 @@ class Resolve(BaseModel):
 
 class RegistryToggle(BaseModel):
     down: bool
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=6000)
+
+
+class ChatIn(BaseModel):
+    role: Literal["client", "employee"]
+    message: str = Field(min_length=1, max_length=1000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=10)
 
 
 def _text(v) -> str:
@@ -145,6 +158,16 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
         AGENT.handle_batch(case, [event])
         notifier.flush(case)
         return bundle(case)
+
+
+@app.post("/api/cases/{case_id}/chat")
+def chat_endpoint(case_id: str, body: ChatIn):
+    """Read-only Q&A about the case for a client or an employee; only the audit append takes the write lock."""
+    case = _case(case_id)
+    result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
+    with LOCK:
+        chat.log_turn(case, body.role, body.message, result)
+    return result
 
 
 @app.get("/api/cases/{case_id}/verify")
