@@ -35,13 +35,21 @@ Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and 
 6. **Inbound → updated documents**: the beneficial owners match, the IDs are on file, and the legal clock is **cancelled**. Every check passes, so the file becomes **READY_FOR_DECISION**.
 7. **+7 days**: the certificate passes 30 days and becomes **EXPIRED**. The engine enforces this, not the agent. The file **reopens** and the agent re-requests the certificate.
 8. **Inbound → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
-9. **Verify ledger**: the hash chain is intact.
+9. **Inbound → internal staff events** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
+10. **Ask the case** (chat, two roles):
+    - **Employee:** "When did we learn about Radu Pop and what did we do?" The answer cites ledger events `[#seq]`.
+    - **Client:** "What do you still need from me?" The answer is plain-language. The client role never sees internal reviews.
+11. **Outbox**: the client got one Romanian email per step: documents needed, reminders, file complete. Never anything internal.
+12. **Verify ledger**: the hash chain is intact, including every chat turn and email.
 
 ## Modes
 | Env | Values | Notes |
 |---|---|---|
-| `AGENT_MODE` | `scripted` (default) / `bedrock` | `bedrock` = Claude plans its own tool calls (Anthropic SDK Mantle client, key in `AWS_BEARER_TOKEN_BEDROCK`). On any failure it falls back to scripted (30 s timeout). Requests, legal clocks, escalations and expiry are enforced in code either way. |
+| `AGENT_MODE` | `scripted` (default) / `bedrock` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **Claude (Bedrock, `us.anthropic.claude-opus-5-5`, `us-east-1`) plans once per click** over the allowed actions, interprets emails and words escalations. On any failure it falls back to scripted (30 s timeout), and a code safety net runs after it either way. |
 | `JUDGE_MODE` | `heuristic` (default) / `featherless` | `featherless` calls `/v1/classifier`; on error it falls back to heuristic and says so |
+| `EMAIL_MODE` | `outbox` (default) / `gmail` | `gmail` sends through SMTP with `GMAIL_USER` + `GMAIL_APP_PASSWORD`; `NOTIFY_TO` redirects all demo mail to a team inbox |
+
+**Bring your own document AI:** `template.EXTRACTOR_ROUTES` routes each document type to an adapter (`backend/app/extractors.py`). Financial statements go through a simulated bank document-AI adapter. Whatever answers must return fields plus verbatim quotes, which code verifies; `DOCAI_CURVEBALL=1` shows an unverifiable field being rejected.
 
 Copy `.env.example` to `.env` to configure.
 
