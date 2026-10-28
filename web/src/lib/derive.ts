@@ -1,5 +1,7 @@
 /* Pure Bundle -> view mapping. No DOM, no React, relative imports only (testable from a Node script). */
-import type { Bundle, DocumentInfo, Evidence, Exception_, LedgerEvent, Requirement, Timer, TraceStep } from './types'
+import type {
+  Bundle, DocDetail, DocField, DocListItem, DocUse, DocumentInfo, Evidence, Exception_, LedgerEvent, Requirement, Timer, TraceStep,
+} from './types'
 
 /* ================= time ================= */
 export const MIN = 6e4
@@ -234,7 +236,8 @@ const actorType = (e: { actor?: { type?: unknown } }) => String(e.actor?.type ??
 const HUMAN_STAFF = new Set(['analyst', 'employee', 'staff', 'reviewer', 'compliance'])
 // Chat, client emails and bank-internal staff events stay in the ledger tab, never on the rail
 // (an employee's insider actions are not analyst work on the file).
-const RAIL_HIDE = new Set(['CHAT_TURN', 'EMAIL_SENT', 'EMAIL_FAILED', 'CHECK_PROMOTED', 'STAFF_CONTACT_CHANGE', 'CREDIT_ACTION', 'CLIENT_CONFIRMATION'])
+const RAIL_HIDE = new Set(['CHAT_TURN', 'EMAIL_SENT', 'EMAIL_FAILED', 'CHECK_PROMOTED', 'STAFF_CONTACT_CHANGE', 'CREDIT_ACTION', 'CLIENT_CONFIRMATION',
+  'CLIENT_DISPUTE', 'CLIENT_CONSENT'])
 const SKIP_AGENT_LANE = new Set(['AGENT_STEP', 'SCENARIO_DELIVERED', 'CLOCK_ADVANCED', 'TIMER_SET', 'TIMER_FIRED', 'TIMER_CANCELLED', 'CHAT_TURN'])
 // Routine bookkeeping stays off the agent lane (it is in the ledger tab); the lane shows what the agent did that matters.
 const ROUTINE_AGENT = new Set(['FIELDS_EXTRACTED', 'REGISTRY_CHECKED', 'REQUIREMENT_UPDATED'])
@@ -511,6 +514,7 @@ const TOASTS: Record<string, string> = {
   different_person: 'Signatory marked as a different person. A mandate was requested.',
   escalate_compliance: 'File put on hold and escalated to compliance.',
   legitimate: 'Marked as legitimate. The file continues.',
+  acknowledge: 'Contact change acknowledged as legitimate. The file continues.', // client_dispute
 }
 export const resolveToast = (x: Exception_, actionId: string) => TOASTS[actionId] || `Decision recorded: ${actionLabel(x, actionId).toLowerCase()}.`
 
@@ -666,4 +670,299 @@ export function compareSlips(b: Bundle, slips: Slip[]): CompareSlip[] {
     const role = k === 1 ? 'new' as const : 'onfile' as const
     return { ...i.s, role, meta: meta(i.d, role) }
   })
+}
+
+/* ================= document viewer + Docs tab =================
+   Server first (`/documents?role=employee`, `/documents/{id}?role=employee`); when a server has no such endpoint,
+   the same view is built from the bundle (no full text there, only the quotes used as evidence). */
+export const DOC_TYPE_LABEL: Record<string, string> = {
+  application: 'Loan application', financial_statement: 'Financial statements', ubo_declaration: 'UBO declaration',
+  id_card: 'Identity card', onrc_certificate: 'Trade register certificate (ONRC)', fiscal_certificate: 'Fiscal certificate (ANAF)',
+  email: 'Client email', address_proof: 'Proof of registered office', signatory_mandate: 'Signatory mandate',
+}
+/** Bank policy for registry and fiscal certificates (backend template.DOC_VALIDITY_DAYS); bundle fallback only. */
+const DOC_VALIDITY_DAYS = 30
+const EXPIRING_DOCS = new Set(['onrc_certificate', 'fiscal_certificate'])
+
+export type DocStatusKind = 'valid' | 'expired' | 'superseded' | 'quarantined' | 'unreadable'
+/** Colour only for problems: expired, quarantined and unreadable carry a tone; superseded is muted; valid is plain ink. */
+export const DOC_STATUS: Record<DocStatusKind, { word: string; cls: string }> = {
+  valid: { word: 'Valid', cls: 'st-verified' },
+  expired: { word: 'Expired', cls: 'st-expired' },
+  superseded: { word: 'Superseded', cls: 'st-waiting' },
+  quarantined: { word: 'Quarantined', cls: 'st-conflict' },
+  unreadable: { word: 'Needs manual reading', cls: 'st-review' },
+}
+const docStatusKind = (s: unknown): DocStatusKind | null => (String(s) in DOC_STATUS ? String(s) as DocStatusKind : null)
+
+export interface DocUseRow { id: string; title: string; kind: Kind | null; word: string }
+export interface DocRow {
+  id: string
+  name: string
+  label: string
+  type: string
+  person: string | null
+  issuedDay: number | null
+  receivedDay: number | null
+  /** Exact times from the bundle, when the bundle knows the document. */
+  receivedAt: number | null
+  issuedAt: number | null
+  status: string
+  statusWord: string
+  statusCls: string
+  usedBy: DocUseRow[]
+  extractor: string | null
+  source: string | null
+}
+export interface DocViewField { field: string; value: string; quote: string; verified: boolean | null; start: number | null; end: number | null }
+export interface DocHistoryRow { seq: number | null; day: number | null; what: string }
+export interface DocView extends DocRow {
+  text: string | null
+  fields: DocViewField[]
+  rejected: string[]
+  injections: string[]
+  quarantineReason: string | null
+  validity: { issuedDay: number | null; expiresDay: number | null; expired: boolean } | null
+  history: DocHistoryRow[]
+  /** server: the documents endpoint; case: built from the bundle; missing: no such document in this case. */
+  origin: 'server' | 'case' | 'missing'
+}
+
+const num = (v: unknown): number | null => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+/** A case day as a calendar time (midnight UTC of that day). */
+export const dayTime = (b: Bundle, day: number) => caseClock(b).midnight0 + day * DAY
+/** "day 9, 6 Nov"; days before the case opened read as a date with the year ("7 Oct 2026"). */
+export function dayText(b: Bundle, day: number | null): string {
+  if (day === null) return ''
+  const t = dayTime(b, day)
+  return day < 0 ? `${fDate(t)} ${new Date(t).getUTCFullYear()}` : `day ${day}, ${fDate(t)}`
+}
+export const docFieldName = (f: string) => sentence(humanize(f)).replace(/\b(cui|ubo|ebitda|cnp|dscr)\b/gi, (w) => w.toUpperCase())
+
+/** Requirement status from the live bundle (the server's word only if the bundle does not know the check). */
+function useRow(b: Bundle, u: DocUse | Requirement): DocUseRow {
+  const r = reqById(b, u.id)
+  const kind = r ? kindOf(r.status) : null
+  const word = kind ? STATUS[kind].word : String((u as DocUse).status_word || '')
+  return { id: u.id, title: cleanTitle(r?.title || u.title || u.id), kind, word }
+}
+
+/** One Docs tab row from the server list, with exact times from the bundle when it has them. */
+export function docRowFromApi(b: Bundle, it: DocListItem): DocRow {
+  const d = arr(b.documents).find((x) => x.id === it.id)
+  const k = docStatusKind(it.status)
+  return {
+    id: it.id,
+    name: String(it.name || d?.name || it.label || it.id),
+    label: String(it.label || DOC_TYPE_LABEL[String(it.type)] || sentence(humanize(it.type || 'document'))),
+    type: String(it.type || d?.type || ''),
+    person: it.person ? String(it.person) : null,
+    issuedDay: num(it.issued_day),
+    receivedDay: num(it.received_day),
+    receivedAt: ms(d?.received_at),
+    issuedAt: ms(d?.issued_at),
+    status: String(it.status || 'valid'),
+    statusWord: k ? DOC_STATUS[k].word : sentence(it.status_word || humanize(it.status || '')),
+    statusCls: k ? DOC_STATUS[k].cls : 'st-waiting',
+    usedBy: arr(it.used_by).map((u) => useRow(b, u)),
+    extractor: it.extractor ? String(it.extractor) : null,
+    source: it.source ? String(it.source) : null,
+  }
+}
+
+/** Bundle-only status: a newer document of the same kind supersedes; certificates expire after the policy window. */
+function bundleStatus(b: Bundle, d: DocumentInfo): DocStatusKind {
+  const key = (x: DocumentInfo) => (x.type === 'id_card' ? `id|${x.name}` : String(x.type))
+  const after = (x: DocumentInfo) => {
+    const r = ms(x.received_at) ?? 0
+    const r0 = ms(d.received_at) ?? 0
+    return r > r0 || (r === r0 && docNum(x.id) > docNum(d.id))
+  }
+  if (d.type !== 'email' && arr(b.documents).some((x) => x.id !== d.id && key(x) === key(d) && after(x))) return 'superseded'
+  const iss = ms(d.issued_at)
+  if (EXPIRING_DOCS.has(String(d.type)) && iss !== null && caseClock(b).now >= iss + DOC_VALIDITY_DAYS * DAY) return 'expired'
+  return 'valid'
+}
+
+/** The extract_fields step for a document: extractor, values and rejected quotes (from the trace output). */
+function extraction(b: Bundle, id: string): Record<string, unknown> | null {
+  const step = [...arr(b.trace)].reverse().find((s) => {
+    const inp = parseMaybe(s.input)
+    return s.tool === 'extract_fields' && !!inp && typeof inp === 'object' && (inp as Record<string, unknown>).doc_id === id
+  })
+  const out = step ? parseMaybe(step.output) : null
+  return out && typeof out === 'object' ? out as Record<string, unknown> : null
+}
+
+export function docRowFromBundle(b: Bundle, d: DocumentInfo): DocRow {
+  const clock = caseClock(b)
+  const k = bundleStatus(b, d)
+  const rec = ms(d.received_at)
+  const iss = ms(d.issued_at)
+  const ex = extraction(b, d.id)
+  return {
+    id: d.id, name: String(d.name || d.id), label: DOC_TYPE_LABEL[String(d.type)] || sentence(humanize(d.type || 'document')),
+    type: String(d.type || ''), person: null,
+    issuedDay: iss !== null ? clock.dayNo(iss) : null, receivedDay: rec !== null ? clock.dayNo(rec) : null,
+    receivedAt: rec, issuedAt: iss,
+    status: k, statusWord: DOC_STATUS[k].word, statusCls: DOC_STATUS[k].cls,
+    usedBy: arr(b.requirements).filter((r) => arr(r.evidence).some((e) => e.doc_id === d.id)).map((r) => useRow(b, r)),
+    extractor: ex?.extractor ? String(ex.extractor) : null,
+    source: null,
+  }
+}
+
+/** Docs tab rows, newest first: the server list when there is one, else the bundle's documents. */
+export function docRows(b: Bundle, list: DocListItem[] | null): DocRow[] {
+  const rows = list ? list.map((it) => docRowFromApi(b, it)) : arr(b.documents).map((d) => docRowFromBundle(b, d))
+  return rows.sort((x, y) => docNum(y.id) - docNum(x.id))
+}
+
+const ARROW_STATUS: Record<string, string> = { conflict: 'in conflict' }
+/** History lines in plain words: "Used as evidence: R1 → Verified" reads "Used as evidence: R1 now verified". */
+export function historyText(what: unknown, name?: string): string {
+  let s = String(what ?? '')
+  s = s.replace(/\b(R\d+|MON)\s*(?:→|->)\s*([A-Za-z][A-Za-z ]*)$/, (_m, r: string, w: string) => {
+    const word = w.trim().toLowerCase()
+    return `${r} now ${ARROW_STATUS[word] ?? word}`
+  })
+  if (name) s = s.replace(` from ${name} via `, ' via ')
+  s = s.replace(/^Received \(scenario\)$/, 'Received from the client').replace(/^Received \(upload\)$/, 'Uploaded by the client')
+  return tidy(plain(s))
+}
+
+/** History from the bundle: ledger events that name this document (its id, or its exact name). */
+function bundleHistory(b: Bundle, d: DocumentInfo): DocHistoryRow[] {
+  const clock = caseClock(b)
+  const name = String(d.name || '')
+  const idRe = new RegExp(`\\b${d.id}(?!\\d)`)
+  const label = DOC_TYPE_LABEL[String(d.type)] || ''
+  const rec = arr(b.events).find((e) => e.type === 'DOCUMENT_RECEIVED' && String(e.summary || '').split(': ').slice(1).join(': ') === name)
+  const cites = new Set(arr(b.exceptions).filter((x) => arr(x.snippets).some((s) => s.doc_id === d.id)).map((x) => x.id))
+  const out: DocHistoryRow[] = []
+  arr(b.events).forEach((e) => {
+    const s = String(e.summary || '')
+    const at = ms(e.sim_time)
+    let what: string | null = null
+    if (e === rec) what = 'Received'
+    else if (e.type === 'DOCUMENT_REQUESTED' && rec && e.seq < rec.seq && (s.endsWith(`: ${name}`) || (!!label && s.endsWith(`: ${label}`)))) what = s
+    else if (e.type === 'FIELDS_EXTRACTED' && s.includes(` from ${name} via `)) what = s
+    else if (e.type === 'EXCEPTION_RAISED' && cites.has((s.match(/^EX-\d+/) || [''])[0])) what = `Quoted on decision card ${s.replace(/ raised for (?:R\d+|MON):/, ':')}`
+    else if (idRe.test(s)) what = s
+    if (what) out.push({ seq: e.seq, day: at !== null ? clock.dayNo(at) : null, what: historyText(what, name) })
+  })
+  return out
+}
+
+function bundleFields(b: Bundle, id: string): { fields: DocViewField[]; rejected: string[]; injections: string[] } {
+  const quotes = docQuotes(b, id).quotes
+  const ex = extraction(b, id)
+  const skip = new Set(['extractor', 'quotes_verified', 'rejected_unverified_quotes', 'injection_flagged'])
+  const fields: DocViewField[] = []
+  const used = new Set<Evidence>()
+  Object.entries(ex ?? {}).forEach(([k, v]) => {
+    if (skip.has(k)) return
+    const many = Array.isArray(v)
+    ;(many ? v : [v]).forEach((val) => {
+      const q = quotes.find((x) => x.field === k && !used.has(x))
+      if (q) used.add(q)
+      fields.push({ field: many ? k.replace(/s$/, '') : k, value: String(val ?? ''), quote: String(q?.quote || ''), verified: true, start: null, end: null })
+    })
+  })
+  // evidence quotes the extraction output does not name (e.g. multi-line owner blocks)
+  quotes.filter((q) => !used.has(q) && !fields.some((f) => f.quote === q.quote)).forEach((q) => {
+    fields.push({ field: String(q.field || 'quote'), value: '', quote: String(q.quote || ''), verified: true, start: null, end: null })
+  })
+  const rejected = Array.isArray(ex?.rejected_unverified_quotes) ? ex.rejected_unverified_quotes.map(String) : []
+  const injections = Array.isArray(ex?.injection_flagged) ? ex.injection_flagged.map(String) : []
+  return { fields, rejected, injections }
+}
+
+/** The viewer's model from the bundle alone (no full text). */
+export function docViewFromBundle(b: Bundle, id: string): DocView {
+  const d = arr(b.documents).find((x) => x.id === id)
+  if (!d) {
+    return { id, name: id, label: 'Document', type: '', person: null, issuedDay: null, receivedDay: null, receivedAt: null, issuedAt: null,
+      status: '', statusWord: '', statusCls: 'st-waiting', usedBy: [], extractor: null, source: null, quarantineReason: null,
+      text: null, fields: [], rejected: [], injections: [], validity: null, history: [], origin: 'missing' }
+  }
+  const clock = caseClock(b)
+  const row = docRowFromBundle(b, d)
+  const iss = ms(d.issued_at)
+  const validity = EXPIRING_DOCS.has(String(d.type)) && iss !== null
+    ? { issuedDay: row.issuedDay, expiresDay: clock.dayNo(iss + DOC_VALIDITY_DAYS * DAY), expired: clock.now >= iss + DOC_VALIDITY_DAYS * DAY }
+    : null
+  return { ...row, text: null, ...bundleFields(b, id), quarantineReason: null, validity, history: bundleHistory(b, d), origin: 'case' }
+}
+
+/** The viewer's model from `/documents/{id}`; the Docs-tab row (if any) and the bundle fill in what the detail lacks. */
+export function docViewFromApi(b: Bundle, x: DocDetail, row: DocRow | undefined): DocView {
+  const d = arr(b.documents).find((y) => y.id === x.id)
+  const base = row ?? (d ? docRowFromBundle(b, d) : undefined)
+  const k = docStatusKind(x.status)
+  const v = x.validity && typeof x.validity === 'object' ? x.validity : null
+  const name = String(x.name || base?.name || x.id)
+  return {
+    id: x.id,
+    name,
+    label: String(x.label || base?.label || DOC_TYPE_LABEL[String(x.type)] || 'Document'),
+    type: String(x.type || base?.type || ''),
+    person: base?.person ?? null,
+    issuedDay: num(v?.issued_day) ?? base?.issuedDay ?? null,
+    receivedDay: base?.receivedDay ?? null,
+    receivedAt: base?.receivedAt ?? null,
+    issuedAt: base?.issuedAt ?? null,
+    status: String(x.status || base?.status || ''),
+    statusWord: k ? DOC_STATUS[k].word : sentence(x.status_word || base?.statusWord || ''),
+    statusCls: k ? DOC_STATUS[k].cls : base?.statusCls || 'st-waiting',
+    usedBy: x.used_by ? arr(x.used_by).map((u) => useRow(b, u)) : base?.usedBy ?? [],
+    extractor: x.extractor ? String(x.extractor) : base?.extractor ?? null,
+    source: x.source ? String(x.source) : base?.source ?? null,
+    text: typeof x.text === 'string' ? x.text : null,
+    fields: arr(x.fields).map((f: DocField) => ({
+      field: String(f.field || ''), value: f.value === null || f.value === undefined ? '' : String(f.value),
+      quote: String(f.quote || ''), verified: typeof f.verified === 'boolean' ? f.verified : null, start: num(f.start), end: num(f.end),
+    })),
+    rejected: arr(x.rejected).map(String),
+    injections: arr(x.injection_lines).map(String),
+    quarantineReason: x.quarantine_reason ? String(x.quarantine_reason) : null,
+    validity: v ? { issuedDay: num(v.issued_day), expiresDay: num(v.expires_day), expired: !!v.expired } : null,
+    history: arr(x.history).map((h) => ({ seq: num(h.seq), day: num(h.day), what: historyText(h.what || humanize(h.type), name) })),
+    origin: 'server',
+  }
+}
+
+export type DocMark = { kind: 'field'; fields: DocViewField[] } | { kind: 'injection' }
+/** Splits the full text into plain and highlighted runs. Server offsets are trusted only when
+ *  text.slice(start, end) === quote; otherwise the quote is searched for. Overlapping ranges are skipped (listed as unplaced). */
+export function docSegments(text: string, fields: DocViewField[], injections: string[]): { parts: { t: string; mark: DocMark | null }[]; unplaced: DocViewField[] } {
+  type R = { a: number; z: number; mark: DocMark }
+  const ranges: R[] = []
+  const unplaced: DocViewField[] = []
+  const free = (a: number, z: number) => ranges.every((r) => z <= r.a || a >= r.z)
+  fields.forEach((f) => {
+    if (!f.quote) return
+    let a = f.start !== null && f.end !== null && text.slice(f.start, f.end) === f.quote ? f.start : -1
+    if (a < 0) a = text.indexOf(f.quote)
+    if (a < 0) { unplaced.push(f); return }
+    const z = a + f.quote.length
+    const same = ranges.find((r) => r.a === a && r.z === z)
+    if (same && same.mark.kind === 'field') { same.mark.fields.push(f); return }
+    if (free(a, z)) ranges.push({ a, z, mark: { kind: 'field', fields: [f] } })
+    else unplaced.push(f)
+  })
+  injections.forEach((line) => {
+    const a = line ? text.indexOf(line) : -1
+    if (a >= 0 && free(a, a + line.length)) ranges.push({ a, z: a + line.length, mark: { kind: 'injection' } })
+  })
+  ranges.sort((p, q) => p.a - q.a)
+  const parts: { t: string; mark: DocMark | null }[] = []
+  let i = 0
+  ranges.forEach((r) => {
+    if (r.a > i) parts.push({ t: text.slice(i, r.a), mark: null })
+    parts.push({ t: text.slice(r.a, r.z), mark: r.mark })
+    i = r.z
+  })
+  if (i < text.length) parts.push({ t: text.slice(i), mark: null })
+  return { parts, unplaced }
 }

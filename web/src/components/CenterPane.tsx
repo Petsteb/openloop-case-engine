@@ -107,9 +107,11 @@ function HoldBanner({ bundle, busy, onRelease, onOpenLedger }: {
   const [note, setNote] = useState('')
   const input = useRef<HTMLInputElement | null>(null)
   useEffect(() => { if (confirming) input.current?.focus() }, [confirming])
-  const insider = x?.kind === 'sequence_insider' || x?.rule?.id === 'SR-01'
+  // a client dispute reuses rule SR-01, so it is told apart by its kind first
+  const dispute = x?.kind === 'client_dispute'
+  const insider = !dispute && (x?.kind === 'sequence_insider' || x?.rule?.id === 'SR-01')
   const ruleId = x?.rule?.id ? String(x.rule.id) : insider ? 'SR-01' : null
-  const links = x && insider ? linkedEvents(bundle, x) : []
+  const links = x && (insider || dispute) ? linkedEvents(bundle, x) : []
   const by = String(x?.resolution?.by?.type || '')
   const cancel = () => { setConfirming(false); setNote('') }
   const release = () => { if (!busy) onRelease(note.trim()) }
@@ -122,15 +124,17 @@ function HoldBanner({ bundle, busy, onRelease, onOpenLedger }: {
       <div className="dec-main">
         <h2>On hold — escalated to compliance</h2>
         <p className="why dec-why">
-          {insider
-            ? `The agent is paused. A bank employee changed the client's contact details and then started a credit action for the same client (insider pattern ${ruleId}). Nothing moves on this file until compliance releases it.`
-            : 'The agent is paused. Nothing moves on this file until compliance releases it.'}
+          {dispute
+            ? 'The agent is paused. A bank employee changed the client’s contact details, and the client says they did not ask for it. Nothing moves on this file until compliance releases it.'
+            : insider
+              ? `The agent is paused. A bank employee changed the client's contact details and then started a credit action for the same client (insider pattern ${ruleId}). Nothing moves on this file until compliance releases it.`
+              : 'The agent is paused. Nothing moves on this file until compliance releases it.'}
         </p>
         <dl className="props">
           {since !== null ? (
             <div><dt>Escalated</dt><dd>Day {clock.dayNo(since)}, {fTime(since)}{by === 'analyst' ? ', by the analyst' : ''}</dd></div>
           ) : null}
-          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{insider ? 'Insider sequence' : 'Rule'}</dd></div> : null}
+          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{dispute ? 'Client disputes a staff change' : insider ? 'Insider sequence' : 'Rule'}</dd></div> : null}
           {links.length ? (
             <div><dt>Linked events</dt><dd>
               {links.map((l, i) => (
@@ -202,7 +206,7 @@ export function CenterPane(p: Props) {
       <div className="stack">
         {hold}
         {back}
-        {selEx ? <DecisionCard bundle={bundle} x={selEx} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} />
+        {selEx ? <DecisionCard bundle={bundle} x={selEx} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} onOpenDoc={p.onOpenDoc} />
           : <RequirementDetail bundle={bundle} r={sel} onOpenDoc={p.onOpenDoc} />}
       </div>
     )
@@ -211,7 +215,7 @@ export function CenterPane(p: Props) {
     return (
       <div className="stack">
         {hold}
-        {open.map((x) => <DecisionCard key={x.id} bundle={bundle} x={x} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} />)}
+        {open.map((x) => <DecisionCard key={x.id} bundle={bundle} x={x} busy={p.busy} onResolve={p.onResolve} onOpenLedger={p.onOpenLedger} onOpenDoc={p.onOpenDoc} />)}
         <ResolvedList bundle={bundle} />
       </div>
     )

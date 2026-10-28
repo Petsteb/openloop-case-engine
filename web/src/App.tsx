@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '@/lib/api'
 import { isUnavailable } from '@/lib/api'
-import { arr, checklist, checklistNote, fTime, latestActivity, plural, resolveToast } from '@/lib/derive'
+import { arr, checklist, checklistNote, docRows, fTime, latestActivity, plural, resolveToast } from '@/lib/derive'
 import type { Citation, Exception_, LearningState, VerifyResult } from '@/lib/types'
 import { isTyping, store } from '@/lib/store'
 import { failureText, useCase } from '@/hooks/useCase'
+import { useDocList } from '@/hooks/useDocs'
 import { toast } from 'sonner'
 import { Boundary } from './components/Btn'
 import { CaseHeader, verifyLabel } from './components/CaseHeader'
 import { CenterPane } from './components/CenterPane'
 import { ChecklistAttention, ChecklistRail, PanelHead, RightRail } from './components/Checklist'
 import { DemoDock } from './components/DemoDock'
-import { DocumentDialog } from './components/DocumentDialog'
+import { DocumentViewer } from './components/DocumentDialog'
 import { LearningSheet } from './components/LearningSheet'
 import { RightPanel, type RightTab } from './components/RightPanel'
 import { Timeline } from './components/Timeline'
@@ -65,6 +66,8 @@ export default function App() {
   useEffect(() => { if (bundle) void loadLearning() }, [eventCount, bundle === null, loadLearning]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(() => (bundle ? checklist(bundle) : []), [bundle])
+  const docList = useDocList(caseId, bundle)
+  const docs = useMemo(() => (bundle ? docRows(bundle, docList) : []), [bundle, docList])
   const latest = useMemo(() => {
     const l = bundle ? latestActivity(bundle) : null
     return l ? { time: fTime(l.real), text: l.text } : null
@@ -98,6 +101,9 @@ export default function App() {
     setTab('ledger')
     setHighlight(seq)
   }, [])
+  // The viewer is a modal sheet over the panels: close it first, then show the ledger event or the check.
+  const ledgerFromDoc = useCallback((seq: number | null) => { setDocOpen(null); openLedger(seq) }, [openLedger])
+  const checkFromDoc = useCallback((id: string) => { setDocOpen(null); setSelected(id) }, [])
   const onCite = useCallback((c: Citation) => {
     if (c.kind === 'doc') setDocOpen(String(c.ref))
     else {
@@ -152,13 +158,15 @@ export default function App() {
           </section>
           <section className="panel side-panel right-col" aria-label="Ask and activity" hidden={!right}>
             <RightPanel bundle={bundle} caseId={caseId} tab={tab} onTab={setTab} onHide={() => setRight(false)} highlight={highlight}
-              onCite={onCite} onAnswered={() => void refresh()} verifyText={v?.text ?? null} verifyOk={!!v?.ok} verifying={verifying} onVerify={doVerify} />
+              onCite={onCite} onAnswered={() => void refresh()} verifyText={v?.text ?? null} verifyOk={!!v?.ok} verifying={verifying} onVerify={doVerify}
+              docs={docs} onOpenDoc={setDocOpen} />
           </section>
           {!right ? <RightRail latest={latest} onOpen={(t) => { if (t) setTab(t); setRight(true) }} /> : null}
         </div>
       </main>
       {dock ? <DemoDock bundle={bundle} busy={busy} onInbound={onInbound} onAdvance={onAdvance} onReset={onReset} /> : null}
-      <DocumentDialog bundle={bundle} docId={docOpen} onClose={() => setDocOpen(null)} />
+      <DocumentViewer bundle={bundle} caseId={caseId} docId={docOpen} rows={docs} onClose={() => setDocOpen(null)} onOpenDoc={setDocOpen}
+        onOpenLedger={ledgerFromDoc} onSelectRequirement={checkFromDoc} />
       {learningOk ? <LearningSheet open={learningOpen} onOpenChange={setLearningOpen} state={learning} onChanged={() => { void loadLearning(); void refresh() }} /> : null}
     </>
   )

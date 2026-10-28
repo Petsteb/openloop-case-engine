@@ -275,3 +275,77 @@ export interface Backtest {
   manual_review_rate?: number
   [k: string]: unknown
 }
+
+/* ---- documents + live updates (client-portal spec, API table) ---- */
+export interface CaseVersion {
+  length: number
+  status?: string
+  [k: string]: unknown
+}
+
+export type DocStatus = 'valid' | 'expired' | 'superseded' | 'quarantined' | (string & {})
+
+export interface DocUse {
+  id: string
+  title?: string
+  status_word?: string
+  [k: string]: unknown
+}
+
+/** One row of `GET /documents?role=employee`. Days are case days (negative = before the case opened). */
+export interface DocListItem {
+  id: string
+  type?: string
+  label?: string
+  name?: string
+  issued_day?: number | null
+  received_day?: number | null
+  status?: DocStatus
+  status_word?: string
+  person?: string | null
+  source?: string
+  used_by?: DocUse[]
+  extractor?: string | null
+  [k: string]: unknown
+}
+
+/** `start`/`end` are exact offsets into `text` (text.slice(start, end) === quote). */
+export interface DocField {
+  field: string
+  value?: unknown
+  quote?: string
+  verified?: boolean
+  start?: number | null
+  end?: number | null
+  [k: string]: unknown
+}
+
+export interface DocHistoryItem {
+  seq?: number | null
+  day?: number | null
+  type?: string
+  what?: string
+  [k: string]: unknown
+}
+
+/** `GET /documents/{id}?role=employee`. */
+export interface DocDetail {
+  id: string
+  type?: string
+  label?: string
+  name?: string
+  text?: string | null
+  status?: DocStatus
+  status_word?: string
+  source?: string
+  extractor?: string | null
+  fields?: DocField[]
+  rejected?: string[]
+  injection_lines?: string[]
+  /** quarantined documents only: why nothing was extracted (e.g. the tax ID belongs to another company) */
+  quarantine_reason?: string | null
+  used_by?: DocUse[]
+  validity?: { issued_day?: number | null; expires_day?: number | null; expired?: boolean } | null
+  history?: DocHistoryItem[]
+  [k: string]: unknown
+}

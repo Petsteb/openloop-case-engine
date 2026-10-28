@@ -57,6 +57,10 @@ export function CaseHeader({ bundle, verify, verifying, onVerify, theme, onTheme
           {learningCount !== null ? (
             <Btn size="sm" onClick={onLearning}>Learning{learningCount > 0 ? <span className="badge-count">{learningCount}</span> : null}</Btn>
           ) : null}
+          {/* the client portal for this case, for the two-window demo; trailing slash: it is its own page */}
+          <a className="btn quiet sm" href="/client/" target="_blank" rel="noopener" title="Open what the client sees, in a new window">
+            Preview client view<Icon name="external" size={13} />
+          </a>
           <button type="button" className="btn quiet icon-only sm" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
           </button>

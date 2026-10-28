@@ -15,14 +15,16 @@ function highlight(text: string, marks: string[]): ReactNode {
   return text.split(re).map((part, i) => (list.includes(part) ? <mark key={i}>{part}</mark> : part))
 }
 
-function SlipView({ s, showSame }: { s: CompareSlip; showSame: boolean }) {
+function SlipView({ s, showSame, onOpenDoc }: { s: CompareSlip; showSame: boolean; onOpenDoc: (id: string) => void }) {
   const lines = showSame ? s.lines : s.lines.filter((l) => l.k !== 'same')
   return (
     <figure className={'slip' + (s.role === 'new' ? ' is-new' : '')}>
       <figcaption>
         {s.role ? <span className={`age age-${s.role}`}>{s.role === 'new' ? 'New' : 'On file'}</span> : <span />}
         <span className="src" title={s.src}>{s.src}</span>
-        {s.doc ? <span className="mono">{s.doc}</span> : <span />}
+        {s.doc ? (
+          <button type="button" className="cite slip-doc" onClick={() => onOpenDoc(String(s.doc))} title={`Open the whole document (${s.doc})`}>{s.doc}</button>
+        ) : <span />}
         {s.meta ? <span className="meta">{s.meta}</span> : null}
       </figcaption>
       <ol>
@@ -67,10 +69,11 @@ interface Props {
   busy: string | null
   onResolve: (x: Exception_, actionId: string) => void
   onOpenLedger: (seq: number | null) => void
+  onOpenDoc: (docId: string) => void
 }
 
 /** The one raised surface: flat panel, header row, meta properties, on-file vs new comparison, footer actions. */
-export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props) {
+export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger, onOpenDoc }: Props) {
   const clock = caseClock(bundle)
   const req = reqById(bundle, x.requirement_id)
   const sev = String(x.severity || 'medium').toLowerCase()
@@ -79,7 +82,9 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
   const legal = x.kind === 'ubo_discrepancy' || x.requirement_id === 'R2'
     ? arr(bundle.timers).filter((t) => t.kind === 'legal_deadline' && t.status === 'PENDING').map((t) => ms(t.due)).filter((t): t is number => t !== null)[0]
     : undefined
-  const insider = x.kind === 'sequence_insider'
+  // Both show two linked ledger events on one rail instead of document quotes.
+  const dispute = x.kind === 'client_dispute'
+  const insider = x.kind === 'sequence_insider' || dispute
   const ev = insider ? null : decisionEvidence(x)
   const slips = ev ? compareSlips(bundle, ev.slips) : []
   const pair = slips.length === 2 && slips.every((s) => s.role)
@@ -116,8 +121,8 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
         <h2>{cleanTitle(x.title)}</h2>
         {why ? <p className="why dec-why">{why}</p> : null}
         <dl className="props">
-          <div><dt>Check</dt><dd><span className="mono">{x.requirement_id || 'MON'}</span>{req ? cleanTitle(req.title) : insider ? 'Staff actions' : 'Monitoring'}</dd></div>
-          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{RULE_NAMES[ruleId] || 'Rule'}</dd></div> : null}
+          <div><dt>Check</dt><dd><span className="mono">{x.requirement_id || 'MON'}</span>{req ? cleanTitle(req.title) : dispute ? 'Client contact details' : insider ? 'Staff actions' : 'Monitoring'}</dd></div>
+          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{dispute ? 'Client disputes a staff change' : RULE_NAMES[ruleId] || 'Rule'}</dd></div> : null}
           {legal !== undefined ? (
             <div><dt>Deadline</dt><dd className="warn">AMLR report in {plural(Math.max(0, Math.ceil((legal - clock.now) / DAY)), 'day')}</dd></div>
           ) : null}
@@ -134,7 +139,8 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
                   <Fragment key={i}>
                     {prev ? (
                       <li className="seq-gap">
-                        {sentence(gap || 'later')}, {confirmedBetween(bundle, prev.seq, l.seq) ? 'after a client confirmation' : 'with no client confirmation in between'}
+                        {sentence(gap || 'later')}, {dispute ? 'the client said they did not make this change'
+                          : confirmedBetween(bundle, prev.seq, l.seq) ? 'after a client confirmation' : 'with no client confirmation in between'}
                       </li>
                     ) : null}
                     <li className="seq-ev">
@@ -152,12 +158,12 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger }: Props
           ) : <p className="empty">The linked events are listed in the ledger.</p>
         ) : pair ? (
           <div className="compare" aria-label="The document on file compared with the new document">
-            <SlipView s={slips[0]} showSame={showSame} />
+            <SlipView s={slips[0]} showSame={showSame} onOpenDoc={onOpenDoc} />
             <div className="vs" aria-hidden="true"><span>vs</span></div>
-            <SlipView s={slips[1]} showSame={showSame} />
+            <SlipView s={slips[1]} showSame={showSame} onOpenDoc={onOpenDoc} />
           </div>
         ) : slips.length ? (
-          <div className="compare single">{slips.map((s, i) => <Fragment key={i}><SlipView s={s} showSame={showSame} /></Fragment>)}</div>
+          <div className="compare single">{slips.map((s, i) => <Fragment key={i}><SlipView s={s} showSame={showSame} onOpenDoc={onOpenDoc} /></Fragment>)}</div>
         ) : null}
 
         {!insider && hasSame ? (

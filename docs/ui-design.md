@@ -108,8 +108,8 @@ Keep the custom tokens above as well.
 │ Swimlanes timeline: Client / Agent / Analyst / Deadlines, overview strip, range       │
 │ presets, zoom ± and Now (production view, no demo buttons)                             │
 ├──────────────┬─────────────────────────────────────────────┬──────────────────────────┤
-│ Checklist  ‹ │  Decision card (raised), or waiting summary, │ Ask  Activity  Reasoning │
-│ (attention   │  or "File complete"                          │ Ledger                ›  │
+│ Checklist  ‹ │  Decision card (raised), or waiting summary, │ Ask Activity Reasoning   │
+│ (attention   │  or "File complete"                          │ Ledger Email Docs     ›  │
 │  first)      │                                              │ (tab content)            │
 └──────────────┴─────────────────────────────────────────────┴──────────────────────────┘
 ```
@@ -129,6 +129,7 @@ Keep the custom tokens above as well.
   - big numerals: checks verified, day of the case, and days to the AMLR report (only while that timer is pending, numeral in `--conflict`);
   - mode badges (agent: scripted/bedrock; judge) in muted 12px;
   - "Check ledger" outline pill showing "Chain intact, N events" after a check;
+  - "Preview client view" (see below);
   - theme toggle.
 - **Timeline (swimlanes):** port from the lab.
   - **Lanes:** Client (documents as filled ink dots, emails as hollow dots), Agent (muted squares), Analyst (attn diamonds), Deadlines (flags: legal in conflict, expiry in expired, reminders muted; done ones struck through).
@@ -182,6 +183,9 @@ Keep the custom tokens above as well.
     - **Footer action bar:** a hairline above, no fill. The primary button carries a `⏎` hint; the rest are outline pills, then a spacer and an "Open in ledger" text link.
     - The data needs `papers[].lines[] {t, k: same|diff|missing|gap, marks[], note}`. Derive it from the exception snippets: the backend gives the raw lines, and the UI marks a line as diff or missing when the `requirement_id` and the rule tell it which values differ. If that can't be derived, show plain lines.
   - A **`sequence_insider` card** shows the two linked events instead of quotes: "First" and "Then" on one thin rail, ordered by `first_seq` / `then_seq`, each with its `#seq` chip and time. Between them sits the gap in `--tone` mono ("At the same time, with no client confirmation in between").
+  - A **`client_dispute` card** (a staff contact change, then the client answered "No, I didn't" in the portal) uses the same rail.
+    - The gap reads "…, the client said they did not make this change", and the Check reads `MON` "Client contact details".
+    - It reuses rule `SR-01`, so the hold banner tells it apart by `kind`: it says the client disputed a staff change instead of naming the insider pattern.
   - **When `ON_HOLD`:** a hold banner owns the centre, above every other branch (a selected row or an open card never hides it). It is the same flat card in the conflict tone, with:
     - "On hold — escalated to compliance" and a one-line why (agent paused, insider pattern SR-01);
     - escalated day/time, the rule and the linked events;
@@ -189,14 +193,15 @@ Keep the custom tokens above as well.
   - While on hold, the checklist's empty line reads "On hold with compliance…", never "Nothing needs attention".
   - **Otherwise:** the selected requirement's detail (reason, evidence quotes, rule), or a waiting summary.
   - **When `READY_FOR_DECISION`:** "File complete" in display 36px, plus the summary list.
-- **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, Email, with counts in mono superscript.
-  - All five must fit on one line in the default 340px panel.
-  - The list is start-aligned with `space-between` and a 6px minimum gap. Shadcn's centring clips the first tab on overflow.
+- **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, Email, Docs. Counts are in mono superscript, except on Ask and Docs.
+  - All six must fit on one line in the default 340px panel, at 1333 and 1440 px, with no horizontal scrolling. Labels are 12px, never smaller.
+  - The list is start-aligned with `space-between` and a 4px minimum gap. Shadcn's centring clips the first tab on overflow.
+  - Measured at worst-case counts (Ledger 112, Activity 54), the six tabs need 286 of the 300px, so a three-digit Activity count still fits.
   - **Ask (chat):**
     - a role toggle, "Client view" / "Bank employee", which clears history;
     - 3 suggested questions per role as dashed chips;
     - messages: user bubbles in ink fill, answers on `--surface`;
-    - citation chips `#42` (switches to the Ledger tab and highlights the event) and `doc-3` (opens a dialog with that document's quotes);
+    - citation chips `#42` (switches to the Ledger tab and highlights the event) and `doc-3` (opens the document viewer);
     - an "offline answer" badge when `mode === "offline"`;
     - an input pill with a send button, and a typing indicator while waiting;
     - on a 404 from the endpoint: "Chat is not available on this server yet".
@@ -206,6 +211,58 @@ Keep the custom tokens above as well.
     - A failed row adds "Failed" in `--conflict` plus the error text.
   - **Reasoning:** agent steps, newest first. Each shows the reason sentence (15px), then a mono `by` tag (code, Claude, planner, safety net; nothing when null), then the tool name in mono plus the gate word (Allowed in muted, "Blocked: GATE-01" in conflict with the rule text in a tooltip). "Details" expands the input and output as JSON.
   - **Ledger:** rows with the summary, day/time and short hash `c27e… ← a91f…` in mono, with "Check ledger integrity" at the top.
+  - **Docs:** every document in the case, newest first, from `GET /documents?role=employee`. The server defaults to the client view, so `role=employee` is required.
+    - A summary line first ("11 documents, 2 superseded.").
+    - **One button row per document:**
+      - the `doc-N` id in mono, the name, and the status word with its dot;
+      - under them, the type (only when the name doesn't already say it) and the dates ("Issued 7 Oct 2026, received day 0, 28 Oct");
+      - then "Used by R3 R5" (ids in mono, title and status in the tooltip) or "Not used by a check".
+    - **Status colours:**
+      - Valid: plain ink, solid dot;
+      - Superseded: muted, hollow dot, and the name is muted too;
+      - Expired: `--expired`;
+      - Quarantined: `--conflict`;
+      - "Needs manual reading" (`unreadable`, a PDF): `--review`.
+    - Clicking a row opens the viewer.
+    - The list is fetched in App, not in the tab, and refetched when the ledger grows, so opening the tab never flips statuses.
+    - On 404/405/501 the list is derived from `bundle.documents`: a newer document of the same kind supersedes, and certificates expire 30 days after issue.
+- **Document viewer:** a right-side sheet. It opens from:
+  - evidence quotes in the requirement detail;
+  - the `doc-N` chip on each decision-card slip;
+  - `doc-N` chat citations;
+  - the Docs tab;
+  - `doc-N` links in the viewer's own history ("Superseded by doc-11").
+  - **Look:** flat, on `--bg`, 600px wide, with hairline sections. Sheets dim the page with a flat overlay (no blur), so the card behind stays readable.
+  - **Header:**
+    - the `doc-N` chip, the type and the status word, then the name in display type;
+    - a property grid: Issued, Received (exact time from the bundle), Validity and "Extracted by";
+    - Validity is an outline pill: "Valid until 6 Nov" in ink, "Expired 6 Nov" in `--expired`, or "No expiry date";
+    - "Extracted by" shows `builtin` / `bank_docai` in mono, with its plain name in the tooltip;
+    - case days before day 0 show as a date with the year ("7 Oct 2026").
+  - **Document:** the full text as a serif slip (16px Source Serif on `--surface`, 1px line, 8px radius).
+    - Each extracted field's quote is marked with an ink tint; hovering shows the field and value.
+    - Marks use the server's exact `start`/`end` offsets, trusted only when `text.slice(start, end) === quote`; otherwise the quote is searched for.
+    - An unverified field is marked in `--review` with a wavy underline.
+    - `injection_lines` are struck through in a `--conflict` tint.
+    - A quarantined document gets a `--conflict` bar note with `quarantine_reason`; an unreadable one gets a `--review` note.
+  - **Extracted fields:** a fold listing each field's name and value. It is closed by default, because the marks already show every quote, and opens by itself when a field is unverified or there is no full text.
+  - **Not used as evidence** (shown only when there is something):
+    - each rejected quote in serif with a 2px `--conflict` bar and the mono note "Rejected: quote not found in document";
+    - each injection line with "Ignored instruction in document".
+  - **Used by:** one button row per check (mono id, title, status word from the live bundle). Clicking closes the sheet and selects that check in the centre.
+  - **History:** the day in mono, what happened, and a `#seq` chip.
+    - The chip closes the sheet and opens the Ledger tab with that event highlighted.
+    - Arrows in server text become words ("Used as evidence: R1 now verified").
+  - **Data:** `GET /documents/{id}?role=employee`, refetched when the ledger grows. The previous answer stays on screen while it refetches.
+  - **Fallback** on 404/405/501 or an unknown id: the view is built from the bundle.
+    - Quotes come from requirement evidence and card snippets; values and the extractor from the `extract_fields` trace step; history from ledger events that name the document.
+    - The text section then says "The full text is not available on this server".
+    - An id that isn't in the case reads "This document is not in this case".
+  - **Dev fixtures:** `?mock` on the dev server adds, from `web/src/lib/mock-docs.ts`:
+    - a rejected quote and an injection line on the financial statements;
+    - a quarantined upload (`doc-90`) and an unreadable PDF (`doc-91`).
+    - They load only through a dynamic import behind `import.meta.env.DEV`, so production builds don't contain them.
+- **Preview client view:** a quiet outline pill in the header tools (`btn quiet sm`, with an external-link icon). It opens `/client/` (trailing slash) with `target="_blank" rel="noopener"`, for the two-window demo.
 - **Learning sheet:** opened from the header ("Learning" outline pill with a count badge of proposals).
   - Lists proposals (support count, description, "Run backtest" showing n, auto-resolved %, false approvals and manual-review %).
   - "Promote" takes a reviewer name; a 409 shows "The person who ruled on these cases can't approve the check".
@@ -219,7 +276,17 @@ Keep the custom tokens above as well.
 ## Behaviour
 - On load, `GET /api/cases/demo-1/bundle`. Every POST returns a Bundle; re-render everything from it.
 - One request at a time: a busy lock disables actions, buttons show a spinner, and failures show a sonner toast in the interface's voice.
+- **Live updates** (`hooks/useCase.ts`): another window (the client portal, a second bank screen) can change the case.
+  - Poll `GET /api/cases/demo-1/version` every 2.5 s. Refetch the bundle only when `length` differs from the events on screen (`!==`, because a reset shortens the ledger).
+  - The poll is one `setTimeout` chain, so ticks never overlap, and it never toasts.
+  - It pauses while this tab is hidden or has any request in flight. A counter in `lib/api.ts` covers actions, chat, learning and documents.
+  - A generation counter drops a poll answer that lands after a newer bundle from an action.
+  - **Fallback:** when `/version` answers 404/405/501, refetch the bundle every 5 s instead, and ask for `/version` again every 30 s. A refetched bundle replaces the state only if events, status or sim time changed.
+  - **No fighting the UI:** components keep their own state across a new bundle (chat draft and message-list scroll, selection, timeline view, open sheet). The chat scrolls only its own message list; the Ledger scrolls only when a `#seq` is opened.
 - Toasts confirm human actions: "Discrepancy confirmed. The client was asked for a corrected declaration."
 - **Dev server:** Vite proxies `/api` to `http://localhost:8000`.
 - **Production:** `npm run build` writes `web/dist`. FastAPI mounting `web/dist` is a 3-line change to `backend/app/main.py`, done by the backend owner at freeze. The UI must not edit backend files.
 - **Accessibility:** visible focus (2px attn ring), real buttons, `aria-expanded` and `aria-pressed`, AA contrast in both themes.
+
+## Client portal (/client)
+P2's notes on the client portal will be added here.

@@ -1,5 +1,6 @@
 import type {
-  Backtest, Bundle, ChatHistoryItem, ChatResponse, ChatRole, LearnedCheck, LearningState, VerifyResult,
+  Backtest, Bundle, CaseVersion, ChatHistoryItem, ChatResponse, ChatRole, DocDetail, DocListItem, LearnedCheck, LearningState,
+  VerifyResult,
 } from './types'
 
 /** Every failed call throws this. `status` 0 means the server could not be reached. */
@@ -16,7 +17,16 @@ export class ApiError extends Error {
 export const isUnavailable = (e: unknown): boolean =>
   e instanceof ApiError && (e.status === 404 || e.status === 405 || e.status === 501 || e.status === -1)
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+/** Requests from this tab still waiting for an answer. Live polling pauses while it is above 0. */
+let inflight = 0
+export const requestsInFlight = () => inflight
+
+async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, opts: { quiet?: boolean } = {}): Promise<T> {
+  if (!opts.quiet) inflight++
+  try { return await send<T>(method, path, body) } finally { if (!opts.quiet) inflight-- }
+}
+
+async function send<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   let res: Response
   try {
     res = await fetch(path, {
@@ -49,6 +59,13 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
 const c = (id: string) => `/api/cases/${encodeURIComponent(id)}`
 
 export const getBundle = (id: string) => call<Bundle>('GET', `${c(id)}/bundle`)
+/** Live polling: `quiet` requests do not count as "in flight", so they never pause themselves. */
+export const getVersion = (id: string) => call<CaseVersion>('GET', `${c(id)}/version`, undefined, { quiet: true })
+export const pollBundle = (id: string) => call<Bundle>('GET', `${c(id)}/bundle`, undefined, { quiet: true })
+// role=employee is required: the server defaults to the client view and fails closed.
+export const getDocuments = (id: string) => call<DocListItem[]>('GET', `${c(id)}/documents?role=employee`)
+export const getDocument = (id: string, docId: string) =>
+  call<DocDetail>('GET', `${c(id)}/documents/${encodeURIComponent(docId)}?role=employee`)
 export const reset = () => call<Bundle>('POST', '/api/demo/reset', {})
 export const inbound = (id: string, itemId: string) => call<Bundle>('POST', `${c(id)}/inbound`, { item_id: itemId })
 export const advance = (id: string, days: number) => call<Bundle>('POST', `${c(id)}/advance`, { days })
