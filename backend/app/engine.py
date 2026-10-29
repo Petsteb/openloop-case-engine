@@ -257,7 +257,7 @@ class Case:
             st = self.state()
             self.now, self.template, self.profile = st["now"], st["template"], st["profile"]
             return
-        self.now, self.template, self.profile = CASE_START, template, profiles.snapshot(profile_id)
+        self.now, self.template, self.profile = CASE_START, template, profiles.snapshot(profile_id, template)
         t = T.TEMPLATES[template]
         title = f"{t['title']} — {self.profile['name']}"
         self.emit("CASE_OPENED", ENGINE, {"title": title, "goal": t["goal"], "template": template, "profile": self.profile},
