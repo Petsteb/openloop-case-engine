@@ -2,6 +2,7 @@
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 import os
 import threading
@@ -373,7 +374,7 @@ def release_hold(case_id: str, body: Release, x_staff_token: str | None = Header
 def _require_staff(token: str | None) -> None:
     """Demo has no login; set STAFF_TOKEN to require X-Staff-Token on staff-only calls (production: bank SSO)."""
     expected = os.environ.get("STAFF_TOKEN", "")
-    if expected and token != expected:
+    if expected and not hmac.compare_digest((token or "").encode(), expected.encode()):
         raise HTTPException(403, "staff token required")
 
 

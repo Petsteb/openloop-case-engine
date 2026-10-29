@@ -253,3 +253,10 @@ def test_two_screen_demo_with_login_on(fresh):
     for word in ("HR-0", "SR-0", "GATE-", "analyst-1", "E-0317", "judge", "insider"):
         assert word not in view, word
     assert browser.get("/api/cases/demo-1/verify").json()["ok"]
+
+
+def test_api_docs_are_for_staff_only():
+    assert TestClient(app).get("/openapi.json").status_code == 404
+    assert TestClient(app).get("/docs").status_code == 404
+    assert session(ANA).get("/openapi.json").status_code == 200
+    assert session(VERDE).get("/openapi.json").status_code == 404

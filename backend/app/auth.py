@@ -470,6 +470,7 @@ SECURITY_HEADERS = [
     (b"content-security-policy", b"frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"),
 ]
 PAGES = {"/": "staff", "/index.html": "staff", "/client/": "client", "/client/index.html": "client"}
+API_DOCS = ("/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json")  # the API map: bank staff only
 
 
 class PolicyMiddleware:
@@ -495,6 +496,8 @@ class PolicyMiddleware:
         if not enabled():
             return await self.app(scope, receive, send_secure)
         cookies = _cookies(scope)
+        if path in API_DOCS and not self._page_allowed("staff", cookies):
+            return await _json(send_secure, 404, {"detail": "Not Found"})
         if not path.startswith("/api/"):
             need = PAGES.get(path)
             if need and login_page_built() and not self._page_allowed(need, cookies):
