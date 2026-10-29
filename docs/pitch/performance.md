@@ -35,7 +35,12 @@ Every number below is measured on the hardware listed, or is marked **estimate**
 ## Cost per case
 - **Offline: $0.** No external call is made: scripted planner, heuristic judge, outbox email, no keys.
   - **Caveat:** the chat calls Bedrock whenever `AWS_BEARER_TOKEN_BEDROCK` is set, even with `AGENT_MODE=scripted`.
-- **Live: estimate.**
+- **Live: measured.** One full README demo file was run on 29 Oct at 06:00: Claude Opus 5.5 on Bedrock planned every click, and the Featherless judge answered from its cache. Counts come from `llm.Budget.usage`, which reads `response.usage`:
+  - **Work:** 10 clicks, **15 Claude calls**, **43,438 input** and **4,348 output** tokens.
+  - **Latency:** 3–11 s per click; 0 fallbacks; ledger chain intact.
+  - **Cost at Anthropic list prices** ($4 / $20 per million input/output tokens): **≈ $0.26 per file**. Sonnet 5.5 at the same token counts would be ≈ $0.13, and Haiku 5.5 ≈ $0.007. Bedrock bills on its own price list.
+  - **Judge:** 0 paid calls, all cache hits.
+- **Live: earlier estimate** (kept for the method; the measurement above replaces it).
   - **Input tokens:** the exact requests the code builds, recorded with a stub client (no paid call), at ≈ 4 characters per token. One planner call is ~1,450 tokens: system prompt 1,264 chars, tool schemas 3,167, case brief 1.1–1.6k. The API's own tool-use preamble is not counted.
   - **Output tokens: an assumption.** 400 per planner call and 300 per chat call, including thinking at `effort: low`. The range in brackets is 150–1,000 per call.
   - **Prices:** Anthropic list prices per million tokens (input/output), from the `claude-api` reference dated 2026-10-06: Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50. **The app calls Claude through Amazon Bedrock, which has its own price list:** check it before quoting a bill.
@@ -62,17 +67,17 @@ Every number below is measured on the hardware listed, or is marked **estimate**
 - **Risk:** the state dict is shared by all readers until the next append, so it must stay read-only. Nothing mutates it today, and a test runs every read view and checks that the state is unchanged.
 
 ## Scaling path
-- **Today: one process holds every ledger in RAM, behind one write lock** (`main.LOCK`), over SQLite. Reads take no lock.
-  - **Why the lock exists:** each event stores the hash of the one before it. Two concurrent appends to one file would both point at the same predecessor and fork the chain, and `verify` would fail. One writer keeps every chain linear.
+- **Today: one process holds every ledger in RAM, with one write lock per file** (`main.case_lock`, done 29 Oct 06:30), over SQLite. Reads take no lock.
+  - **Why the lock exists:** each event stores the hash of the one before it. Two concurrent appends to one file would both point at the same predecessor and fork the chain, and `verify` would fail. One writer per file keeps every chain linear.
+  - **Why per file:** in live mode a click holds its file's lock while Claude plans (3–11 s). Files no longer wait for each other: a test checks that a slow step on one file does not delay a write to another.
 - **The current limit is per-request framework overhead, not the case engine.** A poll costs ~2 ms of CPU.
   - We measured a bare FastAPI app with the same `@app.middleware("http")`: 1.8 ms per request. Without that middleware: 1.0 ms. With `async def` endpoints: 0.6 ms.
 - **Next, hours:**
-  - Move that middleware to pure ASGI.
+  - Move that middleware to pure ASGI. The auth policy (`auth.PolicyMiddleware`) is already pure ASGI.
   - Make the two version endpoints `async def`.
   - Use the fast encoder on the POST endpoints that return bundles.
   - Commit one SQLite transaction per click instead of one per event.
 - **Next, days:**
-  - **Per-case locks** instead of the global lock: chains are per case, so files never need to wait for each other.
   - **Shard files across processes by case id**, with sticky routing, so there is still one writer per file.
   - **PostgreSQL** with the unique `(case_id, seq)` key the SQLite table already has, as the cross-process guard: an append that loses a race fails instead of forking the chain.
 - **Memory bound:** ~1 GB of ledgers per ~8,000 open files per process. Beyond that, closed files are loaded from the store on demand.
