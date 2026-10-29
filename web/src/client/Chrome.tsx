@@ -3,7 +3,7 @@ import { SessionChip, useMe } from '@/shared/session'
 import { Icon } from './Icon'
 import { notificationText, plural } from './derive'
 import { caseHref, HOME_HREF } from './route'
-import { markSeen, readSeen, useSeenRev } from './store'
+import { markMsgsSeen, markSeen, readMsgsSeen, readSeen, useSeenRev } from './store'
 import type { Theme } from './theme'
 import type { Company, PortalNotification } from './types'
 
@@ -75,8 +75,14 @@ export function TopBar({ back, notes, titles, lengths, currentCaseId, onOpenCase
   )
 }
 
+/** The case on screen (like the bank's bell): its actions never count (the client is looking at them), its messages from
+ *  the bank do until the Messages tab was on screen (openloop-seen:client-msgs:<caseId>). */
 const isUnread = (n: PortalNotification, lengths: Record<string, number>, current: string | null) =>
-  n.case_id !== current && Number(n.seq) > readSeen(n.case_id, lengths[n.case_id])
+  n.case_id === current
+    ? n.kind === 'message' && Number(n.seq) > readMsgsSeen(n.case_id, lengths[n.case_id])
+    : Number(n.seq) > readSeen(n.case_id, lengths[n.case_id])
+/** Asks the case page to open its Messages tab (the bell lives in the top bar, outside the case page). */
+export const OPEN_MESSAGES_EVENT = 'openloop-client-open-messages'
 const SHOW = 8
 
 /** Unread = a notification whose seq is past the file's last-seen seq (openloop-seen:client:<caseId>). */
@@ -86,7 +92,9 @@ function Bell({ notes, titles, lengths, currentCaseId, onOpenCase }: Omit<BarPro
   const btn = useRef<HTMLButtonElement | null>(null)
   const panel = useRef<HTMLDivElement | null>(null)
   const panelId = useId()
-  const list = Array.isArray(notes) ? notes : []
+  // on a case page, that case's notifications come first (the newest first within each group, as the server sends them)
+  const all = Array.isArray(notes) ? notes : []
+  const list = currentCaseId ? [...all.filter((n) => n.case_id === currentCaseId), ...all.filter((n) => n.case_id !== currentCaseId)] : all
   const unread = list.filter((n) => isUnread(n, lengths, currentCaseId))
   const count = notes ? unread.length : 0
 
@@ -119,9 +127,18 @@ function Bell({ notes, titles, lengths, currentCaseId, onOpenCase }: Omit<BarPro
     const max = new Map<string, number>()
     for (const n of list) max.set(n.case_id, Math.max(max.get(n.case_id) ?? 0, Number(n.seq) || 0))
     max.forEach((seq, id) => markSeen(id, seq, lengths[id]))
+    if (currentCaseId) {
+      const top = list.reduce((m, n) => (n.case_id === currentCaseId && n.kind === 'message' ? Math.max(m, Number(n.seq) || 0) : m), 0)
+      if (top) markMsgsSeen(currentCaseId, top, lengths[currentCaseId])
+    }
   }
   const pick = (n: PortalNotification) => {
     close(false)
+    // the case on screen: a message opens its Messages tab, anything else stays on the page
+    if (n.case_id === currentCaseId) {
+      if (n.kind === 'message') window.dispatchEvent(new CustomEvent(OPEN_MESSAGES_EVENT, { detail: { caseId: n.case_id } }))
+      return
+    }
     onOpenCase(n.case_id)
   }
 

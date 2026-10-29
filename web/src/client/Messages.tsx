@@ -3,11 +3,12 @@ import { Thread } from '@/shared/thread'
 import * as api from './api'
 import { isUnavailable } from './api'
 import { DocSheet, type DetailState } from './Documents'
+import type { ThreadItem } from '@/shared/thread/types'
 import type { ClientDocument } from './types'
 
 /** "Messages with the bank": the client's thread with the bank, including the bank's automatic emails. A document
  *  named in a message opens in the portal's own document sheet (this component keeps its own copy of the sheet). */
-export function Messages({ caseId, role }: { caseId: string; role: 'client' }) {
+export function Messages({ caseId, role, onItems }: { caseId: string; role: 'client'; onItems?: (items: ThreadItem[]) => void }) {
   const [sheet, setSheet] = useState<{ doc: ClientDocument; detail: DetailState } | null>(null)
   const want = useRef<string | null>(null)
 
@@ -31,7 +32,7 @@ export function Messages({ caseId, role }: { caseId: string; role: 'client' }) {
 
   return (
     <>
-      <Thread caseId={caseId} role={role} onOpenDoc={(id) => void openDoc(id)} className="thr-portal" />
+      <Thread caseId={caseId} role={role} onOpenDoc={(id) => void openDoc(id)} onItems={onItems} className="thr-portal" />
       <DocSheet doc={sheet?.doc} detail={sheet?.detail} onClose={close} />
     </>
   )

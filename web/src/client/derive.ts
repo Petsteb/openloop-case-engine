@@ -49,6 +49,7 @@ const STATES: PortalState[] = ['needs_you', 'under_review', 'complete', 'in_prog
 export function portalState(v: ClientView): PortalState {
   const s = v.overview?.state
   if (s && STATES.includes(s)) return s
+  if (/hold/i.test(String(s ?? ''))) return 'under_review'   // a hold reads as a review to the client
   // older server: derive from the plain status text and what is pending
   const t = String(v.overview?.status_text ?? '').toLowerCase()
   if (t.startsWith('complete')) return 'complete'
@@ -241,7 +242,8 @@ export const decidesLine = (decision?: string) =>
 export const productFor = (template: string | undefined, product: string | undefined) =>
   (!template || template === 'sme_loan') && product ? safe(product, '') : ''
 
-const asState = (s: unknown): PortalState => (STATES.includes(s as PortalState) ? (s as PortalState) : 'in_progress')
+const asState = (s: unknown): PortalState =>
+  (STATES.includes(s as PortalState) ? (s as PortalState) : /hold/i.test(String(s ?? '')) ? 'under_review' : 'in_progress')
 export const rowState = (r: CaseRow) => asState(r.state)
 /** How many things the file asks of the client. */
 export const rowNeeds = (r: CaseRow) => Math.max(0, Number(r.needs_you ?? r.waiting_on_client ?? 0) || 0)

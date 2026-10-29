@@ -384,3 +384,49 @@ a.btn.pt-next-btn .icon { width: 14px; height: 14px; }
   .pt-home-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); column-gap: 88px; }
   .pt-file-status { font-size: 21px; }
 }
+
+/* ======================================================================================================
+   The case page on the bank case screen's layout: index.css's .l-three grid, .panel-head, .collapse, the 44 px rails
+   and its breakpoints (three columns; under 1180 px the right panel drops under the other two; under 820 px one column).
+   Left: Your documents. Centre: Pending. Right: Messages / Ask AI tabs. [ and ] fold the sides to rails.
+   ====================================================================================================== */
+/* a wider page for three columns; the demo strip and the top bar follow so their edges line up */
+.pt-wrap.pt-case, .pt:has(.pt-case) .pt-bar, .pt:has(.pt-case) .pt-demo-in { max-width: 1480px; }
+.pt-three { margin: 32px 0 36px; }
+.pt-center { border-top: 1px solid var(--line); padding: 12px 0 8px; min-width: 0; }
+.pt-pane-head { min-width: 0; }
+.pt-pane-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 15px; font-weight: 500; color: var(--ink); }
+.pt-pane-sub { font-size: 13px; font-weight: 500; color: var(--muted); margin: 6px 0 12px; }
+.pt-tabs { display: flex; flex-direction: column; min-width: 0; }
+.pt-rtabs { justify-content: flex-start; gap: 22px; }
+.pt-three .rtab { display: inline-flex; align-items: center; font-size: 14px; }
+.pt-three .tabpane { padding-top: 4px; }
+/* documents in a side column: name, then status, then View and History (the row never needs more than ~260 px) */
+.pt-three .left-col .pt-doc-row { grid-template-columns: 18px minmax(0, 1fr); grid-template-areas: "icon name" ". meta" ". hist"; gap: 6px 12px; padding: 10px 0; }
+.pt-three .left-col .pt-doc-meta { justify-content: flex-start; gap: 10px; }
+.pt-three .left-col .pt-doc-when { min-width: 0; text-align: left; }
+.pt-three .left-col .pt-doc-acts { justify-self: start; }
+.pt-three .left-col .pt-doc-more { padding-left: 30px; }
+/* rails: a quiet document count; unread dots on the folded right rail */
+.pt-rail-n { font: 11px var(--mono); color: var(--muted); }
+.pt-rail-tab { position: relative; }
+.pt-rail-dot { position: absolute; top: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--attn); outline: 2px solid var(--bg); }
+.rail-ai .pt-rail-dot { top: -3px; right: -3px; background: var(--ink); }
+/* phones and narrow tablets (the bank's single column under 820 px): Pending first, then documents, then messages */
+@media (max-width: 820px) {
+  .pt-three > .center-col { order: -1; }
+  .pt-three { margin-top: 24px; }
+}
+/* touch: the bank's 44 px rule for these shared controls is scoped to html.bank, so the portal repeats it */
+@media (pointer: coarse), (max-width: 640px) {
+  .pt .collapse { width: 44px; height: 44px; }
+  .pt .rail-btn { min-width: 44px; min-height: 44px; }
+  .pt .l-three > .rail { min-height: 44px; }
+  .pt .rtab { min-height: 44px; min-width: 44px; justify-content: center; }
+}
+@media (pointer: coarse) and (min-width: 821px) {
+  .pt .rail { width: 46px; }
+}
+@media (min-width: 1600px) {
+  .pt-wrap.pt-case, .pt:has(.pt-case) .pt-bar, .pt:has(.pt-case) .pt-demo-in { max-width: 1720px; }
+}

@@ -43,9 +43,11 @@ interface Props {
   known: { seqs: Set<number>; docs: Set<string> }
   track: <T>(p: Promise<T>) => Promise<T>
   onCite: (c: Citation) => void
+  /** an answer (or a failure line) arrived: the case page shows a dot when this chat is not on screen */
+  onAnswer?: () => void
 }
 
-export function Ask({ caseId, known, track, onCite }: Props) {
+export function Ask({ caseId, known, track, onCite, onAnswer }: Props) {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState(false)
@@ -65,9 +67,10 @@ export function Ask({ caseId, known, track, onCite }: Props) {
     try {
       const r = await track(api.chat(caseId, message, history))
       setMsgs((m) => [...m, { id: nextId.current++, who: 'ai', text: safe(String(r.answer ?? ''), LEAK_FALLBACK), citations: arr(r.citations) }])
+      onAnswer?.()
     } catch (e) {
       if (isUnavailable(e)) setUnavailable(true)
-      else setMsgs((m) => [...m, { id: nextId.current++, who: 'ai', text: api.failureText(e), error: true }])
+      else { setMsgs((m) => [...m, { id: nextId.current++, who: 'ai', text: api.failureText(e), error: true }]); onAnswer?.() }
     } finally {
       setPending(false)
     }

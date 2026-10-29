@@ -18,6 +18,8 @@ export interface ThreadProps {
   active?: boolean
   /** called with the list the server returned after this viewer posted */
   onPosted?: (items: ThreadItem[]) => void
+  /** called with the list on screen whenever it changes (the portal's unread dot on its Messages tab) */
+  onItems?: (items: ThreadItem[]) => void
   className?: string
 }
 
@@ -66,7 +68,7 @@ export function Thread(p: ThreadProps) {
   return <ThreadView key={`${p.caseId}:${p.role}`} {...p} />
 }
 
-function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = true, onPosted, className = '' }: ThreadProps) {
+function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = true, onPosted, onItems, className = '' }: ThreadProps) {
   const [items, setItems] = useState<ThreadItem[] | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable' | 'error' | 'gone'>('loading')
   const [sending, setSending] = useState(false)
@@ -123,6 +125,10 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
       window.dispatchEvent(new CustomEvent('openloop-seen', { detail: { role, caseId, seq: max } }))
     } catch { /* storage unavailable */ }
   }, [items, active, role, caseId])
+  const onItemsRef = useRef(onItems)
+  useEffect(() => { onItemsRef.current = onItems }, [onItems])
+  useEffect(() => { if (items) onItemsRef.current?.(items) }, [items])
+
   const markSeenRef = useRef(markSeen)
   useEffect(() => { markSeenRef.current = markSeen; markSeen() }, [markSeen])
 

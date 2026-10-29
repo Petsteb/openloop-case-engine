@@ -300,7 +300,13 @@ Keep the custom tokens above as well.
 ## Client portal (/client)
 - **Where it lives:** a second Vite page, `web/client/index.html` with code in `src/client/**` and `pt-`-prefixed styles in `portal.css`.
 - **Look:** it uses the bank screen's tokens and fonts, with more air.
-- **Layout:** one column under 1024 px; two columns from 1024 px, at a 1120 px max width.
+- **Layout:** My cases is one column under 1024 px and two columns from 1024 px, at a 1120 px max width.
+- **Case page:** it uses the bank case screen's layout (`.l-three`, `.panel-head`, `.collapse` and the rails from `index.css`; portal additions are `pt-`-prefixed in `portal.css`), at a 1480 px max width (1720 px from 1600 px).
+  - **Columns:** left is "Your documents", each row with an always-visible View. The centre is "Pending": requests and confirmations, under the status pill, the next action and the progress steps. Right is two tabs, "Messages" (with the bank) and "Ask AI".
+  - **Folding:** `[` and `]` fold the side panels to 44 px rails, like the bank's. The state and the tab are remembered in `openloop-client-left`, `-right` and `-rtab`. The right panel stays mounted while folded, so the thread keeps polling and the chat keeps its answers.
+  - **Unread:** a dot on the Messages tab (and on the folded rail) for a bank message or email the tab has not shown (`openloop-seen:client-msgs:<caseId>`), and on Ask AI for an answer that arrived while the tab was hidden.
+  - **Bell:** on a case page it lists that case first. Its bank messages stay unread until the Messages tab shows them, and picking one opens that tab.
+  - **Breakpoints:** the bank's. Under 1180 px the right panel drops under the other two. Under 820 px it is one column in the order Pending, Your documents, Messages / Ask, with the rails as horizontal 44 px pills.
 - **Top of page:** it answers "what do I do now?":
   - the company name in display type;
   - one status pill: amber `--review` for "We need something from you", neutral for "Under review by the bank", an ink dot for "Complete";

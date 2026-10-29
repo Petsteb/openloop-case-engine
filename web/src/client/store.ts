@@ -51,7 +51,8 @@ export function useCompany(): string {
 
 /* ---------- last-seen seq per file ---------- */
 const SEEN_PREFIX = 'openloop-seen:client:'
-const seenStore = store((k) => k.startsWith(SEEN_PREFIX))
+const MSGS_PREFIX = 'openloop-seen:client-msgs:'
+const seenStore = store((k) => k.startsWith(SEEN_PREFIX) || k.startsWith(MSGS_PREFIX))
 const memSeen = new Map<string, number>()   // only used when storage is unavailable
 // the messages thread writes the same key in this tab and announces it with a same-tab "openloop-seen" event
 window.addEventListener('openloop-seen', () => seenStore.emit())
@@ -73,6 +74,26 @@ export function markSeen(caseId: string, seq: number, ledgerLen?: number | null)
   try { window.localStorage.setItem(SEEN_PREFIX + caseId, String(seq)) } catch { /* memory only */ }
   seenStore.emit()
 }
+/* ---------- last-seen bank message per case (the Messages tab's unread dot) ----------
+   key openloop-seen:client-msgs:<caseId>: the newest bank-side thread seq the client had on screen in the Messages tab */
+const memMsgs = new Map<string, number>()
+export function readMsgsSeen(caseId: string, ledgerLen?: number | null): number {
+  let v: number
+  try {
+    v = Number(JSON.parse(window.localStorage.getItem(MSGS_PREFIX + caseId) ?? '0')) || 0
+  } catch {
+    v = memMsgs.get(caseId) ?? 0
+  }
+  return typeof ledgerLen === 'number' && ledgerLen > 0 && v > ledgerLen ? 0 : v
+}
+/** Moves forward only, except over a stale value past the ledger's end (a demo reset). */
+export function markMsgsSeen(caseId: string, seq: number, ledgerLen?: number | null) {
+  if (!caseId || !Number.isFinite(seq) || seq <= 0 || seq <= readMsgsSeen(caseId, ledgerLen)) return
+  memMsgs.set(caseId, seq)
+  try { window.localStorage.setItem(MSGS_PREFIX + caseId, String(seq)) } catch { /* memory only */ }
+  seenStore.emit()
+}
+
 /** Re-renders the caller whenever a last-seen value changes (this tab, the thread, or another tab). */
 export function useSeenRev(): number {
   return useSyncExternalStore(seenStore.subscribe, seenStore.rev)

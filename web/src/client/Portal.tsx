@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Tabs } from 'radix-ui'
 import { toast } from 'sonner'
 import * as api from './api'
 import { ApiError, isUnavailable } from './api'
@@ -12,10 +13,27 @@ import {
   arr, decidesLine, latestDispute, nextText as nextTextFor, pillState, pillText, portalState, productFor, progressSteps, safe, sameKey,
   shortLabel, sortRequests, fileEyebrow, type Step,
 } from './derive'
+import { OPEN_MESSAGES_EVENT } from './Chrome'
 import { HOME_HREF } from './route'
-import { markSeen } from './store'
+import { markMsgsSeen, markSeen, readMsgsSeen, useSeenRev } from './store'
+import type { ThreadItem } from '@/shared/thread/types'
 import type { CaseRow, Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
+
+/* ---------- panels: the bank case screen's layout (.l-three), remembered in this browser ---------- */
+type PaneTab = 'messages' | 'ask'
+const PREF = 'openloop-client-'
+function readPref<T extends string>(key: string, ok: readonly T[], fallback: T): T {
+  try { const v = window.localStorage.getItem(PREF + key); return ok.includes(v as T) ? (v as T) : fallback } catch { return fallback }
+}
+function writePref(key: string, value: string) {
+  try { window.localStorage.setItem(PREF + key, value) } catch { /* this page only */ }
+}
+const isTyping = (e: KeyboardEvent) =>
+  e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable="true"]')
+/** The newest thread item from the bank's side: a staff message or an automatic email (not the client's own). */
+const bankTopOf = (items: ThreadItem[]) =>
+  items.reduce((m, i) => (i.kind === 'email' || i.author?.role !== 'client' ? Math.max(m, Number(i.seq) || 0) : m), 0)
 
 const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
 
@@ -41,6 +59,19 @@ function Progress({ steps }: { steps: Step[] }) {
         </li>
       ))}
     </ol>
+  )
+}
+
+/** The bank's PanelHead (.panel-head, .collapse): a title or the tab row, and the hide button ([ or ]). */
+function PaneHead({ side, label, onHide, children }: { side: 'left' | 'right'; label: string; onHide: () => void; children: ReactNode }) {
+  const key = side === 'left' ? '[' : ']'
+  return (
+    <div className="panel-head pt-pane-head">
+      {children}
+      <button type="button" className="collapse" onClick={onHide} aria-label={`Hide ${label}`} aria-expanded="true" title={`Hide ${label} (${key})`}>
+        <Icon name={side === 'left' ? 'chevronL' : 'chevron'} size={15} />
+      </button>
+    </div>
   )
 }
 
@@ -94,7 +125,7 @@ export function Portal({ caseId, file, onCompanyName, decision = '' }: PortalPro
   // a demo reset (the ledger got shorter) remounts the page: no notes, chat or open rows from the previous run
   return (
     <PortalBoundary key={gen} inner>
-      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} file={file} decision={decision}
+      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} file={file} decision={decision} ledger={ledger}
         track={track} mutate={mutate} refresh={refresh} />
     </PortalBoundary>
   )
@@ -107,6 +138,8 @@ interface FileProps {
   caseId: string
   file?: CaseRow
   decision: string
+  /** the case's ledger length, to drop a stale last-seen value after a demo reset */
+  ledger?: number | null
   track: <T>(p: Promise<T>) => Promise<T>
   mutate: ReturnType<typeof useClientView>['mutate']
   refresh: () => Promise<boolean>
@@ -115,7 +148,7 @@ interface FileProps {
 const toggleIn = (s: Set<string>, id: string) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }
 const docNo = (id: string) => Number(String(id ?? '').replace(/\D/g, '')) || 0
 
-function FileView({ view, docs, error, caseId, file, decision, track, mutate, refresh }: FileProps) {
+function FileView({ view, docs, error, caseId, file, decision, ledger, track, mutate, refresh }: FileProps) {
   const [cards, setCards] = useState<Record<string, CardState>>({})
   const [ghosts, setGhosts] = useState<Record<string, MissingDocument>>({})
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -128,6 +161,59 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
   const [flash, setFlash] = useState<string | null>(null)
   const inputs = useRef(new Map<string, HTMLInputElement>())
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  /* ---------- panels: documents on the left, messages and questions on the right; [ and ] fold them like the bank's ---------- */
+  const [left, setLeft] = useState(() => readPref('left', ['open', 'closed'] as const, 'open') === 'open')
+  const [right, setRight] = useState(() => readPref('right', ['open', 'closed'] as const, 'open') === 'open')
+  const [tab, setTab] = useState<PaneTab>(() => readPref<PaneTab>('rtab', ['messages', 'ask'], 'messages'))
+  useEffect(() => writePref('left', left ? 'open' : 'closed'), [left])
+  useEffect(() => writePref('right', right ? 'open' : 'closed'), [right])
+  useEffect(() => writePref('rtab', tab), [tab])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '[') setLeft((v) => !v)
+      else if (e.key === ']') setRight((v) => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const [docVisible, setDocVisible] = useState(() => document.visibilityState !== 'hidden')
+  useEffect(() => {
+    const onVis = () => setDocVisible(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+  const openPane = (t?: PaneTab) => {
+    if (t) setTab(t)
+    setRight(true)
+  }
+  // the bell (in the top bar) picked a message of this case: show the Messages tab
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ caseId?: string }>).detail?.caseId !== caseId) return
+      setTab('messages')
+      setRight(true)
+      requestAnimationFrame(() => document.querySelector('.pt-three > .right-col')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
+    }
+    window.addEventListener(OPEN_MESSAGES_EVENT, on)
+    return () => window.removeEventListener(OPEN_MESSAGES_EVENT, on)
+  }, [caseId])
+
+  /* ---------- unread dots: a bank message the Messages tab has not shown, an answer the Ask tab has not shown ---------- */
+  useSeenRev()   // re-render when the bell's "Mark all read" or another tab moves the messages mark
+  const [bankTop, setBankTop] = useState(0)
+  const onThreadItems = useCallback((items: ThreadItem[]) => setBankTop(bankTopOf(items)), [])
+  const msgsOnScreen = right && tab === 'messages' && docVisible
+  useEffect(() => { if (msgsOnScreen && bankTop) markMsgsSeen(caseId, bankTop, ledger) }, [msgsOnScreen, bankTop, caseId, ledger])
+  const msgsDot = !msgsOnScreen && bankTop > readMsgsSeen(caseId, ledger)
+  const askOnScreen = right && tab === 'ask' && docVisible
+  const askOnScreenRef = useRef(askOnScreen)
+  useEffect(() => { askOnScreenRef.current = askOnScreen }, [askOnScreen])
+  const [askNew, setAskNew] = useState(false)
+  if (askNew && askOnScreen) setAskNew(false)   // shown: the dot clears (state adjusted while rendering)
+  const onAskAnswer = useCallback(() => { if (!askOnScreenRef.current) setAskNew(true) }, [])
+  const askDot = askNew && !askOnScreen
 
   /* sample files: only offer "Use sample file" when one exists for the request */
   useEffect(() => {
@@ -280,6 +366,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
       const name = ev.what.replace(/^[^:]*:\s*/, '').trim()
       const d = docList.find((x) => x.name === name)
       if (d) {
+        setLeft(true)   // the row lives in the documents panel
         setOpenDocs((s) => new Set(s).add(d.id))
         return flashTo(d.id, `[data-doc="${CSS.escape(d.id)}"]`)
       }
@@ -313,7 +400,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
 
   return (
     <>
-      <div className="pt-wrap">
+      <div className="pt-wrap pt-case">
         <header className="pt-head">
           <div className="pt-head-main">
             <p className="pt-eyebrow">{kind}</p>
@@ -341,9 +428,30 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
           <Progress steps={steps} />
         </section>
 
-        <main className="pt-grid">
-          <section className="pt-sec pt-a-need" aria-labelledby="h-need">
-            <h2 id="h-need" className="pt-h2">What we need from you{needCount ? <span className="pt-count">{needCount}</span> : null}</h2>
+        {/* the bank case screen's three columns: documents | pending | messages and questions; [ and ] fold the sides */}
+        <div className="l-three pt-three" style={{ ['--lw' as string]: left ? undefined : '44px', ['--rw' as string]: right ? undefined : '44px' }}>
+          {left ? (
+            <section className="panel side-panel left-col" aria-labelledby="h-docs">
+              <PaneHead side="left" onHide={() => setLeft(false)} label="your documents">
+                <h2 id="h-docs" className="pt-pane-title">Your documents{docList.length ? <span className="pt-count">{docList.length}</span> : null}</h2>
+              </PaneHead>
+              <div className="panel-body">
+                {docList.length ? (
+                  <Documents docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
+                    flash={flash} onToggle={toggleDoc} onView={openDoc} />
+                ) : <p className="pt-empty">Nothing sent yet. The documents you send appear here.</p>}
+              </div>
+            </section>
+          ) : (
+            <button type="button" className="rail rail-left pt-rail" onClick={() => setLeft(true)} aria-label={`Show your documents (${docList.length})`} title="Show your documents ([)">
+              <Icon name="chevron" size={14} />
+              <span className="rail-label">Your documents</span>
+              {docList.length ? <span className="pt-rail-n" aria-hidden="true">{docList.length}</span> : null}
+            </button>
+          )}
+
+          <section className="center-col pt-center" aria-labelledby="h-need">
+            <h2 id="h-need" className="pt-h2">Pending{needCount ? <span className="pt-count">{needCount}</span> : null}</h2>
             {requests.length || confirmations.length || showDispute ? (
               <div className="pt-cards">
                 {requests.map((r) => (
@@ -365,26 +473,47 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
             )}
           </section>
 
-          <section className="pt-sec pt-a-msgs" aria-labelledby="h-msgs">
-            <h2 id="h-msgs" className="pt-h2">Messages with the bank</h2>
-            <SectionBoundary fallback="Messages can’t be shown right now. Please reload the page.">
-              <Messages caseId={caseId} role="client" />
-            </SectionBoundary>
+          {/* kept mounted while folded (like the bank's): the thread keeps polling and the chat keeps its answers */}
+          <section className="panel side-panel right-col" aria-label="Messages and questions" hidden={!right}>
+            <Tabs.Root value={tab} onValueChange={(v) => setTab(v as PaneTab)} className="right-tabs pt-tabs">
+              <PaneHead side="right" onHide={() => setRight(false)} label="messages and questions">
+                <Tabs.List className="rtabs pt-rtabs" aria-label="Messages and questions">
+                  <Tabs.Trigger value="messages" className="rtab" title={msgsDot ? 'New message from the bank' : undefined}>
+                    Messages{msgsDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new message from the bank</span></> : null}
+                  </Tabs.Trigger>
+                  <Tabs.Trigger value="ask" className="rtab" title={askDot ? 'New answer' : undefined}>
+                    Ask AI{askDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new answer</span></> : null}
+                  </Tabs.Trigger>
+                </Tabs.List>
+              </PaneHead>
+              <Tabs.Content value="messages" forceMount hidden={tab !== 'messages'} className="tabpane">
+                <h3 className="pt-pane-sub">Messages with the bank</h3>
+                <SectionBoundary fallback="Messages can’t be shown right now. Please reload the page.">
+                  <Messages caseId={caseId} role="client" onItems={onThreadItems} />
+                </SectionBoundary>
+              </Tabs.Content>
+              <Tabs.Content value="ask" forceMount hidden={tab !== 'ask'} className="tabpane">
+                <h3 className="pt-pane-sub">Ask about your case</h3>
+                <Ask caseId={caseId} known={known} track={track} onCite={onCite} onAnswer={onAskAnswer} />
+              </Tabs.Content>
+            </Tabs.Root>
           </section>
-
-          {docList.length ? (
-            <section className="pt-sec pt-a-docs" aria-labelledby="h-docs">
-              <h2 id="h-docs" className="pt-h2">Your documents<span className="pt-count">{docList.length}</span></h2>
-              <Documents docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
-                flash={flash} onToggle={toggleDoc} onView={openDoc} />
-            </section>
+          {!right ? (
+            <div className="rail rail-right rail-split pt-rail" role="group" aria-label="Messages and questions, hidden">
+              <button type="button" className="rail-btn" onClick={() => openPane()} aria-label="Show messages and questions" aria-expanded="false" title="Show messages and questions (])">
+                <Icon name="chevronL" size={14} />
+              </button>
+              <button type="button" className="rail-btn rail-label pt-rail-tab" onClick={() => openPane('messages')}
+                aria-label={msgsDot ? 'Open messages, new message from the bank' : 'Open messages'}>
+                Messages{msgsDot ? <i className="pt-rail-dot" aria-hidden="true" /> : null}
+              </button>
+              <button type="button" className="rail-btn rail-ai pt-rail-tab" onClick={() => openPane('ask')}
+                aria-label={askDot ? 'Open Ask AI, new answer' : 'Open Ask AI'} title="Ask AI">
+                AI{askDot ? <i className="pt-rail-dot" aria-hidden="true" /> : null}
+              </button>
+            </div>
           ) : null}
-
-          <section className="pt-sec pt-a-ask" aria-labelledby="h-ask">
-            <h2 id="h-ask" className="pt-h2">Ask about your case</h2>
-            <Ask caseId={caseId} known={known} track={track} onCite={onCite} />
-          </section>
-        </main>
+        </div>
 
         <footer className="pt-foot">
           <Icon name="shield" size={16} />
