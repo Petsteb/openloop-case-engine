@@ -331,3 +331,12 @@ def test_annual_review_offers_no_loan_samples_and_blocked_files_notify_the_bank(
     c.post(f"/api/cases/{carpatic}/exceptions/{card['id']}/resolve", json={"action_id": "acknowledge"})
     staff = c.get("/api/notifications", params={"role": "employee"}).json()
     assert any(n["case_id"] == carpatic and n["text"].startswith("Blocked:") for n in staff)
+
+
+def test_a_client_starting_an_application_gets_the_client_view_not_the_bank_bundle():
+    r = c.post("/api/cases", json={"template": "kyb_review", "company_id": "verde", "role": "client"}).json()
+    assert r["case"]["company_id"] == "verde" and "missing_documents" in r
+    assert not {"trace", "events", "exceptions", "config"} & set(r)
+    t = {x["id"]: x for x in c.get("/api/templates").json()}
+    assert t["kyb_review"]["decision"] == "annual review sign-off" and t["sme_loan"]["decision"] == "credit decision"
+    assert c.get(f"/api/cases/{r['case']['id']}/bundle").json()["case"]["decision"] == "annual review sign-off"

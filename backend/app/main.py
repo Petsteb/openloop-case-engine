@@ -88,16 +88,22 @@ def _text(v) -> str:
     return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)
 
 
+def bundle_case_header(case: Case) -> dict:
+    st = case.state()
+    opened, t = case.ledger.events[0]["payload"], T.TEMPLATES[st["template"]]
+    return {"id": case.id, "title": opened.get("title", t["title"]), "goal": opened.get("goal", t["goal"]),
+            "status": st["status"], "sim_now": st["now"].isoformat(), "day": (st["now"] - CASE_START).days,
+            "opened_at": CASE_START.isoformat(), "template": st["template"], "template_title": t["title"],
+            "decision": t["decision"], "company_id": st["profile"]["id"], "company": st["profile"]["name"],
+            "product": st["profile"]["product"]}
+
+
 def bundle(case: Case) -> dict:
     st = case.state()
     ev = case.ledger.events
     steps = st["trace"]
-    opened, t = ev[0]["payload"], T.TEMPLATES[st["template"]]
     return {
-        "case": {"id": case.id, "title": opened.get("title", t["title"]), "goal": opened.get("goal", t["goal"]),
-                 "status": st["status"], "sim_now": st["now"].isoformat(), "day": (st["now"] - CASE_START).days,
-                 "opened_at": CASE_START.isoformat(), "template": st["template"], "template_title": t["title"],
-                 "company_id": st["profile"]["id"], "company": st["profile"]["name"], "product": st["profile"]["product"]},
+        "case": bundle_case_header(case),
         "config": {"agent_mode": AGENT.mode, "agent_status": AGENT.status,
                    "judge_mode": os.environ.get("JUDGE_MODE", "heuristic"),
                    "judge_threshold": T.JUDGE_THRESHOLD, "registry_down": registry.state["down"]},
@@ -221,6 +227,7 @@ def reset_demo(all_cases: bool = Query(False, alias="all")):
 class NewCase(BaseModel):
     template: str = Field(min_length=1, max_length=40)
     company_id: str = Field(min_length=1, max_length=40)
+    role: Literal["client", "employee"] = "employee"  # a client starting an application gets the client view back
 
 
 @app.get("/api/version")
@@ -229,9 +236,13 @@ def global_version():
     return {"cases": len(CASES), "events": sum(len(c.ledger.events) for c in list(CASES.values()))}
 
 
+TEMPLATE_PUBLIC_FIELDS = ("id", "title", "description", "requirements", "goal", "decision")
+
+
 @app.get("/api/templates")
 def list_templates():
-    return [{k: t[k] for k in ("id", "title", "description", "requirements")} for t in T.TEMPLATES.values()]
+    """Templates with the words a UI needs (`decision`: "credit decision" / "annual review sign-off")."""
+    return [{k: t[k] for k in TEMPLATE_PUBLIC_FIELDS} for t in T.TEMPLATES.values()]
 
 
 @app.get("/api/companies")
@@ -265,6 +276,10 @@ def create_case(body: NewCase):
         case = CASES[f"case-{n}"] = Case(f"case-{n}", STORE, template=body.template, profile_id=body.company_id)
         AGENT.handle_batch(case, [case.ledger.events[0]])
         notifier.flush(case)
+        if body.role == "client":  # never the bank bundle (agent trace, internal events) to a client
+            return {"case": {k: bundle_case_header(case)[k] for k in
+                             ("id", "template", "template_title", "company_id", "company", "product")},
+                    **_client_view(case)}
         return bundle(case)
 
 
