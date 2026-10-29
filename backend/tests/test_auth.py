@@ -369,3 +369,22 @@ def test_cached_user_is_dropped_on_every_change():
     auth.users().update(u["id"], active=0)
     assert auth.users().get(u["id"])["active"] == 0  # not the cached copy
     auth.users().update(u["id"], active=1)
+
+
+def test_admin_moves_a_user_between_staff_and_client(fresh):
+    admin, supervisor = session("admin@bank.example"), session(IOANA)
+    u = admin.post("/api/users", json={"email": "mover@bank.example", "name": "Mover", "role": "admin",
+                                       "password": "a-long-password"}).json()["user"]
+    old = session("mover@bank.example")
+    assert old.get("/api/cases").status_code == 200
+    assert supervisor.post(f"/api/users/{u['id']}/role", json={"role": "client", "company_id": "verde"}).status_code == 403
+    assert admin.post(f"/api/users/{u['id']}/role", json={"role": "client"}).status_code == 422  # which company?
+    r = admin.post(f"/api/users/{u['id']}/role", json={"role": "client", "company_id": "verde"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "client" and r.json()["user"]["staff_id"] is None
+    assert old.get("/api/cases").status_code == 401  # signed out everywhere: the old staff session is gone
+    client = session("mover@bank.example")
+    assert [x["company_id"] for x in client.get("/api/cases?role=client").json()] and         {x["company_id"] for x in client.get("/api/cases?role=client").json()} == {"verde"}
+    r = supervisor.post(f"/api/users/{u['id']}/role", json={"role": "analyst"})
+    assert r.status_code == 200 and r.json()["user"]["staff_id"].startswith("analyst-")
+    me = auth.users().by_email("admin@bank.example")
+    assert admin.post(f"/api/users/{me['id']}/role", json={"role": "analyst"}).status_code == 409  # not yourself

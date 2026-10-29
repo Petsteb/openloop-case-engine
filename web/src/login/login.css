@@ -69,3 +69,6 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
   background: #fff; color: #3c4043; border: 1px solid #dadce0; font-family: 'Segoe UI', var(--ui); font-size: .875rem; font-weight: 500; }
 .btn.lg-ms::before { background: #f1f3f4; }
 .btn.lg-ms:hover:not(:disabled) { color: #202124; border-color: #d2e3fc; }
+.lg-userlist li { flex-wrap: wrap; }
+.lg-move { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-top: 8px; }
+.lg-move .lg-input { width: auto; min-height: 36px; padding: 6px 10px; font-size: .875rem; }
