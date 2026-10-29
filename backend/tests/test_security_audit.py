@@ -7,6 +7,7 @@ The plain (non-xfail) tests pin strengths the pitch relies on. Everything is off
 judge, outbox email, in-memory database (see conftest.py).
 """
 import base64
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -72,7 +73,7 @@ def test_sec02_forged_register_certificate_cannot_hide_a_beneficial_owner():
 
 
 # ----------------------------------------------------------------------------- SEC-03 identity from the key, not the document
-@xfail("SEC-03", "an ID card upload with no identity fields satisfies HR-05 for the person named in the request key")
+# Fixed (theo/logic-fixes): engine._id_problem quarantines the upload; engine.id_identifies feeds HR-05.
 def test_sec03_empty_id_card_does_not_identify_anyone():
     start_demo()
     r = upload("id_card:Elena Munteanu", "scan attached")       # no Nume / Prenume / CNP / validity
@@ -81,7 +82,6 @@ def test_sec03_empty_id_card_does_not_identify_anyone():
     assert still_needed, "the bank now treats Elena Munteanu as identified"
 
 
-@xfail("SEC-03", "the ID card's 'Valabilă până la' is extracted but never checked")
 def test_sec03_expired_id_card_is_not_valid_evidence():
     start_demo()
     expired = ("ROMÂNIA · CARTE DE IDENTITATE (copie)\nNume: MUNTEANU\nPrenume: ELENA\nCNP: 288070••••••\n"
@@ -91,6 +91,30 @@ def test_sec03_expired_id_card_is_not_valid_evidence():
     elena = [d for d in docs if d["type"] == "id_card" and d.get("person") == "Elena Munteanu"]
     require(elena, "uploaded ID card not listed")
     assert elena[-1]["status"] != "valid"
+
+
+def test_sec03_id_card_that_expires_while_the_file_waits_identifies_nobody():
+    start_demo()
+    tomorrow = (CASES["demo-1"].now + timedelta(days=1)).strftime("%d.%m.%Y")
+    card = ("ROMÂNIA · CARTE DE IDENTITATE (copie)\nNume: MUNTEANU\nPrenume: ELENA\nCNP: 288070••••••\n"
+            f"Valabilă până la: {tomorrow}")
+    r = upload("id_card:Elena Munteanu", card)
+    require("id_card:Elena Munteanu" not in {m["key"] for m in r.json()["missing_documents"]}, "valid card refused")
+    c.post("/api/cases/demo-1/advance", json={"days": 3})
+    case = CASES["demo-1"]
+    case.run_tool("check_requirement", {"req_id": "R2"}, "re-check after the card expired")
+    assert "Elena" in case.state()["reqs"]["R2"]["reason"]
+
+
+def test_sec03_demo_id_cards_still_identify_their_holders():
+    from app import profiles
+    from app.engine import id_identifies
+    st = {"now": CASES["demo-1"].now}
+    for pid in profiles.PROFILES:
+        for item in profiles.scenario_for(pid, profiles.PROFILES[pid]["templates"][0]):
+            for d in item.get("docs", []):
+                if d["type"] == "id_card":
+                    assert id_identifies(st, d), (pid, d["person"])
 
 
 # ----------------------------------------------------------------------------- SEC-04 / SEC-05 issue dates from the text

@@ -133,11 +133,48 @@ def _quarantine_reason(doc_type: str, person: str, text: str, cui: str) -> str |
     if m and m.group(1) != cui:
         return "it shows another company's tax ID"  # the other firm's number stays out of every summary
     if doc_type == "id_card" and person:
-        last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
-        first = re.search(r"^Prenume\s*:\s*(.+)$", text or "", re.M)
-        if last and first and not rules.same_name_exact(f"{first.group(1)} {last.group(1)}", person):
+        name = _id_name(text)
+        if name and not rules.same_name_exact(name, person):
             return "it is an identity card for another person"
     return None
+
+
+ID_VALID_RE = re.compile(r"^Valabil[ăa]\s+p[âa]n[ăa]\s+la\s*:\s*(\d{2})\.(\d{2})\.(\d{4})", re.M | re.I)
+
+
+def _id_name(text: str) -> str | None:
+    """The holder's name as printed on the card (Prenume + Nume), not the name in the request key."""
+    last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
+    first = re.search(r"^Prenume\s*:\s*(.+)$", text or "", re.M)
+    return f"{first.group(1).strip()} {last.group(1).strip()}" if last and first else None
+
+
+def _id_valid_until(text: str) -> datetime | None:
+    m = ID_VALID_RE.search(text or "")
+    return _date_of(m) if m else None
+
+
+def _id_problem(text: str, now: datetime) -> tuple[str, str] | None:
+    """SEC-03: an ID card copy must show who it identifies and until when; an expired card identifies nobody."""
+    until = _id_valid_until(text)
+    if _id_name(text) is None or until is None:
+        return "incomplete", "the identity card copy does not show the holder's name and validity date"
+    if until.date() < now.date():
+        return "expired_id", "the identity card has expired"
+    return None
+
+
+def id_identifies(st: dict, d: dict) -> str | None:
+    """The person an ID card on file identifies (HR-05): the name printed on it, only if it matches the person
+    it was requested for and the card is still valid at the case's clock. Otherwise None (SEC-03)."""
+    if d["type"] != "id_card" or d.get("quarantined") or d.get("unreadable"):
+        return None
+    name, until = _id_name(d.get("text") or ""), _id_valid_until(d.get("text") or "")
+    if not name or until is None or until.date() < st["now"].date():
+        return None
+    if d.get("person") and not rules.same_name_exact(name, d["person"]):
+        return None
+    return name
 
 
 def pending_confirmations(events: list[dict]) -> list[dict]:
@@ -185,6 +222,9 @@ def latest_doc(st: dict, doc_type: str) -> dict | None:
 
 
 def doc_expired(st: dict, doc: dict) -> bool:
+    if doc["type"] == "id_card":  # an ID card is valid until the date printed on it (SEC-03)
+        until = _id_valid_until(doc.get("text") or "")
+        return until is None or until.date() < st["now"].date()
     return doc["type"] in T.EXPIRING_DOCS and not rules.doc_is_valid(_dt(doc["issued_at"]), st["now"])
 
 
@@ -334,6 +374,8 @@ class Case:
         kind = "wrong_owner" if reason else None
         if not reason and not pdf and (reason := _date_problem(text, self.now)):
             kind = "bad_date"
+        if not reason and not pdf and doc_type == "id_card" and (problem := _id_problem(text, self.now)):
+            kind, reason = problem
         issued = None if reason else _issued_from_text(text)  # a rejected date is never stored as the issue date
         payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
                    "issued_at": (issued or self.now).isoformat(), "source": "upload",
@@ -567,9 +609,10 @@ def _evaluate(st: dict, req_id: str) -> dict:
                 "details": {"doc_id": onrc["id"], "expires_at": rules.doc_expires_at(_dt(onrc['issued_at'])).isoformat()}}
 
     if req_id == "R2":
-        id_docs = [d for d in st["docs"].values()  # a quarantined or unread ID card identifies nobody
-                   if d["type"] == "id_card" and not d.get("quarantined") and not d.get("unreadable")]
-        ids = [d["person"] for d in id_docs]
+        # HR-05 (SEC-03): a person is identified by the name printed on a valid, accepted ID card, never by the
+        # request key; a quarantined, unread, nameless or expired card identifies nobody
+        id_docs = [d for d in st["docs"].values() if id_identifies(st, d)]
+        ids = [id_identifies(st, d) for d in id_docs]
         if not have(ubo):
             return wait(T.DOC_LABELS["ubo_declaration"])
         declared = X[ubo["id"]].get("declared_owners", [])
