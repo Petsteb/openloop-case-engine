@@ -1,0 +1,22 @@
+/* "What the agent has learned" under the work queue (lp- prefix). */
+.lp { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 16px; min-width: 0; }
+.lp-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; margin-bottom: 14px; }
+.lp-head h2 { font-family: var(--display); font-weight: 500; font-size: 1.25rem; letter-spacing: -.015em; margin: 0; }
+.lp-head p { max-width: 70ch; margin: 0; }
+.lp-cols { display: grid; gap: 18px 28px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .lp-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.lp-col h3 { display: flex; align-items: baseline; gap: 8px; font-size: .75rem; font-weight: 500; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; margin: 0 0 6px; }
+.lp-n { font-family: var(--mono); color: var(--ink); letter-spacing: 0; }
+.lp-list { list-style: none; margin: 0; padding: 0; }
+.lp-item { border-top: 1px solid var(--line); padding: 10px 0; min-width: 0; }
+.lp-item p { margin: 4px 0 0; font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
+.lp-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+.lp-line a { color: var(--ink); text-underline-offset: 3px; }
+.lp-id { font-family: var(--mono); font-weight: 500; }
+.lp-pair { display: flex; flex-wrap: wrap; gap: 4px 8px; font-family: var(--quote); }
+.lp-pair span:nth-child(2) { color: var(--muted); font-family: var(--ui); }
+.lp-applied ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.lp-applied a { color: var(--ink); }
+.lp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.lp-empty { border-top: 1px solid var(--line); padding-top: 10px; margin: 0; }

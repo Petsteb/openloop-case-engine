@@ -619,6 +619,28 @@ def learning_state():
     return {"proposals": learner.proposals(_rulings()[0]), "checks": learner.PROMOTED}
 
 
+@app.get("/api/learning/overview")
+def learning_overview():
+    """Everything the agent has learned, for the work queue's panel: promoted checks, proposals waiting for a second
+    person, the analyst rulings it keeps as precedents, and every place a precedent or a learned check settled a check."""
+    rulings, _ = _rulings()
+    precedents, applied = [], []
+    for c in list(CASES.values()):
+        st = c.state()
+        when = {e["seq"]: e["sim_time"] for e in c.ledger.events}
+        precedents += [{"case_id": c.id, "company": c.profile["name"], "a": p["a"], "b": p["b"], "decision": p["decision"],
+                        "by": p.get("analyst"), "exception_id": p["exception_id"], "sim_time": when.get(p["seq"])}
+                       for p in st["precedents"]]
+        for r in st["reqs"].values():
+            d = r.get("details") or {}
+            source = d.get("learned_check") or (d.get("precedent") if d.get("decided_by") != "analyst" else None)
+            if source:
+                applied.append({"case_id": c.id, "company": c.profile["name"], "requirement_id": r["id"],
+                                "title": r["title"], "source": source, "reason": r["reason"]})
+    return {"checks": learner.PROMOTED, "proposals": learner.proposals(rulings), "precedents": precedents,
+            "applied": applied, "history_rulings": len(learner._rows(learner.HISTORY)), "min_support": learner.MIN_SUPPORT}
+
+
 @app.post("/api/learning/proposals/{proposal_id}/backtest")
 def learning_backtest(proposal_id: str):
     try:
