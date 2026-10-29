@@ -469,7 +469,7 @@ def client_ip(scope) -> str:
 SECURITY_HEADERS = [
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
-    (b"referrer-policy", b"same-origin"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),  # Google Sign-In checks the origin it sends
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
     (b"content-security-policy", b"frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"),
 ]
