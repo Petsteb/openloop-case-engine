@@ -15,6 +15,12 @@ EVENT_TOKEN = re.compile(r"(?<![\w-])#(\d+)\b")
 ROLES = ("client", "employee")
 
 
+def client_facing_name(author: str) -> str:
+    """How a staff author is shown to a client: the person's name only, without internal roles or staff IDs."""
+    name = re.sub(r"\s*\([^)]*\)|\bE-\d+\b", "", author or "").strip(" ·-,")
+    return name or "Bank team"
+
+
 def mentionables(case: Case, role: str) -> dict:
     """What this role may reference: people on the file, its documents, and the events it can see."""
     role = case_views._role(role)
@@ -71,7 +77,8 @@ def thread(case: Case, role: str) -> list[dict]:
                     for r in p.get("refs", []) if r["kind"] == "person"
                     or (r["kind"] == "doc" and r["id"] in doc_names)
                     or (r["kind"] == "event" and r["id"] in event_labels)]
-            out.append({**base, "kind": "message", "author": {"role": p["role"], "name": p["author"]},
+            name = client_facing_name(p["author"]) if role == "client" and p["role"] == "employee" else p["author"]
+            out.append({**base, "kind": "message", "author": {"role": p["role"], "name": name},
                         "text": p["text"], "subject": None, "body": None, "refs": refs})
         elif e["type"] in ("EMAIL_SENT", "EMAIL_FAILED") and (role == "employee" or e["type"] == "EMAIL_SENT"):
             failed = e["type"] == "EMAIL_FAILED"  # the bank sees failed sends; the client only what reached them
