@@ -56,8 +56,18 @@ def check_matches(a: str, b: str, postal_a: str, postal_b: str, street_level_onl
     return not street_level_only or any(set(city) <= core for city in STREET_LEVEL_POSTAL_CITIES)
 
 
+_ROWS: dict[str, tuple] = {}  # path -> ((mtime, size), rows): every bundle asks for proposals, the file rarely changes
+
+
 def _rows(path: Path) -> list[dict]:
-    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()] if path.exists() else []
+    try:
+        stat = path.stat()
+    except OSError:
+        return []
+    stamp, hit = (stat.st_mtime_ns, stat.st_size), _ROWS.get(str(path))
+    if hit is None or hit[0] != stamp:
+        hit = _ROWS[str(path)] = (stamp, [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()])
+    return [dict(r) for r in hit[1]]  # callers get their own rows
 
 
 def _rulings(st: dict) -> list[dict]:

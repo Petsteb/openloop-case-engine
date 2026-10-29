@@ -252,6 +252,7 @@ class Case:
                  events: list[dict] | None = None):
         """A new case (opens its ledger), or with `events` a stored case reloaded as-is."""
         self.id = case_id
+        self._memo: tuple | None = None  # (chain head, state): see state()
         self.ledger = Ledger(case_id, store, events)
         if events:
             st = self.state()
@@ -276,7 +277,23 @@ class Case:
         return self.ledger.append(type_, self.now, actor, payload, summary)
 
     def state(self) -> dict:
-        return reduce(self.ledger.events)
+        """reduce(events), memoised on the chain head: one request reads state many times between appends.
+
+        The key is (length, hash of the newest event). Each hash covers the previous one, so the head commits to
+        the whole chain: any append changes the key and the next call reduces again (state after an append is
+        always fresh). The reduce runs over a snapshot of exactly the events the key names, so a concurrent
+        append can never be cached under the wrong key. The returned dict is shared by every caller until the
+        next append: treat it as read-only (nothing in the app mutates it; tests check that the views don't).
+        """
+        events = self.ledger.events
+        n = len(events)
+        key = (n, events[n - 1]["hash"] if n else None)
+        memo = self._memo  # read once: another thread may swap it (one tuple, so key and state always match)
+        if memo is not None and memo[0] == key:
+            return memo[1]
+        st = reduce(events[:n])
+        self._memo = (key, st)
+        return st
 
     def _next_id(self, prefix: str, collection: str) -> str:
         return f"{prefix}-{len(self.state()[collection]) + 1}"
