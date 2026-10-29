@@ -187,14 +187,22 @@ def test_sec06_amount_and_dscr_edge_cases():
 
 
 # ----------------------------------------------------------------------------- SEC-07 judge auto-accepts different numbers
-@xfail("SEC-07", "heuristic judge (default and Featherless fallback) auto-accepts a different street number")
+# Fixed (theo/logic-fixes): judge.numbers_match is a hard gate before any fuzzy score.
 def test_sec07_different_street_number_is_never_auto_accepted():
     a = "Bd. 21 Decembrie 1989 nr. 10, ap. 5, Cluj-Napoca, jud. Cluj"
     b = "Bd. 21 Decembrie 1989 nr. 104, ap. 5, Cluj-Napoca, jud. Cluj"
     assert not J.judge("address", a, b)["auto_accept"]
+    assert J.judge("address", a, a.replace("jud.", "Județ"))["auto_accept"]          # same numbers: still accepted
+    assert not J.judge("address", a + ", 400127", a + ", 400128")["auto_accept"]     # postal codes, when both present
 
 
-@xfail("SEC-07", "when Featherless fails, one string-similarity signal decides alone")
+def test_sec07_classifier_cannot_override_different_numbers(monkeypatch):
+    monkeypatch.setenv("JUDGE_MODE", "featherless")
+    monkeypatch.setattr(J, "_featherless_cached",
+                        lambda kind, a, b: ({"same_address": 1.0, "different_address": 0.0}, "featherless (cached)"))
+    assert not J.judge("address", "Str. Lungă nr. 1, Brașov", "Str. Lungă nr. 7, Brașov")["auto_accept"]
+
+
 def test_sec07_featherless_outage_does_not_auto_accept(monkeypatch):
     monkeypatch.setenv("JUDGE_MODE", "featherless")
     monkeypatch.setenv("JUDGE_CACHE", "0")
