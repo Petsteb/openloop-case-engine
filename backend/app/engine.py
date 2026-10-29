@@ -756,7 +756,8 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
                                 [{"id": "same_person", "label": "Same person"},
                                  {"id": "different_person", "label": "Different person, ask for a mandate"}]),
     }
-    noted = [{"id": "acknowledge", "label": "Noted: keep this finding for the credit decision"}]
+    decision = T.TEMPLATES[st["template"]]["decision"]
+    noted = [{"id": "acknowledge", "label": f"Noted: keep this finding for the {decision}"}]
     cards |= {  # hard-rule failures: the card names the problem, not the requirement it fails
         "tax_debt": ("high", "Outstanding tax debt on the ANAF certificate", noted),
         "inactive": ("high", "Company is not active in the trade register", noted),
@@ -764,9 +765,11 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
         "dscr": ("medium", f"Debt service coverage below {T.DSCR_MIN}", noted),
     }
     severity, title, actions = cards.get(kind, ("medium", f"Check failed: {req['title']}", noted))
-    rule_id = next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0])
-    if kind in ("address_uncertain", "signatory_uncertain"):
-        rule_id = "JQ-01" if kind == "address_uncertain" else "JQ-02"
+    # the rule the card cites is the one that failed, not the first rule of the requirement
+    rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
+               "address_differs": "HR-06", "dscr": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
+               "signatory_uncertain": "JQ-02", "signatory_differs": "JQ-02"}.get(
+        kind, next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0]))
     ex_id = case._next_id("EX", "exceptions")
     judge_view = None
     if d.get("judge"):

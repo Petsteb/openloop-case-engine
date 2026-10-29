@@ -272,3 +272,13 @@ def test_seeded_loan_clients_already_consented_and_tax_debt_reason_quotes_the_am
     assert seeded and all(any(e["type"] == "CLIENT_CONSENT" for e in k.ledger.events) for k in seeded)
     carpatic = next(k for k in seeded if k.profile["id"] == "carpatic")
     assert "38.410 RON" in carpatic.state()["reqs"]["R6"]["reason"]
+
+
+def test_hard_rule_cards_cite_the_rule_that_failed_and_use_the_files_wording():
+    want = {"delta": ("inactive", "HR-02"), "carpatic": ("tax_debt", "HR-08"), "nord": ("dscr", "HR-07")}
+    for company, (kind, rule) in want.items():
+        card = next(x for x in _run(company, "sme_loan").state()["exceptions"].values() if x["kind"] == kind)
+        assert card["rule"]["id"] == rule, (company, card["rule"])
+    review = _run("carpatic", "kyb_review")
+    card = next(x for x in review.state()["exceptions"].values() if x["kind"] == "tax_debt")
+    assert "annual review sign-off" in card["actions"][0]["label"] and "credit" not in card["actions"][0]["label"]
