@@ -22,6 +22,8 @@ export interface ThreadItem {
   seq: number
   day?: number | null
   sim_time?: string | null
+  /** when it was really sent (UTC ISO); people's messages show it in the viewer's local time. Absent on an older server. */
+  wall_time?: string | null
   kind: 'message' | 'email' | (string & {})
   author?: ThreadAuthor | null
   text?: string | null

@@ -2,9 +2,9 @@ import { useSyncExternalStore } from 'react'
 import { DEMO_CASE_ID } from '@/shared/demo'
 import { DEFAULT_COMPANY, storedCompany } from './store'
 
-/* Hash routing for the portal, with no router library: "#/" is My files, "#/case/{id}" is a file.
+/* Hash routing for the portal, with no router library: "#/" is My cases, "#/case/{id}" is a case.
    An empty hash opens the demo case (history.replaceState), so the old /client/ links still land on demo-1, unless
-   this browser chose another company in "viewing as": then it opens that company's My files. Opening demo-1 there
+   this browser chose another company in "viewing as": then it opens that company's My cases. Opening demo-1 there
    would switch the picker back to the demo company (the file page adopts its file's company). */
 export type Route = { name: 'home' } | { name: 'case'; id: string }
 
@@ -12,7 +12,7 @@ const DEFAULT_CASE = DEMO_CASE_ID
 export const HOME_HREF = '#/'
 export const caseHref = (id: string) => `#/case/${encodeURIComponent(id)}`
 
-/** Where an empty hash goes: the demo case, or My files when another company was chosen in this browser. */
+/** Where an empty hash goes: the demo case, or My cases when another company was chosen in this browser. */
 function defaultHash(): string {
   const c = storedCompany()
   return c && c !== DEFAULT_COMPANY ? HOME_HREF : caseHref(DEFAULT_CASE)

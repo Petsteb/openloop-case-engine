@@ -23,7 +23,7 @@ const WHY_FALLBACK: Record<string, string> = {
 }
 export const docType = (key: string) => key.split(':')[0]
 export const whyFor = (m: MissingDocument) =>
-  safe(m.why, WHY_FALLBACK[docType(m.key)] ?? 'We need it to finish checking your file.')
+  safe(m.why, WHY_FALLBACK[docType(m.key)] ?? 'We need it to finish checking your case.')
 
 /** Lower-case name words in a stable order: "Pop Radu" and "Radu Pop" give the same string (as the backend matches them). */
 const nameWords = (s: string) => s.toLowerCase().split(/\s+/).filter(Boolean).sort().join(' ')
@@ -73,7 +73,7 @@ export const STATE_PILL: Record<PortalState, string> = {
   needs_you: 'We need something from you',
   under_review: 'Under review by the bank',
   complete: 'Complete: the bank will contact you with the decision',
-  in_progress: 'We are checking your file',
+  in_progress: 'We are checking your case',
 }
 
 export type StepState = 'done' | 'active' | 'needs' | 'todo'
@@ -145,7 +145,7 @@ export const sortRequests = (ms: MissingDocument[]) =>
 export const confirmFallback = (c: Confirmation) =>
   c.kind === 'credit_check_consent'
     ? 'We need your consent to check your company’s credit history.'
-    : 'We changed the contact details on your file. Did you request this?'
+    : 'We changed the contact details on your case. Did you request this?'
 
 /* ---------- time ---------- */
 const DAY_MS = 86_400_000
@@ -167,10 +167,10 @@ export const hhmm = (iso: string) => (/T(\d{2}:\d{2})/.exec(iso)?.[1] ?? '')
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-/* ---------- the one next action (shared by the file page and My files) ---------- */
+/* ---------- the one next action (shared by the case page and My cases) ---------- */
 export const IDLE_TEXT: Record<PortalState, string> = {
   needs_you: 'Nothing to do right now.',
-  under_review: 'Nothing to do right now. The bank is reviewing your file and will tell you if it needs anything.',
+  under_review: 'Nothing to do right now. The bank is reviewing your case and will tell you if it needs anything.',
   in_progress: 'Nothing to do right now. We are checking your documents.',
   complete: 'Nothing to do. A bank officer will contact you with the decision.',
 }
@@ -199,7 +199,7 @@ export function decisionFor(templates: Template[] | null | undefined, id: string
 /** The pill's words for a state (used when the server's own line can't be: an override, or no line). */
 export const pillText = (state: PortalState, decision?: string) =>
   state === 'complete' && decision ? `Complete: waiting for the bank’s ${decision}` : STATE_PILL[state]
-/** A My files row: the server's line (it already names the template's decision), else the pill's words. */
+/** A My cases row: the server's line (it already names the template's decision), else the pill's words. */
 export const rowStatusText = (r: CaseRow, tone: PortalState, decision?: string) => safe(r.status_text, pillText(tone, decision))
 export const nextText = (state: PortalState, missing: number, confirmations: number, decision?: string) =>
   needsText(state, missing, confirmations)
@@ -212,7 +212,7 @@ export const nextText = (state: PortalState, missing: number, confirmations: num
 const CLIENT_TEMPLATES: Record<string, { title: string; eyebrow: string; about: string }> = {
   sme_loan: {
     title: 'Working-capital loan',
-    eyebrow: 'Your financing file',
+    eyebrow: 'Your financing case',
     about: 'Financing for your day-to-day business. We ask for your documents, check them, and a bank officer decides.',
   },
   kyb_review: {
@@ -223,7 +223,7 @@ const CLIENT_TEMPLATES: Record<string, { title: string; eyebrow: string; about: 
 }
 export function templateTitle(id: string | undefined, serverTitle?: string): string {
   const known = id ? CLIENT_TEMPLATES[id] : undefined
-  return known ? known.title : safe(serverTitle, 'Your file')
+  return known ? known.title : safe(serverTitle, 'Your case')
 }
 /** The line above the company name on a file page. */
 export const fileEyebrow = (id: string | undefined, serverTitle?: string) =>
@@ -231,7 +231,7 @@ export const fileEyebrow = (id: string | undefined, serverTitle?: string) =>
 /** What a kind of file is about: the client-worded text for a known template, else the server's description or goal. */
 export function templateAbout(id: string | undefined, serverText?: string, goal?: string): string {
   const known = id ? CLIENT_TEMPLATES[id] : undefined
-  return known ? known.about : safe(serverText, safe(goal, 'A new file with the bank.'))
+  return known ? known.about : safe(serverText, safe(goal, 'A new case with the bank.'))
 }
 /** The footer's line on who decides, in the template's words when the decision is known. */
 export const decidesLine = (decision?: string) =>
@@ -263,7 +263,7 @@ export function sortRows(rows: CaseRow[]): CaseRow[] {
 /** A notification line for the bell. The server sends client-safe text; a staff role written after the author
  *  ("Ana Pop (analyst): ...") is dropped, and anything else that looks internal falls back to a neutral line. */
 export function notificationText(n: PortalNotification): string {
-  const fallback = n.kind === 'action' ? 'Your file needs something from you.' : 'New message from the bank.'
+  const fallback = n.kind === 'action' ? 'Your case needs something from you.' : 'New message from the bank.'
   const raw = typeof n.text === 'string' ? n.text.replace(/^([^:()]{1,60}?)\s*\([^)]{1,40}\)\s*:/, '$1:') : ''
   return safe(raw, fallback)
 }

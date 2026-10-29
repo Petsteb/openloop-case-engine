@@ -178,7 +178,8 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
             </ul>
           ) : waiting ? <p className="thr-pop-wait" role="status">Loading suggestions…</p>
             : <p className="thr-pop-wait" role="status">
-              {trigger?.char === '@' ? 'No people on this file yet. They appear once the documents arrive.' : 'Nothing to reference on this file yet.'}
+              {/* the client's word is "case"; the bank's wording is unchanged */}
+              {`${trigger?.char === '@' ? 'No people on this' : 'Nothing to reference on this'} ${role === 'client' ? 'case' : 'file'} yet.${trigger?.char === '@' ? ' They appear once the documents arrive.' : ''}`}
             </p>}
         </div>
       ) : null}

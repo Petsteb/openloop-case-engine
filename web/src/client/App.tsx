@@ -9,7 +9,7 @@ import { DEFAULT_COMPANY, markSeen, useCompany, writeCompany } from './store'
 import { useTheme } from './theme'
 import { usePortalData } from './usePortalData'
 
-/** The portal: My files at "#/", one file at "#/case/{id}". One global poll feeds My files and the bell. */
+/** The portal: My cases at "#/", one case at "#/case/{id}". One global poll feeds My cases and the bell. */
 export function App() {
   const route = useRoute()
   const [theme, toggleTheme] = useTheme()
@@ -34,13 +34,13 @@ export function App() {
     if (max) markSeen(caseId, max, data.rows?.find((r) => r.id === caseId)?.events)
   }, [caseId, data.notes, data.rows])
 
-  // a new page starts at the top; My files has its own title (the file page sets one with the company name)
+  // a new page starts at the top; My cases has its own title (the case page sets one with the company name)
   const routeKey = caseId ?? '#home'
   // ...with fresh lists (the file page may have marked newer events seen than the last list knew)
   const { refetch } = data
   useEffect(() => { window.scrollTo(0, 0); refetch() }, [routeKey, refetch])
   useEffect(() => {
-    if (route.name === 'home') document.title = company ? `My files · ${safe(company.name, '')}` : 'My files'
+    if (route.name === 'home') document.title = company ? `My cases · ${safe(company.name, '')}` : 'My cases'
   }, [route.name, company])
 
   // each file's ledger length: a last-seen value past it is stale (the demo was reset)
@@ -50,10 +50,10 @@ export function App() {
   const openCase = useCallback((id: string) => go(caseHref(id)), [])
   const onCompany = (id: string) => {
     writeCompany(id)
-    if (route.name === 'case') go(HOME_HREF)   // the open file belongs to the previous company
+    if (route.name === 'case') go(HOME_HREF)   // the open case belongs to the previous company
   }
   // a file of another company (a link from the bank screen): view the portal as that company, so the picker,
-  // the bell and "My files" all match the file on screen
+  // the bell and "My cases" all match the case on screen
   const companies = data.companies
   const adopt = useCallback((name: string) => {
     const c = companies?.find((x) => x.name === name)

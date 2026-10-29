@@ -63,12 +63,12 @@ interface BarProps {
   onOpenCase: (id: string) => void
 }
 
-/** "← My files" on a file page, a quiet label on My files, and the bell on the right. */
+/** "← My cases" on a case page, a quiet label on My cases, and the bell on the right. */
 export function TopBar({ back, notes, titles, lengths, currentCaseId, onOpenCase }: BarProps) {
   return (
     <div className="pt-bar">
       {back ? (
-        <a className="pt-back" href={HOME_HREF}><span aria-hidden="true">←</span>My files</a>
+        <a className="pt-back" href={HOME_HREF}><span aria-hidden="true">←</span>My cases</a>
       ) : <span className="pt-bar-label">Client portal</span>}
       <Bell notes={notes} titles={titles} lengths={lengths} currentCaseId={currentCaseId} onOpenCase={onOpenCase} />
     </div>
@@ -156,7 +156,7 @@ function Bell({ notes, titles, lengths, currentCaseId, onOpenCase }: Omit<BarPro
                             <span className="pt-bell-text">
                               {isNew ? <span className="sr-only">New: </span> : null}
                               <span className="pt-bell-what" lang={/^Email:/.test(n.text) ? 'ro' : undefined}>{notificationText(n)}</span>
-                              <span className="pt-bell-meta">{titles[n.case_id] ?? 'Your file'}{n.day != null ? ` · Day ${n.day}` : ''}</span>
+                              <span className="pt-bell-meta">{titles[n.case_id] ?? 'Your case'}{n.day != null ? ` · Day ${n.day}` : ''}</span>
                             </span>
                           </a>
                         </li>

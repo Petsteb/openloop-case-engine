@@ -29,7 +29,7 @@ function StatusPill({ pill, state, decision, serverText }: { pill: PortalState; 
 
 function Progress({ steps }: { steps: Step[] }) {
   return (
-    <ol className="pt-steps" aria-label="Progress of your file">
+    <ol className="pt-steps" aria-label="Progress of your case">
       {steps.map((s) => (
         <li key={s.name} className={`pt-step is-${s.state}`} aria-current={s.state === 'needs' || s.state === 'active' ? 'step' : undefined}>
           <span className="pt-step-mark" aria-hidden="true">{s.state === 'done' ? <Icon name="check" size={11} /> : null}</span>
@@ -48,7 +48,7 @@ const maxSeq = (v: ClientView) => arr(v.timeline).reduce((m, e) => Math.max(m, N
 
 interface PortalProps {
   caseId: string
-  /** this file's row in My files (template, title), once the chosen company's list has it */
+  /** this case's row in My cases (template, title), once the chosen company's list has it */
   file?: CaseRow
   /** the file's company name, so the demo can view the portal as that company */
   onCompanyName?: (name: string) => void
@@ -65,16 +65,16 @@ export function Portal({ caseId, file, onCompanyName, decision = '' }: PortalPro
   useEffect(() => { if (view) markSeen(caseId, Math.max(ledger ?? 0, maxSeq(view)), ledger) }, [caseId, view, ledger])
   useEffect(() => {
     const name = companyName ? safe(companyName, '') : ''
-    document.title = name ? `${name} · Your file` : 'Your file'
+    document.title = name ? `${name} · Your case` : 'Your case'
   }, [companyName])
   // the file was removed (or never existed): a calm page instead of a stale one; polling has stopped
   if (gone) {
     return (
       <div className="pt-wrap">
         <div className="pt-loading pt-gone" role="alert">
-          <h1 className="pt-company">This file no longer exists</h1>
-          <p>It may have been closed or removed. Your other files are in My files.</p>
-          <a className="btn" href={HOME_HREF}>Go to My files</a>
+          <h1 className="pt-company">This case no longer exists</h1>
+          <p>It may have been closed or removed. Your other cases are in My cases.</p>
+          <a className="btn" href={HOME_HREF}>Go to My cases</a>
         </div>
       </div>
     )
@@ -87,7 +87,7 @@ export function Portal({ caseId, file, onCompanyName, decision = '' }: PortalPro
             <p>{error}</p>
             <button type="button" className="btn" onClick={() => void refresh()}>Try again</button>
           </div>
-        ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your file…</p>}
+        ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your case…</p>}
       </div>
     )
   }
@@ -170,7 +170,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
   const company = safe(view.overview?.company, 'Your company')
   // the server sends the company's loan line on every file: show it on a loan file only
   const product = file ? productFor(file.template, view.overview?.product) : ''
-  const kind = file ? fileEyebrow(file.template, file.template_title) : 'Your file with the bank'
+  const kind = file ? fileEyebrow(file.template, file.template_title) : 'Your case with the bank'
 
   // pending requests plus the ones that were just received (kept for a moment to show "Received")
   const requests = useMemo(() => {
@@ -267,7 +267,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
     const ref = String(c.ref).replace(/^#/, '')
     if (c.kind === 'doc' || /^doc-\d+$/.test(ref)) {
       if (docList.some((d) => d.id === ref)) openDoc(ref)
-      else toast('This document is not on your file.')
+      else toast('This document is not part of your case.')
       return
     }
     const seq = Number(ref)
@@ -284,8 +284,8 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
         return flashTo(d.id, `[data-doc="${CSS.escape(d.id)}"]`)
       }
     }
-    if (ev) toast(`Day ${ev.day}: ${safe(ev.what, 'Your file was updated.')}`)
-    else toast(c.label ? safe(c.label, 'Your file was updated.') : 'This item is no longer on your file.')
+    if (ev) toast(`Day ${ev.day}: ${safe(ev.what, 'Your case was updated.')}`)
+    else toast(c.label ? safe(c.label, 'Your case was updated.') : 'This item is no longer part of your case.')
   }
 
   /* ---------- the one next action ---------- */
@@ -322,7 +322,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
           </div>
           <div className="pt-head-side">
             <StatusPill pill={pill} state={state} decision={decision} serverText={view.overview?.status_text} />
-            <span className="pt-day">Day {view.overview?.day ?? 0} of your file</span>
+            <span className="pt-day">Day {view.overview?.day ?? 0} of your case</span>
           </div>
         </header>
 
@@ -381,7 +381,7 @@ function FileView({ view, docs, error, caseId, file, decision, track, mutate, re
           ) : null}
 
           <section className="pt-sec pt-a-ask" aria-labelledby="h-ask">
-            <h2 id="h-ask" className="pt-h2">Ask about your file</h2>
+            <h2 id="h-ask" className="pt-h2">Ask about your case</h2>
             <Ask caseId={caseId} known={known} track={track} onCite={onCite} />
           </section>
         </main>

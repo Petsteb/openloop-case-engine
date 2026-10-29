@@ -116,7 +116,7 @@ export function readAsBase64(file: File): Promise<string> {
 export function failureText(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 0) return 'We can’t reach the bank right now. Please try again in a moment.'
-    if (e.status === 409) return 'This was already answered. Your file is up to date.'
+    if (e.status === 409) return 'This was already answered. Your case is up to date.'
     if (e.status === 413 || (e.status === 422 && /larger than/i.test(e.message))) return 'That file is larger than 1 MB. Please choose a smaller one.'
     if (e.status === 422) {
       if (/pending|not requested|not waiting/i.test(e.message)) return 'We are not waiting for this document any more.'

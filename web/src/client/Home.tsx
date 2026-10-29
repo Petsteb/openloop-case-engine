@@ -11,7 +11,7 @@ import { readSeen, useSeenRev } from './store'
 import type { CaseRow, Company, PortalNotification, PortalState, Template } from './types'
 import type { NextInfo, PortalData } from './usePortalData'
 
-/* My files: what needs the client first, one row per file, and "Start a new application" with only the templates the
+/* My cases: what needs the client first, one row per case, and "Start a new application" with only the templates the
    chosen company can open. */
 
 interface Props {
@@ -82,7 +82,7 @@ function StartList({ company, templates, onOpenCase }: { company: Company; templ
     try {
       const b = await api.createCase(tid, company.id)
       const id = b?.case?.id
-      if (typeof id !== 'string' || !id) throw new ApiError(-1, 'No file id')
+      if (typeof id !== 'string' || !id) throw new ApiError(-1, 'No case id')
       toast('Your application is open. Please send the documents the bank asks for.')
       onOpenCase(id)
     } catch (e) {
@@ -133,7 +133,7 @@ export function Home({ data, company, onOpenCase }: Props) {
     <div className="pt-wrap">
       <header className="pt-head pt-home-head">
         <div className="pt-head-main">
-          <p className="pt-eyebrow">Your files with the bank</p>
+          <p className="pt-eyebrow">Your cases with the bank</p>
           <h1 className="pt-company">{name}</h1>
           {where.length ? <p className="pt-product pt-home-where">{where.map((w, i) => <span key={i}>{w}</span>)}</p> : null}
         </div>
@@ -145,7 +145,7 @@ export function Home({ data, company, onOpenCase }: Props) {
             <p>{data.rowsError}</p>
             <button type="button" className="btn" onClick={data.refetch}>Try again</button>
           </div>
-        ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your files…</p>
+        ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your cases…</p>
       ) : (
         <>
           <div className={`pt-next${top ? ' is-needs' : ''}`}>
@@ -153,26 +153,26 @@ export function Home({ data, company, onOpenCase }: Props) {
               {top ? (
                 <>
                   <span className="pt-next-file">{templateTitle(top.template, top.template_title)}
-                    {needing.length > 1 ? <span className="pt-next-more"> · {needing.length - 1} more {needing.length === 2 ? 'file needs' : 'files need'} you</span> : null}
+                    {needing.length > 1 ? <span className="pt-next-more"> · {needing.length - 1} more {needing.length === 2 ? 'case needs' : 'cases need'} you</span> : null}
                   </span>
                   {nextLine(top, data.next[top.id], decisionFor(data.templates, top.template))}
                 </>
               ) : rows.length ? 'Nothing to do right now. We’ll let you know here when the bank needs something.'
-                : 'You have no open files yet. Start an application when you’re ready.'}
+                : 'You have no open cases yet. Start an application when you’re ready.'}
             </p>
             {top ? (
-              <a className="btn primary pt-next-btn" href={caseHref(top.id)}>Open this file<Icon name="chevron" size={14} /></a>
+              <a className="btn primary pt-next-btn" href={caseHref(top.id)}>Open this case<Icon name="chevron" size={14} /></a>
             ) : null}
           </div>
 
           <main className="pt-home-grid">
             <section className="pt-sec pt-a-files" aria-labelledby="h-files">
-              <h2 id="h-files" className="pt-h2">My files{rows.length ? <span className="pt-count">{rows.length}</span> : null}</h2>
+              <h2 id="h-files" className="pt-h2">My cases{rows.length ? <span className="pt-count">{rows.length}</span> : null}</h2>
               {rows.length ? (
                 <ul className="pt-files">
                   {rows.map((r) => <FileRow key={r.id} r={r} info={data.next[r.id]} unread={unread.has(r.id)} decision={decisionFor(data.templates, r.template)} />)}
                 </ul>
-              ) : <p className="pt-empty">No files yet.</p>}
+              ) : <p className="pt-empty">No cases yet.</p>}
             </section>
 
             {!data.legacy ? (
@@ -180,7 +180,7 @@ export function Home({ data, company, onOpenCase }: Props) {
                 <h2 id="h-start" className="pt-h2">Start a new application</h2>
                 {company ? (
                   <>
-                    <p className="pt-start-intro">The bank asks only for what it needs, and you can follow each file here.</p>
+                    <p className="pt-start-intro">The bank asks only for what it needs, and you can follow each case here.</p>
                     <StartList key={company.id} company={company} templates={data.templates}
                       onOpenCase={(id) => { data.refetch(); onOpenCase(id) }} />
                   </>
@@ -193,7 +193,7 @@ export function Home({ data, company, onOpenCase }: Props) {
 
       <footer className="pt-foot">
         <Icon name="shield" size={16} />
-        <p>Internal reviews and staff notes are not shown here. A bank officer makes every decision on your files.</p>
+        <p>Internal reviews and staff notes are not shown here. A bank officer makes every decision on your cases.</p>
       </footer>
     </div>
   )

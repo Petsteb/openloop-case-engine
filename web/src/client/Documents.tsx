@@ -52,7 +52,7 @@ interface ListProps {
   onView: (id: string) => void
 }
 
-/** Every document the client sent, with a status chip and a History expander. */
+/** Every document the client sent, with a status chip, a View button (the document sheet) and a History expander. */
 export function Documents({ docs, open, details, flash, onToggle, onView }: ListProps) {
   return (
     <ul className="pt-docs">
@@ -60,25 +60,26 @@ export function Documents({ docs, open, details, flash, onToggle, onView }: List
         const isOpen = open.has(d.id)
         const panel = `hist-${d.id}`
         const det = details[d.id]
+        const name = safe(d.name, safe(d.label, 'Document'))
         return (
           <li key={d.id} className={`pt-doc${flash === d.id ? ' pt-flash' : ''}${docTone(d) === 'old' ? ' is-old' : ''}`} data-doc={d.id}>
             <div className="pt-doc-row">
               <Icon name="doc" size={16} className="pt-doc-icon" />
-              <span className="pt-doc-name">{safe(d.name, safe(d.label, 'Document'))}</span>
+              <span className="pt-doc-name">{name}</span>
               <span className="pt-doc-meta">
                 <StatusChip doc={d} />
                 <span className="pt-doc-when">{receivedLine(d.received_day)}</span>
               </span>
-              <button type="button" className="pt-doc-hist" aria-expanded={isOpen} aria-controls={panel} onClick={() => onToggle(d.id)}>
-                History<Icon name="chevron" size={14} className="pt-chev" />
-              </button>
+              <span className="pt-doc-acts">
+                <button type="button" className="btn sm pt-doc-view" onClick={() => onView(d.id)} aria-label={`View ${name}`}>View</button>
+                <button type="button" className="pt-doc-hist" aria-expanded={isOpen} aria-controls={panel} onClick={() => onToggle(d.id)}>
+                  History<Icon name="chevron" size={14} className="pt-chev" />
+                </button>
+              </span>
             </div>
             {isOpen ? (
               <div id={panel} className="pt-doc-more">
                 <History detail={det} />
-                {typeof det === 'object' && det.text ? (
-                  <button type="button" className="pt-link" onClick={() => onView(d.id)}>View the document</button>
-                ) : null}
               </div>
             ) : null}
           </li>

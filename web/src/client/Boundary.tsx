@@ -11,7 +11,7 @@ export class PortalBoundary extends Component<{ children: ReactNode; inner?: boo
       const note = (
         <div className="pt-wrap">
           <div className="pt-loading" role="alert">
-            <p>This page could not be shown. Your file is safe; please reload the page.</p>
+            <p>This page could not be shown. Your case is safe; please reload the page.</p>
             <button type="button" className="btn" onClick={() => window.location.reload()}>Reload</button>
           </div>
         </div>

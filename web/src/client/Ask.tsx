@@ -6,7 +6,7 @@ import { arr, safe } from './derive'
 import type { ChatHistoryItem, Citation } from './types'
 
 /* Adapted from the bank screen's ChatPanel: the role is fixed to "client", and citations open things on this page. */
-const SUGGESTED = ['What do you still need from me?', 'What happened so far?', 'Why isn’t my file finished?']
+const SUGGESTED = ['What do you still need from me?', 'What happened so far?', 'Why isn’t my case finished?']
 const LEAK_FALLBACK = 'I can’t share that here. A bank officer can tell you more.'
 
 interface Msg { id: number; who: 'me' | 'ai'; text: string; citations?: Citation[]; error?: boolean }
@@ -90,7 +90,7 @@ export function Ask({ caseId, known, track, onCite }: Props) {
           {pending ? <div className="pt-msg ai pt-typing" role="status"><span className="sr-only">Answering…</span><i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div> : null}
         </div>
       ) : (
-        <p className="pt-chat-intro">Ask anything about your file. Answers use only what is in your file, and point to where it came from.</p>
+        <p className="pt-chat-intro">Ask anything about your case. Answers use only what the bank has on your case, and point to where it came from.</p>
       )}
       {left.length ? (
         <div className="pt-suggest" aria-label="Suggested questions">
@@ -98,7 +98,7 @@ export function Ask({ caseId, known, track, onCite }: Props) {
         </div>
       ) : null}
       <form className="pt-ask" onSubmit={send}>
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ask about your file" aria-label="Ask about your file" maxLength={1000} />
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ask about your case" aria-label="Ask about your case" maxLength={1000} />
         <button type="submit" className="btn icon-only pt-send" aria-label="Send" disabled={pending || !draft.trim()}>
           {pending ? <Icon name="spinner" size={14} className="spin" /> : <Icon name="send" size={14} />}
         </button>

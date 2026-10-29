@@ -29,9 +29,35 @@ const GONE_STRIKES = 2
 const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
 const maxSeq = (items: ThreadItem[]) => items.reduce((m, i) => (Number(i.seq) > m ? Number(i.seq) : m), 0)
 
-function when(it: ThreadItem): string {
+/** The simulated case clock, "Day 3 09:14": the bank's automatic emails, and messages from an older server. */
+function simWhen(it: ThreadItem): string {
   const t = /T(\d{2}:\d{2})/.exec(String(it.sim_time ?? ''))?.[1] ?? ''
   return typeof it.day === 'number' ? `Day ${it.day}${t ? ` ${t}` : ''}` : t
+}
+
+const CLOCK = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+const DATED = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+const DATED_YEAR = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** A message's real send time (UTC ISO) in the viewer's local time: "09:14" today, else "Thu 29 Oct, 09:14".
+ *  A time without a zone is read as UTC (the server writes UTC). Null when it is missing or unreadable. */
+function wallStamp(raw: string | null | undefined): { text: string; iso: string } | null {
+  const s = String(raw ?? '').trim()
+  if (!s) return null
+  const iso = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s) || !/\d{2}:\d{2}/.test(s) ? s : `${s}Z`
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const now = new Date()
+  const text = d.toDateString() === now.toDateString() ? CLOCK.format(d)
+    : d.getFullYear() === now.getFullYear() ? DATED.format(d) : DATED_YEAR.format(d)
+  return { text, iso: d.toISOString() }
+}
+
+/** The time a row shows. People's messages: when they were really sent (`wall_time`, or the moment this viewer's own
+ *  message came back without one); emails, and messages from an older server: the case clock. */
+function stamp(it: ThreadItem, sentAt?: string): { text: string; iso: string | undefined } {
+  const wall = it.kind === 'message' ? wallStamp(it.wall_time ?? sentAt) : null
+  return wall ?? { text: simWhen(it), iso: it.sim_time ?? undefined }
 }
 
 /** The per-case conversation between the client and the bank, with the bank's automatic emails in the same list.
@@ -47,8 +73,11 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
   const [ments, setMents] = useState<Mentionables | null>(null)
   const [mentsLoading, setMentsLoading] = useState(false)
   const [pill, setPill] = useState(false)
+  // seq -> when this viewer's own message came back without a `wall_time` (only on a server that sends them)
+  const [sentAt, setSentAt] = useState<Record<number, string>>({})
 
   const alive = useRef(true)
+  const hasWall = useRef(false)               // this server sends `wall_time` (an older one does not)
   const gen = useRef(0)                       // a list answer older than the newest request is dropped
   const lastLen = useRef<number | null | undefined>(undefined)
   const mentLen = useRef<number | null | undefined>(undefined)
@@ -66,6 +95,7 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
     try {
       const list = await api.getMessages(caseId, role)
       if (!alive.current || g !== gen.current) return false
+      if (arr(list).some((i) => i.wall_time)) hasWall.current = true
       setItems(arr(list))
       setStatus('ready')
       return true
@@ -197,6 +227,14 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
       if (alive.current) {
         ++gen.current
         forceBottom.current = true
+        // the message just sent shows the moment it came back until the server's own `wall_time` arrives
+        const mine = arr(list).filter((i) => i.kind === 'message' && i.author?.role === role)
+        const last = mine[mine.length - 1]
+        if (arr(list).some((i) => i.wall_time)) hasWall.current = true
+        if (last && !last.wall_time && hasWall.current) {
+          const at = new Date().toISOString()
+          setSentAt((m) => (m[last.seq] ? m : { ...m, [last.seq]: at }))
+        }
         setItems(arr(list))
         setStatus('ready')
         onPosted?.(arr(list))
@@ -215,7 +253,7 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
 
   const client = role === 'client'
   if (status === 'gone') {
-    return <div className={`thr is-${role} ${className}`.trim()}><p className="thr-empty" role="status">{client ? 'This file is no longer available.' : 'This case no longer exists, so its messages are gone too.'}</p></div>
+    return <div className={`thr is-${role} ${className}`.trim()}><p className="thr-empty" role="status">{client ? 'This case is no longer available.' : 'This case no longer exists, so its messages are gone too.'}</p></div>
   }
   if (status === 'unavailable') {
     return <div className={`thr is-${role} ${className}`.trim()}><p className="thr-empty" role="status">Messages are not available on this server yet.</p></div>
@@ -237,7 +275,7 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
               <li key={it.seq}>
                 {it.kind === 'email'
                   ? <EmailRow it={it} role={role} />
-                  : <MessageRow it={it} role={role} onOpenDoc={onOpenDoc} onOpenEvent={onOpenEvent} />}
+                  : <MessageRow it={it} role={role} sentAt={sentAt[it.seq]} onOpenDoc={onOpenDoc} onOpenEvent={onOpenEvent} />}
               </li>
             ))}
           </ol>
@@ -286,7 +324,7 @@ function EmailRow({ it, role }: { it: ThreadItem; role: ThreadRole }) {
           {failed ? <span className="thr-tag is-failed">Failed</span> : null}
           <span lang="ro">{String(it.subject || it.text || '').trim() || '(fără subiect)'}</span>
         </span>
-        <time className="thr-when" dateTime={it.sim_time ?? undefined}>{when(it)}</time>
+        <time className="thr-when" dateTime={it.sim_time ?? undefined}>{simWhen(it)}</time>
       </button>
       {open ? (
         <div id={bodyId} className="thr-mail-body">
@@ -299,10 +337,11 @@ function EmailRow({ it, role }: { it: ThreadItem; role: ThreadRole }) {
   )
 }
 
-interface RowProps { it: ThreadItem; role: ThreadRole; onOpenDoc?: (id: string) => void; onOpenEvent?: (seq: number) => void }
+interface RowProps { it: ThreadItem; role: ThreadRole; sentAt?: string; onOpenDoc?: (id: string) => void; onOpenEvent?: (seq: number) => void }
 
-function MessageRow({ it, role, onOpenDoc, onOpenEvent }: RowProps) {
+function MessageRow({ it, role, sentAt, onOpenDoc, onOpenEvent }: RowProps) {
   const w = who(it, role)
+  const at = stamp(it, sentAt)
   const side = it.author?.role === 'client' ? 'client' : 'bank'
   const mine = (role === 'client') === (side === 'client')
   const refs = arr(it.refs).filter((r) => r && r.id !== undefined && r.id !== null && r.id !== '')
@@ -316,7 +355,7 @@ function MessageRow({ it, role, onOpenDoc, onOpenEvent }: RowProps) {
       <header className="thr-meta">
         <span className="thr-who">{w.name}</span>
         {w.tag ? <span className="thr-role">{w.tag}</span> : null}
-        <time className="thr-when" dateTime={it.sim_time ?? undefined}>{when(it)}</time>
+        <time className="thr-when" dateTime={at.iso}>{at.text}</time>
       </header>
       <p className="thr-text">
         {parts.map((pt, i) => (pt.t === 'text' ? <Fragment key={i}>{muteUnresolved(pt.text)}</Fragment>
@@ -363,7 +402,7 @@ function RefChip({ r, role, onOpenDoc, onOpenEvent }: { r: ThreadRef; role: Thre
   } else return <span>{label || id}</span>
   // the client sees the plain label (no internal ids); the bank sees the mono id first
   const inner: ReactNode = client
-    ? <span className="thr-ref-label">{label || (r.kind === 'doc' ? 'Document' : 'Update on your file')}</span>
+    ? <span className="thr-ref-label">{label || (r.kind === 'doc' ? 'Document' : 'Update on your case')}</span>
     : <><span className="thr-ref-code">{code}</span>{label ? <span className="thr-ref-label">{label}</span> : null}</>
   const title = client ? undefined : label ? `${code}: ${label}` : code
   if (onClick) {
