@@ -1,6 +1,7 @@
 /* Home-screen calls. They do not count as "in flight" for lib/api, so the case screen's live polling never waits on them. */
 import { ApiError } from '@/lib/api'
 import type { Bundle } from '@/lib/types'
+import { DEMO_CASE_ID } from '@/shared/demo'
 import type { CaseRow, Company, GlobalVersion, Note, Template } from './types'
 
 async function send<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
@@ -38,7 +39,7 @@ export const getNotes = () => send<Note[]>('GET', '/api/notifications?role=emplo
 export const getCompanies = () => send<Company[]>('GET', '/api/companies')
 export const getTemplates = () => send<Template[]>('GET', '/api/templates')
 /** Older servers: the home screen falls back to a single demo-1 row built from its bundle. */
-export const getDemoBundle = () => send<Bundle>('GET', '/api/cases/demo-1/bundle')
+export const getDemoBundle = () => send<Bundle>('GET', `/api/cases/${DEMO_CASE_ID}/bundle`)
 /** Opens a new file; the agent immediately asks the client for the starting documents. 422 for an unsupported pair. */
 export const createCase = (template: string, companyId: string) => send<Bundle>('POST', '/api/cases', { template, company_id: companyId })
 /** Wipes the database and reseeds every synthetic file (answers with demo-1's bundle). */

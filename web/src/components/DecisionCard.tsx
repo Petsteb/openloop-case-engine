@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import {
-  actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, confirmedBetween, DAY, decisionEvidence, fTime, gapText, humanize,
+  actionLabel, arr, caseClock, clamp, cleanTitle, compareSlips, confirmedBetween, DAY, decisionEvidence, evidenceSlips, fTime, gapText, humanize,
   JUDGE_LABELS, linkedEvents, ms, noteText, noteTimes, plain, plural, raisedSeq, reqById, sentence, softCaps, tidy, type CompareSlip,
 } from '@/lib/derive'
 import type { Bundle, Exception_ } from '@/lib/types'
@@ -57,6 +57,8 @@ function Bar({ label, p, thr, title }: { label: string; p: number; thr: number |
   )
 }
 
+/** Short UI names for the rule chips. The bundle's `rule` carries only `{id, text}` (a full sentence); a server that
+ *  sends `rule.title` or `rule.name` wins over this map. */
 const RULE_NAMES: Record<string, string> = {
   'HR-01': 'Tax ID checksum', 'HR-02': 'Active in the register', 'HR-03': 'Document validity', 'HR-04': 'Beneficial owners',
   'HR-05': 'Owner identity documents', 'HR-06': 'Postal code', 'HR-07': 'Debt service coverage', 'HR-08': 'Tax debts',
@@ -86,8 +88,11 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger, onOpenD
   const dispute = x.kind === 'client_dispute'
   const insider = x.kind === 'sequence_insider' || dispute
   const ev = insider ? null : decisionEvidence(x)
-  const slips = ev ? compareSlips(bundle, ev.slips) : []
-  const pair = slips.length === 2 && slips.every((s) => s.role)
+  // A comparison only when the two quotes come from two documents (ownership, an address, a name). A tax debt or a
+  // suspended company is read off one document: one evidence panel, no "vs".
+  const compare = !!ev?.compare
+  const slips = !ev ? [] : compare ? compareSlips(bundle, ev.slips) : evidenceSlips(bundle, ev.slips)
+  const pair = compare && slips.length === 2 && slips[0].doc !== slips[1].doc && slips.every((s) => s.role)
   const links = insider ? linkedEvents(bundle, x) : []
   const notes = arr(x.notes).map(noteText).filter(Boolean)
   const nTimes = noteTimes(bundle, x.id)
@@ -105,8 +110,9 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger, onOpenD
   const why = softCaps(tidy(plain(String(x.summary || '').replace(/\s*\((?:HR|JQ|SR|GATE)-\d+\)\s*$/, ''))))
   const busyHere = busy?.startsWith(`resolve:${x.id}:`) ? busy.split(':')[2] : null
   const ruleId = x.rule?.id ? String(x.rule.id) : null
+  const ruleName = String(x.rule?.title || x.rule?.name || '') || (ruleId ? RULE_NAMES[ruleId] : '') || 'Rule'
   const [showSame, setShowSame] = useState(false)
-  const hasSame = slips.some((sl) => sl.lines.some((l) => l.k === 'same')) || !!ev?.matches.length
+  const hasSame = compare && (slips.some((sl) => sl.lines.some((l) => l.k === 'same')) || !!ev?.matches.length)
 
   return (
     <article className="decision" style={{ ['--tone' as string]: tone }} aria-label={`Decision: ${cleanTitle(x.title)}`}>
@@ -122,7 +128,7 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger, onOpenD
         {why ? <p className="why dec-why">{why}</p> : null}
         <dl className="props">
           <div><dt>Check</dt><dd><span className="mono">{x.requirement_id || 'MON'}</span>{req ? cleanTitle(req.title) : dispute ? 'Client contact details' : insider ? 'Staff actions' : 'Monitoring'}</dd></div>
-          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{dispute ? 'Client disputes a staff change' : RULE_NAMES[ruleId] || 'Rule'}</dd></div> : null}
+          {ruleId ? <div><dt>Rule</dt><dd><span className="mono">{ruleId}</span>{dispute ? 'Client disputes a staff change' : ruleName}</dd></div> : null}
           {legal !== undefined ? (
             <div><dt>Deadline</dt><dd className="warn">AMLR report in {plural(Math.max(0, Math.ceil((legal - clock.now) / DAY)), 'day')}</dd></div>
           ) : null}
@@ -163,7 +169,9 @@ export function DecisionCard({ bundle, x, busy, onResolve, onOpenLedger, onOpenD
             <SlipView s={slips[1]} showSame={showSame} onOpenDoc={onOpenDoc} />
           </div>
         ) : slips.length ? (
-          <div className="compare single">{slips.map((s, i) => <Fragment key={i}><SlipView s={s} showSame={showSame} onOpenDoc={onOpenDoc} /></Fragment>)}</div>
+          <div className="compare single" aria-label={compare ? undefined : slips.length === 1 ? 'Evidence from the document' : 'Evidence from the documents'}>
+            {slips.map((s, i) => <Fragment key={i}><SlipView s={s} showSame={compare ? showSame : true} onOpenDoc={onOpenDoc} /></Fragment>)}
+          </div>
         ) : null}
 
         {!insider && hasSame ? (

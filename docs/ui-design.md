@@ -121,6 +121,10 @@ Keep the custom tokens above as well.
     - **Right rail:** the time of the latest event, plus a blue dot if a chat answer arrived while it was collapsed.
   - Clicking the rail reopens the panel. The open/closed state persists in `localStorage` with try/catch.
 - **Below 1180px:** the right panel moves below. **Below 820px:** single column, and rails turn horizontal.
+- **Tall desktop screens** (≥1181 px wide and ≥1000 px high, e.g. 1920×1080, 2560×1440): the case page is one screen with no page scroll. The header and timeline stay put; the three columns fill the rest and each scrolls on its own (thin scrollbars). Ask and Messages grow to the full column height with their input at the bottom.
+- **Timeline height:** 38 px lanes up to a 1100 px-high window, growing to 52 px at 1440 high (about 220 px to 280 px in all).
+- **Wide screens:** past 1920 px the bank's root font size grows from 16 px to 18 px at 2560 (`html.bank`; every UI size is in rem, the timeline's SVG text stays in px). Side panels may grow to 500 / 600 px. Nothing changes at 1920 px or below.
+- **Demo dock:** while it is shown, the case page scrolls in its own box that ends above a 70 px strip at the bottom, where the dock sits. The dock never covers a control, a pill or a hint, at any size or scroll position.
 
 ## Components
 - **Header:**
@@ -163,7 +167,8 @@ Keep the custom tokens above as well.
       - the title in display type, 24–32px, -0.03em, at most 28ch;
       - "why" in `--ink-2`, using the full panel width with no character cap; it only wraps when the panel is narrow;
       - **meta properties**, Linear-style: a grid of muted 12px labels over 13px values. They are Check (`R2` plus title), Rule (`HR-04`), Deadline ("AMLR report in 14 days" in conflict, only while that timer is pending) and Raised (day and time).
-    - **Comparison, "on file" vs "new":** always two slips, the **on-file document on the left** and the **newly received document on the right**, separated by a dashed vertical rule with a small mono "vs". They stack on narrow screens.
+    - **Evidence without a comparison** (a tax debt, a suspended company, a coverage ratio: every quote read off one document, or a computation across documents): one panel per document with its name, `doc-N` chip and "received day N at HH:MM", every quoted line shown, and the value each line holds marked with a `--tone` bar. Date lines (`issued`) stay plain context. No "vs", no on-file/new pills, no "Show what already matches".
+    - **Comparison, "on file" vs "new":** only for a real two-document comparison (ownership, an address, a name), always two slips, the **on-file document on the left** and the **newly received document on the right**, separated by a dashed vertical rule with a small mono "vs". They stack on narrow screens.
       - Each slip: radius 8px, a `--bg` fill, 1px `--line`. The **new** slip's border is `--attn` mixed at 55% with `--line`.
       - Caption row:
         - an age pill: "New" filled with attn, or "On file" as an outline;
@@ -193,13 +198,14 @@ Keep the custom tokens above as well.
   - While on hold, the checklist's empty line reads "On hold with compliance…", never "Nothing needs attention".
   - **Otherwise:** the selected requirement's detail (reason, evidence quotes, rule), or a waiting summary.
   - **When `READY_FOR_DECISION`:** "File complete" in display 36px, plus the summary list.
+  - **Template words** (`templateWords` in `lib/derive.ts`): `sme_loan` says "credit decision" and "application pack"; `kyb_review` says "annual review sign-off" and "review documents". The status line always starts with "File complete." when the file is ready.
 - **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, Email, Docs. Counts are in mono superscript, except on Ask and Docs.
   - All six must fit on one line in the default 340px panel, at 1333 and 1440 px, with no horizontal scrolling. Labels are 12px, never smaller.
   - The list is start-aligned with `space-between` and a 4px minimum gap. Shadcn's centring clips the first tab on overflow.
   - Measured at worst-case counts (Ledger 112, Activity 54), the six tabs need 286 of the 300px, so a three-digit Activity count still fits.
   - **Ask (chat):**
     - a role toggle, "Client view" / "Bank employee", which clears history;
-    - 3 suggested questions per role as dashed chips;
+    - 3 suggested questions per role as dashed chips. The client's are fixed; the bank's come from the case (`chatSuggestions`): what the file still needs, its first open decision (else the latest ruled one, else the first open check), and its newest document. Never another case's names;
     - messages: user bubbles in ink fill, answers on `--surface`;
     - citation chips `#42` (switches to the Ledger tab and highlights the event) and `doc-3` (opens the document viewer);
     - an "offline answer" badge when `mode === "offline"`;

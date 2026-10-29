@@ -2,19 +2,13 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import * as api from '@/lib/api'
 import { isUnavailable } from '@/lib/api'
 import type { Bundle, ChatHistoryItem, ChatRole, Citation } from '@/lib/types'
-import { arr } from '@/lib/derive'
+import { arr, chatSuggestions } from '@/lib/derive'
 import { failureText } from '@/hooks/useCase'
 import { Icon } from './Icon'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
-const SUGGESTED: Record<ChatRole, string[]> = {
-  client: ['What do you still need from me?', 'What happened so far?', 'Why is my file not finished?'],
-  employee: [
-    'When did we learn about Radu Pop and what did we do?',
-    'Why did the agent ask for the trade register certificate?',
-    'What does the UBO declaration say?',
-  ],
-}
+/** The client's questions are the same on every file; the bank's come from this case (derive.ts chatSuggestions). */
+const CLIENT_SUGGESTED = ['What do you still need from me?', 'What happened so far?', 'Why is my file not finished?']
 
 interface Msg { id: number; who: 'me' | 'ai'; text: string; citations?: Citation[]; mode?: string; error?: boolean }
 
@@ -84,6 +78,7 @@ export function ChatPanel({ bundle, caseId, onCite, onAnswered }: Props) {
   }
   const send = (e: FormEvent) => { e.preventDefault(); void ask(draft) }
   const asked = new Set(msgs.filter((m) => m.who === 'me').map((m) => m.text))
+  const suggested = role === 'client' ? CLIENT_SUGGESTED : chatSuggestions(bundle)
 
   return (
     <div className="chat">
@@ -93,7 +88,7 @@ export function ChatPanel({ bundle, caseId, onCite, onAnswered }: Props) {
       </ToggleGroup>
       <p className="muted tiny">
         {role === 'client'
-          ? 'What the applicant sees: status, missing documents and next steps. Internal reviews stay hidden.'
+          ? 'What the client sees: status, missing documents and next steps. Internal reviews stay hidden.'
           : 'Full access: timeline, decisions, rules, documents and the agent’s reasoning. Every answer cites the ledger.'}
       </p>
       {unavailable ? (
@@ -111,7 +106,7 @@ export function ChatPanel({ bundle, caseId, onCite, onAnswered }: Props) {
             <div ref={endRef} />
           </div>
           <div className="suggest">
-            {SUGGESTED[role].filter((q) => !asked.has(q)).map((q) => (
+            {suggested.filter((q) => !asked.has(q)).map((q) => (
               <button key={q} type="button" onClick={() => void ask(q)} disabled={pending}>{q}</button>
             ))}
           </div>

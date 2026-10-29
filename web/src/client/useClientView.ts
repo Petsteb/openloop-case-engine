@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
+import { DEMO_CASE_ID } from '@/shared/demo'
 import { isUnavailable } from './api'
 import type { ClientDocument, ClientView } from './types'
 
@@ -20,7 +21,7 @@ const maxSeq = (v: ClientView | null) =>
  * the client timeline does not show): the file is marked seen up to it.
  * `gen` goes up when the ledger got shorter (a demo reset from the bank screen): the page remounts with clean state.
  */
-export function useClientView(caseId = 'demo-1') {
+export function useClientView(caseId = DEMO_CASE_ID) {
   const [view, setView] = useState<ClientView | null>(null)
   const [docs, setDocs] = useState<ClientDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)

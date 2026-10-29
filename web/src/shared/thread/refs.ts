@@ -28,6 +28,9 @@ export function splitRefs(text: string, refs: ThreadRef[]): { parts: Part[]; res
     seen.add(k)
     const tok = tokenFor(r)
     if (tok) toks.push({ tok, low: tok.toLowerCase(), ref: r })
+    // a person may be typed by the server id when the label differs ("@Andrei Munteanu" for a longer label)
+    const byId = r.kind === 'person' ? `@${String(r.id).trim()}` : null
+    if (byId && byId !== tok && byId.length > 1) toks.push({ tok: byId, low: byId.toLowerCase(), ref: r })
   }
   toks.sort((a, b) => b.tok.length - a.tok.length)
   const used = new Set<string>()
@@ -53,7 +56,7 @@ export function splitRefs(text: string, refs: ThreadRef[]): { parts: Part[]; res
     }
   }
   if (buf) parts.push({ t: 'text', text: buf })
-  const rest = toks.map((t) => t.ref).filter((r) => !used.has(refKey(r)))
+  const rest = [...new Set(toks.map((t) => t.ref))].filter((r) => !used.has(refKey(r)))
   // keep the server's order for the trailing chips
   rest.sort((a, b) => refs.indexOf(a) - refs.indexOf(b))
   return { parts, rest }

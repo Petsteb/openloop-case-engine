@@ -4,7 +4,7 @@ import * as api from './api'
 import { ApiError, isUnavailable } from './api'
 import { Icon } from './Icon'
 import {
-  nextText, productFor, rowNeeds, rowTone, safe, sortRows, STATE_PILL, STATE_SHORT, templateAbout, templateTitle,
+  nextText, productFor, rowNeeds, rowStatusText, rowTone, safe, sortRows, STATE_SHORT, templateAbout, templateTitle,
 } from './derive'
 import { caseHref } from './route'
 import { readSeen, useSeenRev } from './store'
@@ -22,7 +22,7 @@ interface Props {
 
 /** The file's one next action: exact when its client view is known, else from the row's count. */
 function nextLine(r: CaseRow, info: NextInfo | undefined): string {
-  if (info) return nextText(info.state, info.missing, info.confirmations)
+  if (info) return nextText(info.state, info.missing, info.confirmations, r.template)
   const n = rowNeeds(r)
   return n === 1 ? 'The bank needs one thing from you.' : `The bank needs ${n} things from you.`
 }
@@ -58,7 +58,7 @@ function FileRow({ r, info, unread }: { r: CaseRow; info: NextInfo | undefined; 
           {unread ? <span className="pt-file-dot" title="New activity"><span className="sr-only">New activity</span></span> : null}
           <span className="pt-file-day">Day {Number(r.day) || 0}</span>
         </span>
-        <span className="pt-file-status">{safe(r.status_text, STATE_PILL[tone])}</span>
+        <span className="pt-file-status">{rowStatusText(r, tone)}</span>
         {needs ? <span className="pt-file-next">{nextLine(r, info)}</span> : null}
         <span className="pt-file-foot">
           <Tone tone={tone} />

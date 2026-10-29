@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
+import { DEMO_COMPANY_ID } from '@/shared/demo'
 
 /* Two small localStorage-backed stores, each with a same-tab listener (a write in this tab fires no "storage" event):
-   - the demo's chosen company ("Demo: viewing as ..."), key openloop-client-company, default "aurora";
+   - the demo's chosen company ("Demo: viewing as ..."), key openloop-client-company, default the demo case's company;
    - the last-seen ledger seq per file, key openloop-seen:client:<caseId> (the messages thread writes it too). */
 
 function store(isMine: (key: string) => boolean) {
@@ -19,7 +20,7 @@ function store(isMine: (key: string) => boolean) {
 
 /* ---------- chosen company ---------- */
 export const COMPANY_KEY = 'openloop-client-company'
-export const DEFAULT_COMPANY = 'aurora'
+export const DEFAULT_COMPANY = DEMO_COMPANY_ID
 const companyStore = store((k) => k === COMPANY_KEY)
 
 function readCompany(): string {

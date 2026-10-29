@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react'
+import { DEMO_CASE_ID } from '@/shared/demo'
 
 /* Hash routing for the portal, with no router library: "#/" is My files, "#/case/{id}" is a file.
    An empty hash opens the demo case (history.replaceState), so the old /client/ links still land on demo-1. */
 export type Route = { name: 'home' } | { name: 'case'; id: string }
 
-const DEFAULT_CASE = 'demo-1'
+const DEFAULT_CASE = DEMO_CASE_ID
 export const HOME_HREF = '#/'
 export const caseHref = (id: string) => `#/case/${encodeURIComponent(id)}`
 

@@ -18,7 +18,7 @@ export function App() {
   const company = data.companies?.find((c) => c.id === companyId)
   const caseId = route.name === 'case' ? route.id : null
 
-  // a stored company the server does not know (another seed): back to Aurora
+  // a stored company the server does not know (another seed): back to the demo case's company
   useEffect(() => {
     const list = data.companies
     if (list && list.length && !list.some((c) => c.id === companyId)) {

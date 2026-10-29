@@ -5,6 +5,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
 import App from './App.tsx'
 
+// The bank screen scales its type on wide screens (index.css, `html.bank`); the portal shares index.css but not this.
+document.documentElement.classList.add('bank')
+
 // Pill buttons: the hover fill grows as a circle from the point where the cursor entered.
 document.addEventListener('pointerover', (e) => {
   const b = e.target instanceof Element ? e.target.closest<HTMLElement>('.btn') : null

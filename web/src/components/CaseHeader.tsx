@@ -23,11 +23,6 @@ export function verifyLabel(v: VerifyResult | null) {
   return v.ok ? { ok: true, text: `Chain intact, ${v.length} events` } : { ok: false, text: `Chain broken at event #${v.broken_at}` }
 }
 
-/** The shared status line speaks of a loan; an annual review has a sign-off and a review pack instead. */
-const forTemplate = (template: string | undefined, text: string) => (template === 'kyb_review'
-  ? text.replace(/\bthe credit decision\b/gi, 'the sign-off').replace(/\bapplication pack\b/gi, 'review pack')
-  : text)
-
 export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme, onTheme, learningCount, onLearning }: Props) {
   const c = (bundle.case || {}) as Bundle['case'] & CaseExtra
   const split = splitTitle(bundle)
@@ -35,8 +30,8 @@ export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme,
   const name = c.company ? String(c.company) : split.name
   const sub = c.template_title ? String(c.template_title) : split.sub
   const product = c.product && c.product !== sub ? String(c.product) : ''
-  const raw = statusLine(bundle)
-  const line = { ...raw, text: forTemplate(c.template, raw.text) }
+  // the wording already follows the template (derive.ts templateWords)
+  const line = statusLine(bundle)
   const s = headerStats(bundle)
   const cfg = bundle.config || {}
   const v = verifyLabel(verify)

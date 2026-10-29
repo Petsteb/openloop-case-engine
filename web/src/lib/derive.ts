@@ -118,15 +118,25 @@ export const isOnHold = (b: Bundle) => b.case?.status === 'ON_HOLD'
 export const isComplete = (b: Bundle) => b.case?.status === 'READY_FOR_DECISION'
   && arr(b.requirements).length > 0 && arr(b.requirements).every((r) => r.status === 'SATISFIED')
 
+/** What the file is for, in the bank's words, by template (the backend's `template.TEMPLATES[id]["decision"]`).
+ *  An unknown or missing template reads as a loan file, the only kind older servers have. */
+const TEMPLATE_WORDS: Record<string, { decision: string; pack: string }> = {
+  sme_loan: { decision: 'credit decision', pack: 'application pack' },
+  kyb_review: { decision: 'annual review sign-off', pack: 'review documents' },
+}
+export const templateWords = (b: Bundle) => TEMPLATE_WORDS[String(b.case?.template ?? '')] ?? TEMPLATE_WORDS.sme_loan
+
 export type Tone = 'need' | 'done' | 'wait' | 'hold'
 export function statusLine(b: Bundle): { tone: Tone; text: string } {
   const n = openExceptions(b).length
   // The hold outranks open decisions: nothing moves on the file until compliance releases it.
   if (isOnHold(b)) return { tone: 'hold', text: `On hold. The file was escalated to compliance.${n ? ` ${plural(n, 'decision')} still open.` : ''}` }
   if (n) return { tone: 'need', text: `${plural(n, 'decision')} need${n === 1 ? 's' : ''} you` }
-  if (isComplete(b)) return { tone: 'done', text: 'File complete. The credit decision is yours.' }
+  const words = templateWords(b)
+  // "File complete." stays the exact prefix (the e2e test reads it); the rest follows the template.
+  if (isComplete(b)) return { tone: 'done', text: `File complete. The ${words.decision} is yours.` }
   const reqs = arr(b.requirements)
-  if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: 'Waiting for the client to send the application pack' }
+  if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: `Waiting for the client to send the ${words.pack}` }
   const bad = reqs.filter((r) => isAttention(kindOf(r.status)))
   if (bad.length) {
     const r = bad[0]
@@ -140,8 +150,36 @@ export function statusLine(b: Bundle): { tone: Tone; text: string } {
     if (waits.length > 3) list += ` and ${waits.length - 3} more`
     return { tone: 'wait', text: `Waiting on the client for ${list}` }
   }
-  if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: 'Waiting for the application pack' }
+  if (!arr(b.events).some((e) => e.type === 'DOCUMENT_RECEIVED')) return { tone: 'wait', text: `Waiting for the ${words.pack}` }
   return { tone: 'wait', text: 'The agent is working the file' }
+}
+
+/* ================= the bank chat's suggested questions ================= */
+const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s)
+/** "Ana Marin’s identity card", "the fiscal certificate", "the UBO declaration". */
+function docPhrase(d: DocumentInfo): string {
+  const name = String(d.name || DOC_TYPE_LABEL[String(d.type)] || d.id)
+  const person = d.type === 'id_card' ? name.match(/^identity card\s*[—–-]\s*(.+)$/i) : null
+  return person ? `${person[1].trim()}’s identity card` : `the ${lowerFirst(name)}`
+}
+/** Three questions from this case, never another case's data: what the file still needs; its first open decision
+ *  (else the latest ruled one, else the first check still open); its newest document; "what happened" fills a gap. */
+export function chatSuggestions(b: Bundle): string[] {
+  const quoted = (t: unknown) => `“${cleanTitle(t).replace(/[?.!]+$/, '')}”`
+  const out = ['What does this file still need?']
+  const open = openExceptions(b)[0]
+  const ruled = arr(b.exceptions).filter((x) => x.status !== 'OPEN' && x.resolution?.action_id !== 'superseded')
+    .sort((p, q) => (ms(q.resolution?.at) ?? 0) - (ms(p.resolution?.at) ?? 0))[0]
+  const pending = arr(b.requirements).find((r) => r.status !== 'SATISFIED')
+  if (open) out.push(`What should I know before deciding ${quoted(open.title)}?`)
+  else if (ruled) out.push(`When did we learn about ${quoted(ruled.title)}, and what did we do?`)
+  else if (pending) out.push(`Why is ${quoted(pending.title)} not verified yet?`)
+  const doc = [...arr(b.documents)].sort((p, q) => (ms(q.received_at) ?? 0) - (ms(p.received_at) ?? 0)
+    || (Number(String(q.id).replace(/\D+/g, '')) || 0) - (Number(String(p.id).replace(/\D+/g, '')) || 0))[0]
+  if (doc) out.push(`What does ${docPhrase(doc)} say?`)
+  // a finished file has no decision or open check to ask about: always three questions
+  if (out.length < 3) out.push('What has happened on this file so far?')
+  return out
 }
 
 /* ================= header numbers ================= */
@@ -519,9 +557,11 @@ const TOASTS: Record<string, string> = {
 export const resolveToast = (x: Exception_, actionId: string) => TOASTS[actionId] || `Decision recorded: ${actionLabel(x, actionId).toLowerCase()}.`
 
 /* ================= decision evidence as document slips ================= */
-export type LineKind = 'same' | 'diff' | 'missing' | 'gap'
+/** 'key': a line of single-document evidence that carries the value the rule read (no comparison behind it). */
+export type LineKind = 'same' | 'diff' | 'missing' | 'gap' | 'key'
 export interface SlipLine { t: string; k: LineKind; marks: string[]; note?: string }
 export interface Slip { src: string; doc: string | null; lines: SlipLine[] }
+type Snip = { label: string; doc: string | null; quote: string; field: string }
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const personKey = (s: string) => fold(s).split(/[\s-]+/).filter(Boolean).sort().join(' ')
@@ -536,7 +576,7 @@ function ownerLines(quote: string) {
 }
 
 /** Ownership: register lines vs declaration lines, matched by person (MUNTEANU ANDREI = Andrei Munteanu). */
-function ownershipSlips(snips: { label: string; doc: string | null; quote: string }[]) {
+function ownershipSlips(snips: Snip[]) {
   const regIdx = snips.findIndex((s) => /regist|onrc|certificat/i.test(s.label))
   const decIdx = snips.findIndex((s, i) => i !== regIdx && /ubo|declar|beneficiar/i.test(s.label))
   if (regIdx < 0 || decIdx < 0) return null
@@ -578,8 +618,9 @@ const tokNorm = (w: string) => { const f = fold(w).replace(/[.,;:]+$/g, ''); ret
 const valuePart = (line: string) => { const i = line.indexOf(':'); return i >= 0 && i < 30 ? line.slice(i + 1).trim() : line.trim() }
 
 /** Two one-line values (an address, a name): mark the words that appear in only one of them. */
-function tokenSlips(snips: { label: string; doc: string | null; quote: string }[], summary: string) {
-  if (snips.length !== 2) return null
+function tokenSlips(snips: Snip[], summary: string) {
+  // two quotes from one document are not a comparison
+  if (snips.length !== 2 || (snips[0].doc !== null && snips[0].doc === snips[1].doc)) return null
   const vals = snips.map((s) => valuePart(s.quote.split(/\r?\n/)[0] || ''))
   const toks = vals.map((v) => v.split(/[\s,]+/).filter(Boolean))
   const sets = toks.map((ts) => new Set(ts.map(tokNorm)))
@@ -612,19 +653,40 @@ function tokenSlips(snips: { label: string; doc: string | null; quote: string }[
   return { slips, matches }
 }
 
-export function decisionEvidence(x: Exception_): { slips: Slip[]; matches: string[] } {
-  const snips = arr(x.snippets).filter((s) => s.quote).map((s) => ({ label: String(s.label || s.doc_id || 'Document'), doc: s.doc_id ?? null, quote: String(s.quote) }))
+/** Fields that only date a document: shown as context, never marked as the evidence. */
+const CONTEXT_FIELD = /^(issued|issued_at|issue_date|date|valid_until|expires?|expiry)$/i
+
+/** No comparison to draw (a tax debt, a suspended company, a coverage ratio): one panel per document, in the order the
+ *  snippets name them, with every quoted line. The value each line holds is marked; date lines stay plain context. */
+function evidenceByDoc(snips: Snip[]): Slip[] {
+  const out: Slip[] = []
+  const byDoc = new Map<string, Slip>()
+  snips.forEach((s) => {
+    const key = s.doc ?? `label:${s.label}`
+    let slip = byDoc.get(key)
+    if (!slip) { slip = { src: s.label, doc: s.doc, lines: [] }; byDoc.set(key, slip); out.push(slip) }
+    const context = CONTEXT_FIELD.test(s.field)
+    s.quote.split(/\r?\n/).filter((t) => t.trim()).forEach((t) => {
+      const v = valuePart(t)
+      slip.lines.push(context ? { t, k: 'same', marks: [] } : { t, k: 'key', marks: v && v !== t.trim() ? [v] : [] })
+    })
+  })
+  return out
+}
+
+/** `compare` is true only for a real two-document comparison (ownership, an address, a name); anything else is evidence. */
+export function decisionEvidence(x: Exception_): { slips: Slip[]; matches: string[]; compare: boolean } {
+  const snips: Snip[] = arr(x.snippets).filter((s) => s.quote).map((s) => ({
+    label: String(s.label || s.doc_id || 'Document'), doc: s.doc_id ? String(s.doc_id) : null, quote: String(s.quote), field: String(s.field || ''),
+  }))
   const summary = String(x.summary || '')
   try {
     const own = x.kind === 'ubo_discrepancy' || x.requirement_id === 'R2' ? ownershipSlips(snips) : null
-    if (own) return own
+    if (own) return { ...own, compare: true }
     const tok = x.kind === 'address_uncertain' || x.kind === 'signatory_uncertain' || x.judge ? tokenSlips(snips, summary) : null
-    if (tok) return tok
-  } catch { /* fall back to plain lines */ }
-  return {
-    slips: snips.map((s) => ({ src: s.label, doc: s.doc, lines: s.quote.split(/\r?\n/).filter(Boolean).map((t) => ({ t, k: 'same' as const, marks: [] })) })),
-    matches: [],
-  }
+    if (tok) return { ...tok, compare: true }
+  } catch { /* fall back to plain evidence */ }
+  return { slips: evidenceByDoc(snips), matches: [], compare: false }
 }
 
 /** Time of the n-th agent note on an exception (from EXCEPTION_ANNOTATED events). */
@@ -664,11 +726,23 @@ export function compareSlips(b: Bundle, slips: Slip[]): CompareSlip[] {
     if (iss !== null && iss < clock.opened) return `${src}, on file since ${fDate(iss)} ${new Date(iss).getUTCFullYear()}`
     return rec !== null ? `${src}, on file since day ${clock.dayNo(rec)}` : src
   }
-  if (info.length !== 2 || info.some((i) => !i.d)) return info.map((i) => ({ ...i.s, role: null, meta: meta(i.d, null) }))
+  if (info.length !== 2 || info.some((i) => !i.d) || info[0].s.doc === info[1].s.doc) return info.map((i) => ({ ...i.s, role: null, meta: meta(i.d, null) }))
   const sorted = [...info].sort((x, y) => x.rec - y.rec || x.n - y.n)
   return sorted.map((i, k) => {
     const role = k === 1 ? 'new' as const : 'onfile' as const
     return { ...i.s, role, meta: meta(i.d, role) }
+  })
+}
+
+/** Evidence panels (no comparison): no on-file/new roles; the caption says where the document came from and when. */
+export function evidenceSlips(b: Bundle, slips: Slip[]): CompareSlip[] {
+  const clock = caseClock(b)
+  return slips.map((s) => {
+    const d = arr(b.documents).find((x) => x.id === s.doc)
+    const rec = ms(d?.received_at)
+    const src = d ? SOURCE_TYPE[String(d.type)] || 'Document' : ''
+    const meta = !d ? '' : rec !== null ? `${src}, received day ${clock.dayNo(rec)} at ${fTime(rec)}` : src
+    return { ...s, role: null, meta }
   })
 }
 

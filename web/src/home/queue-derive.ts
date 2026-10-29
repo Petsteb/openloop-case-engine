@@ -1,6 +1,7 @@
 /* Pure row -> view mapping for the work queue (no DOM, no React). */
 import { arr, fDate, fTime, isComplete, isOnHold, ms, openExceptions, plural, splitTitle, statusLine } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
+import { DEMO_CASE_ID } from '@/shared/demo'
 import type { CaseExtra, CaseRow, Note } from './types'
 
 /** Each file sits in exactly one bucket, so the header counts add up to the number of files.
@@ -77,7 +78,7 @@ export function rowFromBundle(b: Bundle): CaseRow {
   const waiting = arr(b.requirements).filter((r) => r.status === 'OPEN_WAITING').length
   const ev = arr(b.events)
   return {
-    id: String(c?.id || 'demo-1'),
+    id: String(c?.id || DEMO_CASE_ID),
     title: String(c?.title || ''),
     template_title: c?.template_title || sub,
     company: c?.company || name,

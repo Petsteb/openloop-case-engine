@@ -17,6 +17,7 @@ import { LearningSheet } from './components/LearningSheet'
 import { RightPanel, type RightTab } from './components/RightPanel'
 import { Timeline } from './components/Timeline'
 import { Icon } from './components/Icon'
+import { DEMO_COMPLIANCE_ID } from './shared/demo'
 import { resetAllDemo } from './home/queue'
 import { setSeen } from './home/seen'
 import type { CaseExtra } from './home/types'
@@ -131,7 +132,7 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
     void act(`advance:${days}`, () => api.advance(caseId, days), `Skipped ${plural(days, 'day')}`).then((b) => { if (b) setSelected(null) })
   }, [act, caseId])
   const onRelease = useCallback((note: string) => {
-    void act('release', () => api.releaseHold(caseId, 'compliance-1', note), 'Hold released. The agent resumes the file.')
+    void act('release', () => api.releaseHold(caseId, DEMO_COMPLIANCE_ID, note), 'Hold released. The agent resumes the file.')
       .then((b) => { if (b) setSelected(null) })
   }, [act, caseId])
   const onReset = useCallback(() => {
@@ -189,7 +190,8 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
 
   return (
     <>
-      <main className="page">
+      {/* has-dock: the page scrolls in a box that ends above the demo dock's strip, so the dock never covers it */}
+      <main className={'page case-page' + (dock ? ' has-dock' : '')}>
         <Boundary name="header">
           <CaseHeader bundle={bundle} caseId={caseId} verify={verify} verifying={verifying} onVerify={doVerify} theme={theme}
             onTheme={onTheme} learningCount={learningCount} onLearning={() => { setLearningOpen(true); void loadLearning() }} />

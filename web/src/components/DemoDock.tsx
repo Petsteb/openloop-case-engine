@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { arr, sentence, tidy } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
+import { DEMO_CASE_ID } from '@/shared/demo'
 import { Btn } from './Btn'
 import { Icon } from './Icon'
 
@@ -42,7 +43,7 @@ export function DemoDock({ bundle, caseId, busy, onInbound, onAdvance, onReset, 
   const items = [...arr(bundle.scenario).filter((i) => !i.internal), ...arr(bundle.scenario).filter((i) => i.internal)]
   const next = arr(bundle.scenario).find((i) => !i.delivered)
   const scripted = items.length > 0
-  const isDemo = caseId === 'demo-1'
+  const isDemo = caseId === DEMO_CASE_ID
   const reset = () => {
     if (!armed) {
       setArmed(true)

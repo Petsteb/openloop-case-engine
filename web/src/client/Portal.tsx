@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 import { Messages } from './Messages'
 import { ConfirmCard, DisputeNotice, RequestCard, type CardState } from './Needs'
 import {
-  arr, decidesLine, latestDispute, nextText as nextTextFor, pillState, portalState, productFor, progressSteps, safe, sameKey,
+  arr, decidesLine, latestDispute, nextText as nextTextFor, pillState, pillText, portalState, productFor, progressSteps, safe, sameKey,
   shortLabel, sortRequests, STATE_PILL, fileEyebrow, type Step,
 } from './derive'
 import { markSeen } from './store'
@@ -19,8 +19,10 @@ import { useClientView } from './useClientView'
 const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
 
 /* ---------- header pieces ---------- */
-function StatusPill({ state }: { state: PortalState }) {
-  return <span className={`pt-pill is-${state}`}><i aria-hidden="true" />{STATE_PILL[state]}</span>
+/** The pill's words follow the file's template; until My files has named it, a finished file uses the server's line. */
+function StatusPill({ state, template, serverText }: { state: PortalState; template: string | undefined; serverText: string | undefined }) {
+  const text = template || state !== 'complete' ? pillText(state, template) : safe(serverText, STATE_PILL.complete)
+  return <span className={`pt-pill is-${state}`}><i aria-hidden="true" />{text}</span>
 }
 
 function Progress({ steps }: { steps: Step[] }) {
@@ -276,7 +278,7 @@ function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: F
   const dispute = latestDispute(view)
   const showDispute = !!dispute && hiddenDispute !== dispute.seq
   // complete with a question still open (credit-bureau consent stays pending by design) never reads "Complete"
-  const nextText = nextTextFor(state, missing.length, confirmations.length)
+  const nextText = nextTextFor(state, missing.length, confirmations.length, file?.template)
   const needsYou = missing.length + confirmations.length > 0
   const nextAction = () => {
     if (first) {
@@ -302,7 +304,7 @@ function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: F
             {product ? <p className="pt-product">{product}</p> : null}
           </div>
           <div className="pt-head-side">
-            <StatusPill state={pill} />
+            <StatusPill state={pill} template={file?.template} serverText={view.overview?.status_text} />
             <span className="pt-day">Day {view.overview?.day ?? 0} of your file</span>
           </div>
         </header>

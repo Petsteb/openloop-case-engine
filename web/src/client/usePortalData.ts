@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { DEMO_CASE_ID, DEMO_COMPANY_ID } from '@/shared/demo'
 import * as api from './api'
 import { isUnavailable } from './api'
 import { arr, portalState, rowNeeds } from './derive'
@@ -53,13 +54,13 @@ function useServerTick(): number {
 export interface NextInfo { state: PortalState; missing: number; confirmations: number }
 
 export interface PortalData {
-  /** null while loading; on an older server, Aurora only */
+  /** null while loading; on an older server, the demo case's company only */
   companies: Company[] | null
   templates: Template[] | null
   /** the chosen company's files; null while loading (or after a company switch, until its list arrives) */
   rows: CaseRow[] | null
   rowsError: string | null
-  /** true when /api/cases is missing: the list is demo-1 only, built from its client view */
+  /** true when /api/cases is missing: the list is the demo case only, built from its client view */
   legacy: boolean
   /** undefined while loading; null when /api/notifications is missing (the bell shows no count) */
   notes: PortalNotification[] | null | undefined
@@ -69,13 +70,15 @@ export interface PortalData {
   refetch: () => void
 }
 
-const AURORA: Company = { id: 'aurora', name: 'Brutăria Aurora SRL', templates: ['sme_loan'] }
+/** An older server (no /api/companies) has one company, the demo case's, and only loan files: named from that case. */
+const legacyCompany = (cv: ClientView | null): Company =>
+  ({ id: DEMO_COMPANY_ID, name: String(cv?.overview?.company || 'Demo company'), templates: ['sme_loan'] })
 
 function legacyRow(cv: ClientView): CaseRow {
   const missing = arr(cv.missing_documents).length
   const conf = arr(cv.confirmations).length
   return {
-    id: 'demo-1', template: 'sme_loan', company_id: 'aurora', company: cv.overview?.company, product: cv.overview?.product,
+    id: DEMO_CASE_ID, template: 'sme_loan', company_id: DEMO_COMPANY_ID, company: cv.overview?.company, product: cv.overview?.product,
     state: portalState(cv), status_text: cv.overview?.status_text, day: cv.overview?.day ?? 0,
     waiting_on_client: missing + conf, needs_you: missing + conf,
   }
@@ -107,7 +110,10 @@ export function usePortalData(companyId: string): PortalData {
         setCompanies(arr(c).filter((x) => x && typeof x.id === 'string' && typeof x.name === 'string'))
       }).catch((e) => {
         if (!live) return
-        if (isUnavailable(e)) { listsDone.current.companies = true; setCompanies([AURORA]) }
+        if (!isUnavailable(e)) return
+        // not gated on `live`: the list loads once, so a tick that lands meanwhile must not drop the answer
+        api.getClientView(DEMO_CASE_ID).then((cv) => legacyCompany(cv), () => legacyCompany(null))
+          .then((co) => { listsDone.current.companies = true; setCompanies([co]) })
       })
     }
     if (!listsDone.current.templates) {
@@ -134,12 +140,12 @@ export function usePortalData(companyId: string): PortalData {
         setRows({ for: companyId, rows: arr(r.value).filter((x) => x && typeof x.id === 'string') })
         setRowsError(null)
       } else if (isUnavailable(r.reason)) {
-        // an older server: demo-1 is the only file
+        // an older server: the demo case is the only file
         setLegacy(true)
         try {
-          const cv = await api.getClientView('demo-1')
+          const cv = await api.getClientView(DEMO_CASE_ID)
           if (!live) return
-          setRows({ for: companyId, rows: companyId === 'aurora' ? [legacyRow(cv)] : [] })
+          setRows({ for: companyId, rows: companyId === DEMO_COMPANY_ID ? [legacyRow(cv)] : [] })
           setRowsError(null)
         } catch (e) {
           if (live) setRowsError(api.failureText(e))

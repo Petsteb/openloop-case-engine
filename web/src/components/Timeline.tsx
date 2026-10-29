@@ -21,6 +21,17 @@ function useWidth<T extends HTMLElement>(fallback = 900) {
   return [ref, w] as const
 }
 
+/** The window's height: the lanes grow a little on tall screens. */
+function useViewportHeight() {
+  const [h, setH] = useState(() => (typeof window === 'undefined' ? 900 : window.innerHeight))
+  useEffect(() => {
+    const on = () => setH(window.innerHeight)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  return h
+}
+
 const TICK_STEPS = [HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR, DAY, 2 * DAY, 7 * DAY, 14 * DAY]
 function makeTicks(a: number, b: number, plotW: number) {
   const span = b - a
@@ -78,6 +89,7 @@ export function Timeline({ bundle }: { bundle: Bundle }) {
   const dls = useMemo(() => deadlines(bundle), [bundle])
 
   const [wrapRef, W] = useWidth<HTMLDivElement>()
+  const vh = useViewportHeight()
   const ML = W < 560 ? 70 : 92
   const MR = 14
   const plotW = Math.max(60, W - ML - MR)
@@ -202,8 +214,9 @@ export function Timeline({ bundle }: { bundle: Bundle }) {
   const { step, ticks } = makeTicks(view[0], view[1], plotW)
   const hourly = step < DAY
   const AXIS_H = 34
-  const laneH = W < 560 ? 32 : 38
-  const DL_H = 54
+  // 38px lanes up to a 1100px-high window, growing to 52px at 1440 high (the timeline goes from 220 to about 280px)
+  const laneH = W < 560 ? 32 : Math.round(clamp(38 + (vh - 1100) / 24, 38, 52))
+  const DL_H = Math.round((laneH * 54) / 38)
   const laneTop = (i: number) => AXIS_H + i * laneH
   const bodyH = 3 * laneH + DL_H
   const H = AXIS_H + bodyH + 18

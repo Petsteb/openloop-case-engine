@@ -1,6 +1,7 @@
 /* Client portal API. A copy of the bank screen's request helper (src/lib/api.ts is owned by another builder),
    narrowed to the client endpoints in the spec's API table. Every function is safe to call against an older
    server: a missing endpoint throws an ApiError that isUnavailable() recognises. */
+import { DEMO_CASE_ID } from '@/shared/demo'
 import type {
   CaseRow, ChatHistoryItem, ChatResponse, ClientDocument, ClientDocumentDetail, ClientView, Company, ConfirmKind, GlobalVersion,
   PortalNotification, SampleFile, Template, VersionInfo,
@@ -67,7 +68,7 @@ export async function sampleFiles(id: string): Promise<SampleFile[]> {
   try {
     return await call<SampleFile[]>('GET', `${c(id)}/sample-files`)
   } catch (e) {
-    if (isUnavailable(e) && id === 'demo-1') return call<SampleFile[]>('GET', '/api/demo/sample-files')
+    if (isUnavailable(e) && id === DEMO_CASE_ID) return call<SampleFile[]>('GET', '/api/demo/sample-files')
     throw e
   }
 }

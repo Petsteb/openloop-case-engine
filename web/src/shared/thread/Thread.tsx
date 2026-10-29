@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import * as api from './api'
 import { isUnavailable, seenKey } from './api'
@@ -249,6 +249,8 @@ function who(it: ThreadItem, role: ThreadRole): { name: string; tag: string } {
   const a = it.author ?? { role: 'bank' }
   const name = String(a.name ?? '').trim()
   if (a.role === 'client') return role === 'client' ? { name: 'You', tag: '' } : { name: name || 'Client', tag: 'Client' }
+  // a client sees a staff author by name only: an older server may still send "Ana Pop (analyst)" or a staff id
+  if (a.role === 'employee' && role === 'client') return { name: name.replace(/\s*\([^)]*\)|\bE-\d+\b/g, '').replace(/^[\s·,-]+|[\s·,-]+$/g, '') || 'Bank team', tag: 'Bank' }
   if (a.role === 'employee') return { name: name || 'Bank team', tag: 'Bank' }
   return { name: 'The bank', tag: '' }
 }
@@ -300,7 +302,8 @@ function MessageRow({ it, role, onOpenDoc, onOpenEvent }: RowProps) {
         <time className="thr-when" dateTime={it.sim_time ?? undefined}>{when(it)}</time>
       </header>
       <p className="thr-text">
-        {parts.map((pt, i) => (pt.t === 'text' ? pt.text : <RefChip key={i} r={pt.ref} role={role} onOpenDoc={onOpenDoc} onOpenEvent={onOpenEvent} />))}
+        {parts.map((pt, i) => (pt.t === 'text' ? <Fragment key={i}>{muteUnresolved(pt.text)}</Fragment>
+          : <RefChip key={i} r={pt.ref} role={role} onOpenDoc={onOpenDoc} onOpenEvent={onOpenEvent} />))}
       </p>
       {trailing.length || docButtons.length ? (
         <div className="thr-refrow">
@@ -316,12 +319,20 @@ function MessageRow({ it, role, onOpenDoc, onOpenEvent }: RowProps) {
   )
 }
 
+/** "#12" or "#doc-3" left in the text after the refs were matched: the server dropped it (an id this reader may not
+ *  see, or one that does not exist). It stays plain text, muted, never a chip or a link. */
+const UNRESOLVED = /(#(?:doc-)?\d+)(?![\p{L}\p{N}_-])/gu
+function muteUnresolved(text: string): ReactNode[] {
+  return text.split(UNRESOLVED).map((s, i) => (i % 2 === 1 ? <span key={i} className="thr-unref">{s}</span> : s))
+}
+
 const dedupe = (rs: ThreadRef[]) => { const s = new Set<string>(); return rs.filter((r) => { const k = refKey(r); if (s.has(k)) return false; s.add(k); return true }) }
 
 function RefChip({ r, role, onOpenDoc, onOpenEvent }: { r: ThreadRef; role: ThreadRole; onOpenDoc?: (id: string) => void; onOpenEvent?: (seq: number) => void }) {
   const id = String(r.id).replace(/^#/, '')
   const label = String(r.label ?? '').trim()
-  if (r.kind === 'person') return <span className="thr-person">@{label || id}</span>
+  // a person is a static chip like the other refs (on the portal every ref reads as a word)
+  if (r.kind === 'person') return <span className="thr-ref is-person is-static"><span className="thr-ref-label">@{label || id}</span></span>
   const client = role === 'client'
   let code = ''
   let onClick: (() => void) | undefined

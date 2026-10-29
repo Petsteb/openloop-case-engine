@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import { ApiError, isUnavailable } from '@/lib/api'
 import type { Bundle } from '@/lib/types'
+import { DEMO_CASE_ID } from '@/shared/demo'
 
 /** Live updates: poll `/version` this often and refetch the bundle only when the ledger length changed. */
 const POLL_MS = 2500
@@ -80,7 +81,7 @@ export function useCase(caseId: string) {
       setMissing(false)
     } catch (e) {
       // A fresh server may not know the case yet: create the demo case once.
-      if (e instanceof ApiError && e.status === 404 && caseId === 'demo-1') {
+      if (e instanceof ApiError && e.status === 404 && caseId === DEMO_CASE_ID) {
         try { setB(await api.reset()); setError(null); return } catch (e2) { setError(failureText(e2)); return }
       }
       if (e instanceof ApiError && e.status === 404) { setMissing(true); setError('This case does not exist on this server. It may have been removed by a demo reset.'); return }

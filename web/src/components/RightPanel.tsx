@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { arr, feedItems, type DocRow } from '@/lib/derive'
 import type { Bundle, Citation } from '@/lib/types'
+import { DEMO_STAFF_AUTHOR } from '@/shared/demo'
 import { Thread } from '@/shared/thread'
 import { ActivityFeed, LedgerList, ReasoningList } from './ActivityTabs'
 import { ChatPanel } from './ChatPanel'
@@ -12,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 /** 'outbox' is the Messages tab (the thread with the client plus the automatic emails); the key stays for stored tabs. */
 export type RightTab = 'ask' | 'activity' | 'reasoning' | 'ledger' | 'outbox' | 'docs'
 
-const STAFF_AUTHOR = 'Ana Pop (analyst)'
 /** When the six tabs would not fit on one line, these counts go first (in this order); the tab's title keeps the number. */
 const DROP_ORDER: RightTab[] = ['outbox', 'reasoning', 'activity']
 
@@ -97,7 +97,7 @@ export function RightPanel(p: Props) {
       {/* kept mounted like Ask: switching to the Ledger from an event chip must not lose the draft or the scroll */}
       <TabsContent value="outbox" forceMount hidden={p.tab !== 'outbox'} className="tabpane">
         <Boundary name="messages">
-          <Thread caseId={p.caseId} role="employee" author={p.messageAuthor ?? STAFF_AUTHOR} active={p.tab === 'outbox'}
+          <Thread caseId={p.caseId} role="employee" author={p.messageAuthor ?? DEMO_STAFF_AUTHOR} active={p.tab === 'outbox'}
             onOpenDoc={p.onOpenDoc} onOpenEvent={onOpenEvent} onPosted={p.onAnswered} />
         </Boundary>
       </TabsContent>

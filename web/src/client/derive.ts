@@ -186,8 +186,22 @@ export function needsText(state: PortalState, missing: number, confirmations: nu
   if (confirmations) return confirmations === 1 ? 'Please answer one question from the bank.' : `Please answer ${confirmations} questions from the bank.`
   return null
 }
-export const nextText = (state: PortalState, missing: number, confirmations: number) =>
-  needsText(state, missing, confirmations) ?? IDLE_TEXT[state]
+/** A finished file, in the words of its template (the server's: "waiting for the bank's annual review sign-off").
+ *  An unknown template keeps the loan wording of STATE_PILL / IDLE_TEXT. */
+const COMPLETE_TEXT: Record<string, { pill: string; idle: string }> = {
+  kyb_review: {
+    pill: 'Complete: waiting for the bank’s annual review sign-off',
+    idle: 'Nothing to do. The bank finishes your annual review and tells you if it needs anything else.',
+  },
+}
+export const pillText = (state: PortalState, template?: string) =>
+  (state === 'complete' && template ? COMPLETE_TEXT[template]?.pill : undefined) ?? STATE_PILL[state]
+/** A My files row: the server's line, except a finished file whose template has its own words (the server's client
+ *  line for a finished annual review still reads "credit decision"). */
+export const rowStatusText = (r: CaseRow, tone: PortalState) =>
+  (tone === 'complete' && r.template && COMPLETE_TEXT[r.template] ? COMPLETE_TEXT[r.template].pill : safe(r.status_text, pillText(tone, r.template)))
+export const nextText = (state: PortalState, missing: number, confirmations: number, template?: string) =>
+  needsText(state, missing, confirmations) ?? (state === 'complete' && template ? COMPLETE_TEXT[template]?.idle : undefined) ?? IDLE_TEXT[state]
 
 /* ---------- files (multi-case) ---------- */
 /** The client's name for a kind of file. The server's titles are written for staff ("SME loan and KYB check"). */

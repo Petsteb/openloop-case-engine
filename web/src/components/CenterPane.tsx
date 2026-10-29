@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   actionLabel, arr, caseClock, checklist, cleanTitle, docName, fTime, holdInfo, isComplete, isOnHold, kindOf, linkedEvents, ms,
-  openExceptions, plain, tidy, type CheckItem,
+  openExceptions, plain, templateWords, tidy, type CheckItem,
 } from '@/lib/derive'
 import type { Bundle, Exception_, Requirement } from '@/lib/types'
 import { Btn } from './Btn'
@@ -187,6 +187,7 @@ export function CenterPane(p: Props) {
   const { bundle, selected } = p
   const open = openExceptions(bundle)
   const items = checklist(bundle)
+  const words = templateWords(bundle)
   const sel = selected ? arr(bundle.requirements).find((r) => r.id === selected) : undefined
   const selEx = sel ? open.find((x) => x.requirement_id === sel.id) : undefined
   // On hold, the banner comes first in every branch (a selected row or a leftover open card must not hide it).
@@ -234,7 +235,7 @@ export function CenterPane(p: Props) {
         <section className="raised complete" aria-label="File complete">
           <span className="c-verified"><Icon name="check" size={28} /></span>
           <h2>File complete</h2>
-          <p>All {items.length} checks are verified. The agent stopped here because the credit decision belongs to a person.</p>
+          <p>All {items.length} checks are verified. The agent stopped here because the {words.decision} belongs to a person.</p>
           <CheckRows items={items} />
           <div className="led-top">
             <span className="muted small">The ledger holds {arr(bundle.events).length} events, each linked to the one before.</span>
@@ -247,6 +248,10 @@ export function CenterPane(p: Props) {
     )
   }
   const waiting = items.filter((i) => i.kind !== 'verified')
+  // the next reminder the agent has scheduled (the interval is the backend's; the bundle carries the due time)
+  const clock = caseClock(bundle)
+  const nextReminder = arr(bundle.timers).filter((t) => t.kind === 'reminder' && t.status === 'PENDING')
+    .map((t) => ms(t.due)).filter((t): t is number => t !== null).sort((a, b) => a - b)[0]
   return (
     <div className="stack">
       <section className="panel" aria-label="Summary">
@@ -254,8 +259,9 @@ export function CenterPane(p: Props) {
         <div className="panel-body">
           <p className="muted" style={{ marginBottom: 8 }}>
             {arr(bundle.events).some((e) => e.type === 'DOCUMENT_RECEIVED')
-              ? 'The agent is waiting on the client for these items and reminds them automatically every 3 days.'
-              : 'The case is open. The agent starts as soon as the client sends the application pack.'}
+              ? `The agent is waiting on the client for these items${nextReminder !== undefined
+                ? ` and sends the next reminder on day ${clock.dayNo(nextReminder)}` : ' and reminds them automatically'}.`
+              : `The case is open. The agent starts as soon as the client sends the ${words.pack}.`}
           </p>
           <div className="cl">
             {waiting.map((it) => (

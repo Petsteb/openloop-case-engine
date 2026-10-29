@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { DEMO_CASE_ID } from '@/shared/demo'
 
 /* Hash routing for the bank screen, no router library:
    `#/` is the work queue, `#/case/{id}` is a case. No hash goes to `#/case/demo-1`, so old links and the README demo work. */
 export type Route = { name: 'home' } | { name: 'case'; id: string }
 
-const DEMO = '#/case/demo-1'
+const DEMO = `#/case/${DEMO_CASE_ID}`
 const CASE_RE = /^#\/case\/([^/?#]+)\/?$/
 
 /** `#clean` (presenter mode: no demo dock) predates routing; it still opens demo-1, with the dock hidden. */
