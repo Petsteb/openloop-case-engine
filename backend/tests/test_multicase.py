@@ -245,3 +245,15 @@ def test_consent_notification_stays_anchored_to_the_opening():
     before = seqs()
     c.post(f"/api/cases/{cid}/advance", json={"days": 2})
     assert before == seqs() == [1]
+
+
+def test_clients_see_staff_names_without_internal_roles():
+    from app.messages import client_facing_name
+    assert client_facing_name("Ana Pop (analyst)") == "Ana Pop" and client_facing_name("E-0317") == "Bank team"
+    c.post("/api/demo/reset")
+    c.post("/api/cases/demo-1/messages", json={"role": "employee", "author": "Ana Pop (analyst)", "text": "Hello"})
+    client = [m for m in c.get("/api/cases/demo-1/messages").json() if m["kind"] == "message"][-1]
+    staff = [m for m in c.get("/api/cases/demo-1/messages", params={"role": "employee"}).json() if m["kind"] == "message"][-1]
+    assert client["author"]["name"] == "Ana Pop" and staff["author"]["name"] == "Ana Pop (analyst)"
+    notes = c.get("/api/notifications", params={"role": "client", "company_id": "aurora"}).json()
+    assert any(n["text"].startswith("Ana Pop: ") for n in notes) and "analyst" not in json.dumps(notes)

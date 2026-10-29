@@ -630,7 +630,8 @@ def notifications(case: Case, role: str) -> list[dict]:
             out.append(base(ref, "action", "Please answer a question from the bank"))
         for e in case.ledger.events:
             if e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == "employee":
-                out.append(base(e, "message", f"{e['payload']['author']}: {e['payload']['text'][:120]}"))
+                from .messages import client_facing_name
+                out.append(base(e, "message", f"{client_facing_name(e['payload']['author'])}: {e['payload']['text'][:120]}"))
             elif e["type"] == "EMAIL_SENT":
                 out.append(base(e, "message", f"Email: {e['payload'].get('subject', '')}"))
     return out
