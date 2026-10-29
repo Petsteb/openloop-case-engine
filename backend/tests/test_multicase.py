@@ -139,6 +139,16 @@ def test_messages_thread_refs_and_role_filtering():
     assert ment["people"] and ment["docs"] and all(e["seq"] != internal for e in ment["events"])
 
 
+def test_messages_carry_the_real_send_time():
+    from datetime import datetime, timedelta, timezone
+    c.post("/api/demo/reset")
+    c.post("/api/cases/demo-1/messages", json={"role": "client", "text": "Hello"})
+    msg = [m for m in c.get("/api/cases/demo-1/messages").json() if m["kind"] == "message"][-1]
+    sent = datetime.fromisoformat(msg["wall_time"])
+    assert abs(datetime.now(timezone.utc) - sent) < timedelta(minutes=1)   # real time, not the case clock
+    assert msg["sim_time"]
+
+
 def test_client_message_about_a_new_shareholder_reaches_the_agent():
     c.post("/api/demo/reset")
     c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"})

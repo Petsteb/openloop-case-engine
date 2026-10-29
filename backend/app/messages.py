@@ -87,7 +87,9 @@ def thread(case: Case, role: str) -> list[dict]:
     event_labels = case_views.visible_events(case, role)  # labels in the reader's own words, never the author's
     out = []
     for e in case.ledger.events:
-        base = {"seq": e["seq"], "day": case_views._day(e["sim_time"]), "sim_time": e["sim_time"]}
+        # wall_time: when it was really sent (people's messages show it); sim_time: the case clock (emails show it)
+        base = {"seq": e["seq"], "day": case_views._day(e["sim_time"]), "sim_time": e["sim_time"],
+                "wall_time": e.get("wall_time")}
         if e["type"] == "MESSAGE_POSTED":
             p = e["payload"]
             refs = [r if r["kind"] == "person" else
