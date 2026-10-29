@@ -1,0 +1,25 @@
+# Secrets never go into the image: set them as platform secrets.
+.env
+.env.*
+.git
+.gitignore
+.claude/
+.superpowers/
+.playwright-mcp/
+.pytest_cache/
+.venv/
+venv/
+**/node_modules
+web/dist
+data/
+**/__pycache__
+**/*.pyc
+research/
+docs/
+*.pdf
+*.pptx
+Dockerfile
+.dockerignore
+render.yaml
+fly.toml
+# Keep backend/eval/: judge_cache.json, calibration.json and the learner's history are read at runtime.
