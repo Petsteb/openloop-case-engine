@@ -318,7 +318,7 @@ RULES = [
     ("GET", CASE + r"/(documents|documents/[^/]+|messages|mentionables)", "by_role"),
     ("POST", CASE + r"/messages", "post_message"),
     ("POST", CASE + r"/(upload|upload-sample|client-confirm)", "case_client"),
-    ("GET", r"/api/learning", "staff"),
+    ("GET", r"/api/learning(/overview)?", "staff"),
     ("POST", r"/api/learning/proposals/[^/]+/backtest", "staff"),
     ("POST", r"/api/learning/proposals/[^/]+/promote", "promote"),
     ("POST", r"/api/demo/reset", "demo"),
@@ -771,9 +771,11 @@ def demo_accounts():
         raise HTTPException(404, "Not Found")
     now = time.time()
     demo_emails = {e for e, *_ in DEMO_STAFF} | {p["email"] for p in profiles.PROFILES.values()}
+    order = {r: i for i, r in enumerate(STAFF_ROLES)} | {p: len(STAFF_ROLES) + i for i, p in enumerate(profiles.PROFILES)}
+    rows = sorted(users().all(), key=lambda u: order.get(u["company_id"] or u["role"], 99))  # analyst and demo-1 first
     return {"password": os.environ.get("DEMO_PASSWORD", "demo"), "seconds_left": 30 - int(now % 30),
             "accounts": [public(u) | {"code": totp(u["totp_secret"], max(totp_step(now), u["totp_last_step"] + 1))}
-                         for u in users().all() if u["email"] in demo_emails]}
+                         for u in rows if u["email"] in demo_emails]}
 
 
 def _guard_admin(request: Request, role: str) -> None:
