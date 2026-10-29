@@ -4,6 +4,7 @@ import { Icon } from '@/components/Icon'
 import { store } from '@/lib/store'
 import { SessionChip } from '@/shared/session'
 import { Bell } from './Bell'
+import { LearnedPanel } from './LearnedPanel'
 import { NewCaseSheet } from './NewCase'
 import { invalidateQueue, useQueue } from './queue'
 import {
@@ -144,6 +145,8 @@ export function WorkQueue({ theme, onTheme }: Props) {
           </>
         )}
       </section>
+
+      <LearnedPanel rev={rows} />
       <NewCaseSheet open={creating} onOpenChange={setCreating} />
     </main>
   )

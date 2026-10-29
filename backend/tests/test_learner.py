@@ -82,3 +82,19 @@ def test_promoted_check_resolves_address_without_judge(monkeypatch):
     r3 = next(r for r in b["requirements"] if r["id"] == "R3")
     assert r3["status"] == "SATISFIED" and "Learned check LC-1" in r3["reason"]
     assert not any(x["kind"] == "address_uncertain" for x in b["exceptions"])
+
+
+def test_learning_overview_lists_rulings_and_where_they_were_reused():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    c.post("/api/demo/reset")
+    for item in ("day0-pack", "onrc-cert"):
+        b = c.post("/api/cases/demo-1/inbound", json={"item_id": item}).json()
+    ex = next(x["id"] for x in b["exceptions"] if x["kind"] == "address_uncertain")
+    c.post(f"/api/cases/demo-1/exceptions/{ex}/resolve", json={"action_id": "same_address"})
+    o = c.get("/api/learning/overview").json()
+    mine = [p for p in o["precedents"] if p["case_id"] == "demo-1"]
+    assert mine and mine[0]["decision"] == "same_address" and mine[0]["by"] == "analyst-1"
+    assert o["proposals"] and o["proposals"][0]["support"] >= o["min_support"]  # 2 past rulings + this one
+    assert not [a for a in o["applied"] if a["case_id"] == "demo-1"]  # a fresh ruling is not a reuse
