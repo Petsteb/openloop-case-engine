@@ -255,9 +255,7 @@ button { font: inherit; color: inherit; }
 .rule { display: flex; gap: 10px; align-items: baseline; font-size: 0.8125rem; color: var(--muted); min-width: 0; }
 .rule p { min-width: 0; }
 .rule-id { flex: none; font-size: 0.6875rem; color: var(--ink); border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 8px; font-family: var(--mono); }
-/* Sticky so the decision buttons stay reachable when the card is taller than its scrolling column. */
-.dec-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line);
-  position: sticky; bottom: 0; z-index: 1; background: var(--surface); border-radius: 0 0 12px 12px; }
+.dec-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
 .dec-actions .spacer { flex: 1; }
 .kbd { font-family: var(--mono); font-size: 0.625rem; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; opacity: .75; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -745,6 +743,9 @@ button.thr-ref:hover .thr-ref-code { color: inherit; }
   .case-page .chat .msgs { flex: 1 1 0; min-height: 96px; max-height: none; }
   .case-page .tabpane > .thr > .thr-listwrap { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .case-page .tabpane > .thr .thr-list { flex: 1 1 0; min-height: 96px; max-height: none; }
+  /* Only here (the centre column scrolls on its own): the decision buttons stay reachable when the card is taller than
+     the column. On shorter screens the page scrolls as a whole and the buttons sit in flow, never over the card. */
+  .case-page .dec-actions { position: sticky; bottom: 0; z-index: 1; background: var(--surface); border-radius: 0 0 12px 12px; }
 }
 
 /* ---------- bank: phones and touch screens get 44 px targets (desktop keeps its density) ----------
