@@ -27,7 +27,9 @@ FIELD_MAP = {
                           "împuternicit": "authorized_person"},
 }
 OWNER_KEYS = {"beneficiar real": "declared_owners", "asociat": "register_owners"}
-OWNER_RE = re.compile(r"^(?P<name>.+?)\s+—\s+(?P<pct>\d+(?:[.,]\d+)?)%$")
+# SEC-22: an owner's name is letters, spaces, dots, hyphens and apostrophes, at most 60 characters. A line that
+# carries a URL or instructions in the name is not an owner line (fails closed: the owner is missing, a card opens).
+OWNER_RE = re.compile(r"^(?P<name>[^\W\d_](?:[^\W\d_]|[ .'’-]){0,59}?)\s+—\s+(?P<pct>\d+(?:[.,]\d+)?)%$")
 INJECTION_RE = re.compile(r"(ignore (all |previous )?(rules|instructions)|ignoră regulile|system:|approve (the )?(file|loan))", re.I)
 
 

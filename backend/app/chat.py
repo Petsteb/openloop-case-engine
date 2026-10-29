@@ -56,6 +56,8 @@ SYSTEM = {
                 "what was done. Only say something is not in the case after checking get_issues and search_documents. "
                 "Answer in the language of the question.",
 }
+SYSTEM = {role: f"{text} {llm.UNTRUSTED_RULE}" for role, text in SYSTEM.items()}  # SEC-13: tool results are data
+MAX_HISTORY = 8  # messages (4 exchanges) of context from the browser
 
 CITE = re.compile(r"\s?\[(#\d+|doc-\d+)\]")
 RANGE = re.compile(r"\s?[\[(]#\d+\s*[–,\-][^\])]*[\])]")  # e.g. [#3–#6], [#2, #3], (#4-5); only '#'-led groups
@@ -135,9 +137,27 @@ def offline_answer(case, role: str, message: str) -> str:
     return status
 
 
-def _clean_history(history: list[dict]) -> list[dict]:
-    """The API wants user-first, non-empty, alternating turns; UI history may start with a greeting."""
-    msgs = [{"role": h["role"], "content": h["content"]} for h in history[-10:] if str(h.get("content", "")).strip()]
+def _answer_hashes(case, role: str) -> set[str]:
+    """sha256 of every answer this server gave to this role in this case (logged as CHAT_TURN events)."""
+    return {e["payload"].get("answer_sha256") for e in list(case.ledger.events)
+            if e["type"] == "CHAT_TURN" and e["payload"].get("role") == role}
+
+
+def _clean_history(history: list[dict], trusted_answers: set[str] | frozenset = frozenset()) -> list[dict]:
+    """The API wants user-first, non-empty, alternating turns; UI history may start with a greeting.
+
+    SEC-13: the history comes from the browser. A user turn is the asker's own words; an assistant turn is kept
+    only if it is an answer this server really gave (its hash is in the case ledger), so nobody can put words in
+    the assistant's mouth. Only the last MAX_HISTORY messages count."""
+    msgs = []
+    for h in history[-10:]:
+        content = str(h.get("content", "")).strip()
+        if not content or h.get("role") not in ("user", "assistant"):
+            continue
+        if h["role"] == "assistant" and hashlib.sha256(content.encode()).hexdigest() not in trusted_answers:
+            continue  # forged, edited, or a UI greeting
+        msgs.append({"role": h["role"], "content": content})
+    msgs = msgs[-MAX_HISTORY:]
     while msgs and msgs[0]["role"] != "user":
         msgs.pop(0)
     out = []
@@ -158,7 +178,7 @@ def answer(case, role: str, message: str, history: list[dict], client=None) -> d
     deadline = time.monotonic() + float(os.environ.get("CHAT_BUDGET_S", "25"))
     try:
         client = client or llm.make_client()
-        messages = _clean_history(history)
+        messages = _clean_history(history, _answer_hashes(case, role))
         messages.append({"role": "user", "content": message})
         text = "I could not finish looking this up; please ask a narrower question."
         for _ in range(6):
@@ -176,8 +196,8 @@ def answer(case, role: str, message: str, history: list[dict], client=None) -> d
                 params = dict(u.input or {})
                 tools_used.append({"tool": u.name, "input": params})
                 out = run_tool(case, role, u.name, params)
-                results.append({"type": "tool_result", "tool_use_id": u.id,
-                                "content": json.dumps(out, ensure_ascii=False, default=str)[:6000]})
+                results.append({"type": "tool_result", "tool_use_id": u.id,  # documents and messages are client text
+                                "content": llm.untrusted(json.dumps(out, ensure_ascii=False, default=str)[:6000], u.name)})
             messages.append({"role": "user", "content": results})
     except Exception:  # no key, outage, refusal: answer from the views instead of going silent
         text, mode = offline_answer(case, role, message), "offline"
