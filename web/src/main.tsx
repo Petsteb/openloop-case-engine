@@ -4,6 +4,10 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
 import App from './App.tsx'
+import { installSessionGuard } from './shared/session'
+
+// A 401 means the session ended: back to /login/, then here again (backend/app/auth.py).
+installSessionGuard('staff')
 
 // The bank screen scales its type on wide screens (index.css, `html.bank`); the portal shares index.css but not this.
 document.documentElement.classList.add('bank')

@@ -1,0 +1,45 @@
+/* Sign-in page (lg- prefix). Same tokens as both apps: monochrome, hairlines, no shadows; blue only for "needs you". */
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin: 0; }
+.lg-page { min-height: 100dvh; box-sizing: border-box; display: grid; gap: 28px; align-content: center; justify-content: center;
+  grid-template-columns: minmax(0, 420px); padding: 40px 16px; }
+@media (min-width: 980px) { .lg-page { grid-template-columns: minmax(0, 420px) minmax(0, 460px); align-items: start; gap: 56px; } }
+
+.lg-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: 28px 28px 30px; }
+.lg-brand { padding-top: 0; margin-bottom: 26px; }
+.lg-title { font-family: var(--display); font-weight: 500; font-size: clamp(1.75rem, 3vw, 2.25rem); letter-spacing: -.03em; line-height: 1.05; margin: 0 0 10px; }
+.lg-sub { color: var(--muted); font-size: .9375rem; line-height: 1.45; margin: 0 0 22px; }
+.lg-form { display: grid; }
+.lg-label { font-size: .8125rem; color: var(--ink-2); margin: 14px 0 6px; }
+.lg-label:first-of-type { margin-top: 0; }
+.lg-input { font: inherit; font-size: 1rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px;
+  padding: 11px 12px; min-height: 44px; box-sizing: border-box; width: 100%; }
+.lg-input:focus-visible { outline: 2px solid var(--attn); outline-offset: 1px; border-color: transparent; }
+.lg-code { font-family: var(--mono); font-size: 1.5rem; letter-spacing: .35em; text-align: center; }
+.lg-error { color: var(--conflict); font-size: .875rem; margin: 12px 0 0; }
+.lg-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.lg-row .btn { min-height: 40px; padding-inline: 18px; }
+.lg-alt { display: grid; justify-items: start; gap: 12px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.lg-or { color: var(--muted); font-size: .8125rem; }
+.lg-google { min-height: 44px; }
+
+.lg-demo { border: 1px dashed var(--line-2); border-radius: 18px; padding: 22px 22px 18px; }
+.lg-demo-head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.lg-demo h2 { font-family: var(--display); font-weight: 500; font-size: 1.125rem; margin: 0 0 6px; letter-spacing: -.01em; }
+.lg-demo p { color: var(--muted); font-size: .8125rem; line-height: 1.45; margin: 0; max-width: 34ch; }
+.lg-demo code { font-family: var(--mono); color: var(--ink); }
+.lg-timer { flex: none; width: 64px; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 8px; }
+.lg-timer span { display: block; height: 100%; background: var(--ink); transition: width 1s linear; }
+.lg-group h3 { font-size: .75rem; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 6px; }
+.lg-group ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.lg-acct { all: unset; box-sizing: border-box; display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 9px 10px; min-height: 44px; border-radius: 10px; cursor: pointer; border-top: 1px solid var(--line); }
+.lg-group li:first-child .lg-acct { border-top-color: transparent; }
+.lg-acct:hover:not(:disabled), .lg-acct:focus-visible { background: var(--surface-2); }
+.lg-acct:focus-visible { outline: 2px solid var(--attn); }
+.lg-acct.is-active { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--attn); }
+.lg-acct:disabled { cursor: progress; opacity: .7; }
+.lg-acct-who { display: grid; min-width: 0; }
+.lg-acct-who b { font-weight: 500; font-size: .875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-acct-who span { font-size: .75rem; color: var(--muted); }
+.lg-acct-code { font-family: var(--mono); font-size: 1.0625rem; letter-spacing: .08em; flex: none; }
+

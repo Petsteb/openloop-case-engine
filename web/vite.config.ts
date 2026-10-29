@@ -28,12 +28,13 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  // Two pages: the bank screen (/) and the client portal (/client/ -> dist/client/index.html).
+  // Three pages: the bank screen (/), the client portal (/client/ -> dist/client/index.html) and sign-in (/login/).
   build: {
     rolldownOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         client: fileURLToPath(new URL('./client/index.html', import.meta.url)),
+        login: fileURLToPath(new URL('./login/index.html', import.meta.url)),
       },
     },
   },

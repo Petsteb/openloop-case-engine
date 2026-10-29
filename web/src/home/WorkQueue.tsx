@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Btn } from '@/components/Btn'
 import { Icon } from '@/components/Icon'
 import { store } from '@/lib/store'
+import { SessionChip } from '@/shared/session'
 import { Bell } from './Bell'
 import { NewCaseSheet } from './NewCase'
 import { invalidateQueue, useQueue } from './queue'
@@ -101,6 +102,7 @@ export function WorkQueue({ theme, onTheme }: Props) {
           ) : null}
           <div className="case-tools">
             <Btn size="sm" onClick={() => setCreating(true)}><Icon name="plus" size={14} />New case</Btn>
+            <SessionChip app="staff" />
             <Bell />
             <button type="button" className="btn quiet icon-only sm" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />

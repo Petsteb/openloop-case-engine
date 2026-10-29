@@ -3,6 +3,7 @@ import type { Bundle, VerifyResult } from '@/lib/types'
 import { Bell } from '@/home/Bell'
 import type { CaseExtra } from '@/home/types'
 import { HOME_HREF } from '@/home/useHashRoute'
+import { SessionChip } from '@/shared/session'
 import { Btn } from './Btn'
 import { Icon } from './Icon'
 
@@ -78,6 +79,7 @@ export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme,
           <a className="btn quiet sm" href={`/client/#/case/${encodeURIComponent(caseId)}`} target="_blank" rel="noopener" title="Open what the client sees, in a new window">
             Preview client view<Icon name="external" size={13} />
           </a>
+          <SessionChip app="staff" />
           <Bell currentCaseId={caseId} onOpenMessages={onOpenMessages} />
           <button type="button" className="btn quiet icon-only sm" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />

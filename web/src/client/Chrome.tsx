@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { SessionChip, useMe } from '@/shared/session'
 import { Icon } from './Icon'
 import { notificationText, plural } from './derive'
 import { caseHref, HOME_HREF } from './route'
@@ -19,6 +20,7 @@ interface StripProps {
 export function DemoStrip({ theme, onTheme, companies, companyId, onCompany }: StripProps) {
   const list = companies && companies.length ? companies : null
   const current = list?.find((c) => c.id === companyId)
+  const me = useMe()
   return (
     <div className="pt-demo">
       <div className="pt-demo-in">
@@ -35,9 +37,12 @@ export function DemoStrip({ theme, onTheme, companies, companyId, onCompany }: S
           ) : <span className="pt-picker-wait">…</span>}
         </label>
         <div className="pt-demo-tools">
-          <a className="pt-demo-link" href="/" target="_blank" rel="noopener" aria-label="Bank screen (opens in a new tab)">
-            <span>Bank screen</span><Icon name="external" size={13} />
-          </a>
+          <SessionChip app="client" />
+          {me?.auth && me.client && !me.staff ? null : (
+            <a className="pt-demo-link" href="/" target="_blank" rel="noopener" aria-label="Bank screen (opens in a new tab)">
+              <span>Bank screen</span><Icon name="external" size={13} />
+            </a>
+          )}
           <button type="button" className="pt-icon-btn" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
           </button>
