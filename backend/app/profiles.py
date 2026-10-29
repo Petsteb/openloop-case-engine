@@ -5,6 +5,7 @@ scenario for the demo dock. "aurora" is the original demo case and keeps its han
 Each profile has a `story`: the one problem its file exercises, so every rule path has a reproducible case.
 """
 from . import scenario as S
+from .template import TEMPLATES
 from .rules import CUI_KEY
 
 
@@ -24,6 +25,7 @@ PROFILES: dict[str, dict] = {
         "client_id": "C-1042", "actor_id": "brutaria-aurora", "email": "andrei.munteanu@brutaria-aurora.example",
         "city": "Cluj-Napoca", "county": "Cluj", "caen": "1071 Fabricarea pâinii",
         "product": "Working-capital loan, 500,000 RON", "templates": ["sme_loan"],
+        "people": ["Andrei Munteanu", "Elena Munteanu", "Radu Pop"],
         "story": "Undeclared co-owner, address written two ways, certificate expiring mid-file, insider pattern",
     },
     "verde": {
@@ -326,13 +328,14 @@ def samples_for(profile_id: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-def snapshot(profile_id: str) -> dict:
-    """What the ledger records about the client when a case opens (the ledger stays self-describing)."""
+def snapshot(profile_id: str, template: str = "sme_loan") -> dict:
+    """What the ledger records about the client when a case opens (the ledger stays self-describing).
+    The product line follows the file: a loan company's annual review is not a loan."""
     c = PROFILES[profile_id]
-    return {k: c[k] for k in ("id", "name", "legal_name", "cui", "client_id", "email", "city", "county", "product")} | {
-        "actor_id": c.get("actor_id", profile_id),
-        "people": ([_name(o) for o in c["owners"]] + [_name(c["admin"])] if "owners" in c
-                   else ["Andrei Munteanu", "Elena Munteanu", "Radu Pop"])}
+    product = c["product"] if template == "sme_loan" else TEMPLATES[template]["title"]
+    people = c.get("people") or list(dict.fromkeys([_name(o) for o in c["owners"]] + [_name(c["admin"])]))
+    return {k: c[k] for k in ("id", "name", "legal_name", "cui", "client_id", "email", "city", "county")} | {
+        "product": product, "actor_id": c.get("actor_id", profile_id), "people": people}
 
 
 def profile_of(events: list[dict]) -> dict:

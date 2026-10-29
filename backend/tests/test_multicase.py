@@ -257,3 +257,10 @@ def test_clients_see_staff_names_without_internal_roles():
     assert client["author"]["name"] == "Ana Pop" and staff["author"]["name"] == "Ana Pop (analyst)"
     notes = c.get("/api/notifications", params={"role": "client", "company_id": "aurora"}).json()
     assert any(n["text"].startswith("Ana Pop: ") for n in notes) and "analyst" not in json.dumps(notes)
+
+
+def test_an_annual_review_of_a_loan_company_is_not_labelled_a_loan():
+    b = c.post("/api/cases", json={"template": "kyb_review", "company_id": "verde"}).json()
+    assert b["case"]["product"] == "Annual business review"
+    assert c.post("/api/cases", json={"template": "sme_loan", "company_id": "verde"}).json()["case"]["product"].startswith(
+        "Working-capital loan")
