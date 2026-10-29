@@ -206,7 +206,7 @@ export function Login() {
           </form>
         ) : (
           <form onSubmit={(e) => void submitPassword(e)} className="lg-form" noValidate>
-            <h1 id="lg-title" className="lg-title">{wantsClient ? 'Sign in to your files' : 'Sign in'}</h1>
+            <h1 id="lg-title" className="lg-title">Sign in</h1>
             <p className="lg-sub">Bank staff and clients sign in here. A one-time code from your authenticator app is always asked.</p>
             <label className="lg-label" htmlFor="lg-email">E-mail</label>
             <input id="lg-email" className="lg-input" type="email" autoComplete="username" value={email}
