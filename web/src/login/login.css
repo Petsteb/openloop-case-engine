@@ -24,6 +24,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .lg-or { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--muted); font-size: .8125rem; }
 .lg-or::before, .lg-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .lg-google { width: 100%; max-width: 400px; min-height: 44px; display: flex; justify-content: center; }
+/* Google's button is a light iframe: a matching colour scheme keeps the browser from painting a white box behind it */
+.lg-google, .lg-google iframe { color-scheme: light; }
 
 .lg-demo { border: 1px dashed var(--line-2); border-radius: 18px; padding: 22px 22px 18px; }
 .lg-demo-head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
