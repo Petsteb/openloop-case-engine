@@ -1,6 +1,7 @@
 /* The signed-in chip in both apps' headers ("Ana Pop · Analyst  Sign out"). */
-.session-chip { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.session-chip { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
 .session-who { display: grid; line-height: 1.15; text-align: right; min-width: 0; }
-.session-who b { font-weight: 500; font-size: .8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16ch; }
+/* The whole name, never cut off: a long company name wraps onto a second line, the role stays underneath. Shown on
+   phones too (the header rows wrap, so the chip can drop below the other items). */
+.session-who b { font-weight: 500; font-size: .8125rem; overflow-wrap: anywhere; text-wrap: balance; max-width: 24ch; }
 .session-who span { font-size: .6875rem; color: var(--muted); white-space: nowrap; }
-@media (max-width: 640px) { .session-who { display: none; } }
