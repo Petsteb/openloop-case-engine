@@ -221,6 +221,7 @@ def reset_demo(all_cases: bool = Query(False, alias="all")):
         if all_cases:
             STORE.wipe()
             CASES.clear()
+            learner.PROMOTED.clear()  # the wipe removed the CHECK_PROMOTED events: a restart would forget them too
             _seed()
         else:
             STORE.clear_events("demo-1")

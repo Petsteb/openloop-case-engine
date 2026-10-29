@@ -98,3 +98,12 @@ def test_learning_overview_lists_rulings_and_where_they_were_reused():
     assert mine and mine[0]["decision"] == "same_address" and mine[0]["by"] == "analyst-1"
     assert o["proposals"] and o["proposals"][0]["support"] >= o["min_support"]  # 2 past rulings + this one
     assert not [a for a in o["applied"] if a["case_id"] == "demo-1"]  # a fresh ruling is not a reuse
+
+
+def test_full_reset_forgets_promoted_checks_like_a_restart_would():
+    from fastapi.testclient import TestClient
+    from app import learner
+    from app.main import app
+    learner.PROMOTED.append({"id": "LC-9", "proposal_id": learner.PROPOSAL_ID, "promoted_by": "supervisor-1"})
+    TestClient(app).post("/api/demo/reset?all=true")
+    assert not learner.PROMOTED  # otherwise the next demo run settles the address with no card
