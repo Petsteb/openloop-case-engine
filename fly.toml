@@ -1,0 +1,47 @@
+# Fly.io alternative to render.yaml. See docs/deploy.md.
+#   fly launch --copy-config --no-deploy      # rename `app` if openloop-demo is taken
+#   fly volumes create openloop_data --region fra --size 1
+#   fly secrets set SESSION_SECRET=$(openssl rand -hex 32)
+#   fly secrets set GOOGLE_CLIENT_ID=...                  # optional (Google sign-in)
+#   fly secrets set AWS_BEARER_TOKEN_BEDROCK=...          # optional, then AGENT_MODE=bedrock
+#   fly secrets set FEATHERLESS_API_KEY=...               # optional, then JUDGE_MODE=featherless
+#   fly deploy
+app = "openloop-demo"
+# Bucharest (otp) is no longer a Fly region; Frankfurt is the closest.
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  AGENT_MODE = "scripted"
+  JUDGE_MODE = "heuristic"
+  EMAIL_MODE = "outbox"
+  OPENLOOP_DB = "/data/openloop.db"
+  OPENLOOP_AUTH = "on"
+  DEMO_LOGINS = "1"
+
+[mounts]
+  source = "openloop_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Scales to zero when idle (cheap); the first request after idle waits for a cold start.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/api/health"
+
+# One machine only: cases live in process memory with a single writer (see Dockerfile).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

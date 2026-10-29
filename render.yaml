@@ -1,0 +1,37 @@
+# Render Blueprint: New > Blueprint > pick the repo (Petsteb/openloop-case-engine). See docs/deploy.md.
+services:
+  - type: web
+    name: openloop
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Persistent disks need a paid plan. The free plan works if you delete the `disk:` block below,
+    # but then the SQLite file is ephemeral: every case resets on each deploy or restart.
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: false
+    disk:
+      name: openloop-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: AGENT_MODE
+        value: scripted
+      - key: JUDGE_MODE
+        value: heuristic
+      - key: EMAIL_MODE
+        value: outbox
+      - key: OPENLOOP_DB
+        value: /data/openloop.db
+      - key: OPENLOOP_AUTH
+        value: "on"
+      - key: DEMO_LOGINS
+        value: "1"
+      - key: SESSION_SECRET
+        generateValue: true
+      # Optional: set in the dashboard (never committed). Only then switch AGENT_MODE / JUDGE_MODE.
+      - key: AWS_BEARER_TOKEN_BEDROCK
+        sync: false
+      - key: FEATHERLESS_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
