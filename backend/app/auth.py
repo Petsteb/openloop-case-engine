@@ -151,9 +151,12 @@ class Users:
     def __init__(self, path: str):
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path, check_same_thread=False)
+        from .store import connect
+        self.db = connect(path)
         self.db.row_factory = sqlite3.Row
         self.lock = threading.Lock()
+        self._by_id: dict[str, dict] = {}  # every request checks its session's user: served from memory, exact
+        # because every write below goes through this object and clears it (one process owns the file)
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
             columns = {r[1] for r in self.db.execute("PRAGMA table_info(users)")}
@@ -162,7 +165,11 @@ class Users:
 
     def get(self, user_id: str) -> dict | None:
         with self.lock:
+            if user_id in self._by_id:
+                return dict(self._by_id[user_id])
             row = self.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                self._by_id[user_id] = dict(row)
         return dict(row) if row else None
 
     def by_email(self, email: str) -> dict | None:
@@ -200,11 +207,13 @@ class Users:
 
     def update(self, user_id: str, **fields) -> None:
         with self.lock, self.db:
+            self._by_id.pop(user_id, None)
             self.db.execute(f"UPDATE users SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?",
                             (*fields.values(), user_id))
 
     def bump_session(self, user_id: str) -> None:
         with self.lock, self.db:
+            self._by_id.pop(user_id, None)
             self.db.execute("UPDATE users SET session_version = session_version + 1 WHERE id = ?", (user_id,))
 
     def seed_demo(self) -> None:
