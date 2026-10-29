@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon'
 import { store } from '@/lib/store'
 import { SessionChip } from '@/shared/session'
 import { Bell } from './Bell'
-import { LearnedPanel } from './LearnedPanel'
+import { LearnedPanel, useLearnedSummary } from './LearnedPanel'
 import { NewCaseSheet } from './NewCase'
 import { invalidateQueue, useQueue } from './queue'
 import {
@@ -12,7 +12,7 @@ import {
 } from './queue-derive'
 import { getSeen } from './seen'
 import type { CaseRow } from './types'
-import { caseHref } from './useHashRoute'
+import { caseHref, HOME_HREF, LEARNED_HREF, type HomeTab } from './useHashRoute'
 import './home.css'
 
 const DOT: Record<ReturnType<typeof bucketOf>, string> = { needs: 'need', ready: 'done', hold: 'hold', waiting: 'wait', working: 'wait' }
@@ -64,11 +64,13 @@ function Row({ r, unread }: { r: CaseRow; unread: boolean }) {
   )
 }
 
-interface Props { theme: 'dark' | 'light'; onTheme: () => void }
+interface Props { tab: HomeTab; theme: 'dark' | 'light'; onTheme: () => void }
 
-/** The bank analyst's home: every open file, the ones that need a person first (the server's order is kept). */
-export function WorkQueue({ theme, onTheme }: Props) {
+/** The bank analyst's home: every open file, the ones that need a person first (the server's order is kept).
+    A second tab (#/learned) holds what the agent has learned across all files. */
+export function WorkQueue({ tab, theme, onTheme }: Props) {
   const { rows, fallback, error, seenRev } = useQueue()
+  const learned = useLearnedSummary(rows)
   const [filter, setFilter] = useState<Filter>(() => {
     const f = store.get<Filter>('queue-filter', 'all')
     return FILTERS.some((x) => x.id === f) ? f : 'all'
@@ -89,8 +91,11 @@ export function WorkQueue({ theme, onTheme }: Props) {
         <div className="casehead-main">
           <span className="brand"><span className="brand-mark" aria-hidden="true" />OpenLoop</span>
           <div style={{ minWidth: 0 }}>
-            <h1 className="case-name">Work queue</h1>
-            <div className="case-sub">{rows ? `${filesWord(list.length)}, the ones that need you first` : 'Bank files across every client'}</div>
+            <h1 className="case-name">{tab === 'learned' ? 'Learned checks' : 'Work queue'}</h1>
+            <div className="case-sub">
+              {tab === 'learned' ? 'What the agent has learned from analysts’ rulings, across every file'
+                : rows ? `${filesWord(list.length)}, the ones that need you first` : 'Bank files across every client'}
+            </div>
           </div>
         </div>
         <div className="case-side">
@@ -112,6 +117,19 @@ export function WorkQueue({ theme, onTheme }: Props) {
         </div>
       </header>
 
+      {/* Tabs are links (the hash is the state), styled like the case screen's right-panel tabs */}
+      <nav className="rtabs home-tabs" aria-label="Home">
+        <a href={HOME_HREF} className="rtab" data-state={tab === 'queue' ? 'active' : 'inactive'} aria-current={tab === 'queue' ? 'page' : undefined}>
+          Work queue{rows ? <sup>{list.length}</sup> : null}
+        </a>
+        <a href={LEARNED_HREF} className="rtab" data-state={tab === 'learned' ? 'active' : 'inactive'} aria-current={tab === 'learned' ? 'page' : undefined}
+          title={learned?.pending ? `${learned.pending} proposed check${learned.pending === 1 ? '' : 's'} waiting for approval` : undefined}>
+          Learned checks{learned ? <sup>{learned.checks}</sup> : null}
+          {learned?.pending ? <><span className="rtab-new" aria-hidden="true" /><span className="sr-only">, a proposal waits for approval</span></> : null}
+        </a>
+      </nav>
+
+      {tab === 'learned' ? <LearnedPanel rev={rows} /> : (
       <section className="q-wrap" aria-label="Files">
         <div className="q-bar">
           <div className="seg q-seg" role="group" aria-label="Show">
@@ -145,8 +163,8 @@ export function WorkQueue({ theme, onTheme }: Props) {
           </>
         )}
       </section>
+      )}
 
-      <LearnedPanel rev={rows} />
       <NewCaseSheet open={creating} onOpenChange={setCreating} />
     </main>
   )

@@ -41,16 +41,17 @@ export default function App() {
   const [dock, setDock] = useState<boolean>(!STARTED_CLEAN)
   useEffect(() => { document.documentElement.dataset.theme = theme; store.set('theme', theme) }, [theme])
   const onTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
-  const screen = route.name === 'case' ? `case:${route.id}` : 'home'
+  const screen = route.name === 'case' ? `case:${route.id}` : `home:${route.tab}`
   useEffect(() => {
     try { window.scrollTo(0, 0) } catch { /* no window */ }
-    if (screen === 'home') document.title = 'Work queue | OpenLoop'
+    if (screen === 'home:queue') document.title = 'Work queue | OpenLoop'
+    else if (screen === 'home:learned') document.title = 'Learned checks | OpenLoop'
   }, [screen])
 
   if (route.name === 'home') {
     return (
       <Boundary name="work queue" fallback={<main className="page"><p className="muted" role="alert">The work queue could not be shown. Reload the page to try again.</p></main>}>
-        <WorkQueue theme={theme} onTheme={onTheme} />
+        <WorkQueue tab={route.tab} theme={theme} onTheme={onTheme} />
       </Boundary>
     )
   }

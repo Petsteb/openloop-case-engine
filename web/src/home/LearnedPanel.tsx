@@ -25,6 +25,19 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
 
 const day = (t?: string) => (t ? new Date(t).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '')
 
+/** For the home tab label: how many checks are live, and whether a proposal waits for a second person. Null: unknown. */
+export function useLearnedSummary(rev?: unknown): { checks: number; pending: number } | null {
+  const [s, setS] = useState<{ checks: number; pending: number } | null>(null)
+  useEffect(() => {
+    let live = true
+    call<Overview>('GET', '/api/learning/overview')
+      .then((d) => { if (live) setS({ checks: d.checks?.length ?? 0, pending: d.proposals?.length ?? 0 }) })
+      .catch(() => { if (live) setS(null) })
+    return () => { live = false }
+  }, [rev])
+  return s
+}
+
 export function LearnedPanel({ rev }: { rev?: unknown }) {
   const [data, setData] = useState<Overview | null>(null)
   const [gone, setGone] = useState(false)

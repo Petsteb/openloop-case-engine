@@ -10,6 +10,12 @@
 
 /* ---------- filter chips ---------- */
 .q-wrap { display: flex; flex-direction: column; min-width: 0; border-top: 1px solid var(--line); padding-top: 14px; }
+/* Home tabs (Work queue | Learned checks): the case screen's .rtabs, at page size; the hairline under them replaces the
+   sections' own top border */
+.home-tabs { justify-content: flex-start; gap: 28px; flex: none; margin: 2px 0 0; padding: 0 0 6px; border-bottom: 1px solid var(--line); }
+.home-tabs .rtab { font-size: .9375rem; padding: 6px 0; text-decoration: none; display: inline-flex; align-items: baseline; }
+.home-tabs .rtab[data-state="active"]::after { bottom: -7px; }
+.home-tabs + .q-wrap, .home-tabs + .lp { border-top: 0; margin-top: 0; }
 .q-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding-bottom: 12px; min-width: 0; }
 .q-segn { font-family: var(--mono); font-size: 0.6875rem; margin-left: 7px; opacity: .85; }
 
