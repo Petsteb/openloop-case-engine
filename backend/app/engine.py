@@ -664,8 +664,15 @@ def _evaluate(st: dict, req_id: str) -> dict:
         ea, ef = X[app["id"]], X[fin["id"]]
         ebitda, existing = extract.amount(ef, "ebitda"), extract.amount(ef, "existing_annual_debt_service")
         new = extract.amount(ea, "new_annual_debt_service")
-        value = rules.dscr(ebitda, existing, new)
         ev = _ev(fin, ef, "ebitda") + _ev(fin, ef, "existing_annual_debt_service") + _ev(app, ea, "new_annual_debt_service")
+        # SEC-06: a missing or unreadable amount is never 0, and debt service must be a positive amount
+        missing = [n for n, v in (("EBITDA", ebitda), ("existing annual debt service", existing),
+                                  ("new annual debt service", new)) if v is None]
+        if missing or existing < 0 or new < 0 or existing + new <= 0:
+            why = (f"{', '.join(missing)} missing or unreadable" if missing else "debt service must be a positive amount")
+            return {"status": "NEEDS_REVIEW", "reason": f"DSCR cannot be computed: {why} (HR-07)", "evidence": ev,
+                    "details": {"kind": "dscr_unreadable", "snippets": ev}}
+        value = rules.dscr(ebitda, existing, new)
         status = "SATISFIED" if rules.dscr_ok(value) else "CONTRADICTED"
         return {"status": status, "reason": f"DSCR = {ebitda:,.0f} / ({existing:,.0f} + {new:,.0f}) = {value} "
                 f"({'≥' if status == 'SATISFIED' else '<'} {T.DSCR_MIN})", "evidence": ev,
@@ -806,11 +813,12 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
         "inactive": ("high", "Company is not active in the trade register", noted),
         "bad_cui": ("high", "Tax ID fails the official checksum", noted),
         "dscr": ("medium", f"Debt service coverage below {T.DSCR_MIN}", noted),
+        "dscr_unreadable": ("medium", "Debt service coverage cannot be computed from the documents", noted),
     }
     severity, title, actions = cards.get(kind, ("medium", f"Check failed: {req['title']}", noted))
     # the rule the card cites is the one that failed, not the first rule of the requirement
     rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
-               "address_differs": "HR-06", "dscr": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
+               "address_differs": "HR-06", "dscr": "HR-07", "dscr_unreadable": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
                "signatory_uncertain": "JQ-02", "signatory_differs": "JQ-02"}.get(
         kind, next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0]))
     ex_id = case._next_id("EX", "exceptions")

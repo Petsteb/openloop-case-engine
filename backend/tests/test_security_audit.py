@@ -159,18 +159,30 @@ def _r4_after(financials: str) -> dict:
     return case.state()["reqs"]["R4"]
 
 
-@xfail("SEC-06", "parse_amount drops the minus sign: an EBITDA loss reads as a profit")
+# Fixed (theo/logic-fixes): parse_amount keeps the sign; a missing amount is None; dscr never divides by <= 0.
 def test_sec06_negative_ebitda_fails_dscr():
     require(_r4_after(FINANCIALS)["status"] == "SATISFIED", "baseline DSCR 1.4 should pass")
     r4 = _r4_after(FINANCIALS.replace("EBITDA: 420.000 RON", "EBITDA: -420.000 RON"))
     assert r4["status"] != "SATISFIED", r4["reason"]
+    r4 = _r4_after(FINANCIALS.replace("EBITDA: 420.000 RON", "EBITDA: (420.000) RON"))   # accounting notation
+    assert r4["status"] != "SATISFIED", r4["reason"]
 
 
-@xfail("SEC-06", "a missing debt-service line counts as 0, so DSCR passes")
 def test_sec06_missing_existing_debt_line_does_not_pass_dscr():
     low = FINANCIALS.replace("EBITDA: 420.000 RON", "EBITDA: 250.000 RON")   # 250k / (180k + 120k) = 0.83
     require(_r4_after(low)["status"] == "CONTRADICTED", "baseline DSCR 0.83 should fail")
     r4 = _r4_after(low.replace("Serviciul anual al datoriei existente: 180.000 RON\n", ""))
+    assert r4["status"] != "SATISFIED", r4["reason"]
+
+
+def test_sec06_amount_and_dscr_edge_cases():
+    from app import rules as R
+    assert R.parse_amount("-420.000 RON") == -420000 and R.parse_amount("(420.000) RON") == -420000
+    assert R.parse_amount("420.000,50 RON") == 420000.5 and R.parse_amount("n/a") is None
+    assert R.dscr(420000, 0, 0) is None and not R.dscr_ok(R.dscr(420000, 0, 0))     # zero denominator never passes
+    assert not R.dscr_ok(R.dscr(-420000, 180000, 120000))
+    r4 = _r4_after(FINANCIALS.replace("Serviciul anual al datoriei existente: 180.000 RON",
+                                      "Serviciul anual al datoriei existente: -180.000 RON"))
     assert r4["status"] != "SATISFIED", r4["reason"]
 
 
