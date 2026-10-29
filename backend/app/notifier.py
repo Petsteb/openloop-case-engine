@@ -11,16 +11,16 @@ import smtplib
 from email.message import EmailMessage
 
 from .profiles import profile_of, template_of
-from .template import TEMPLATES
+from .template import DOC_VALIDITY_DAYS, TEMPLATES
 
 ENGINE = {"type": "system", "id": "notifier"}
 NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED", "CLIENT_DISPUTE"}
 RO_LABELS = {
     "application": "Cererea de finanțare",
     "financial_statement": "Situațiile financiare anuale",
-    "ubo_declaration": "Declarația privind beneficiarul real (actualizată)",
+    "ubo_declaration": "Declarația privind beneficiarul real",
     "id_card": "Copia actului de identitate",
-    "onrc_certificate": "Certificatul constatator ONRC (emis în ultimele 30 de zile)",
+    "onrc_certificate": f"Certificatul constatator ONRC (emis în ultimele {DOC_VALIDITY_DAYS} de zile)",
     "fiscal_certificate": "Certificatul de atestare fiscală ANAF",
     "address_proof": "Dovada sediului social",
     "signatory_mandate": "Mandatul semnatarului",
@@ -80,7 +80,7 @@ def compose(events: list[dict]) -> dict | None:
     subject = ("Am înregistrat răspunsul dumneavoastră: vă vom contacta" if disputed and not (asks or reminders or ready
                                                                                               or rejected)
                else "Document neacceptat: vă rugăm să încărcați documentul corect" if rejected and not (asks or reminders or ready)
-               else "Dosar complet: decizia urmează" if ready and not (asks or reminders)
+               else f"Dosar complet: {t['ready_subject_ro']}" if ready and not (asks or reminders)
                else "Reamintire: documente necesare" if reminders and not asks
                else f"Documente necesare pentru {t['file_ro']}")
     client = profile_of(events)

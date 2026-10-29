@@ -533,7 +533,7 @@ def _bank_quarantine_reason(d: dict, applicant_cui: str) -> str | None:
 def version(case: Case) -> dict:
     """Cheap change detector for polling: ledger length + current case status."""
     status = next((e["payload"]["status"] for e in reversed(case.ledger.events) if e["type"] == "CASE_STATUS"), "OPEN")
-    return {"length": len(case.ledger.events), "status": status}
+    return {"length": len(case.ledger.events), "status": "OPEN" if status == "ON_HOLD" else status}  # polled by clients
 
 
 # ----------------------------------------------------------------------------- home screen and notifications
@@ -613,6 +613,10 @@ def notifications(case: Case, role: str) -> list[dict]:
         for x in st["exceptions"].values():
             if x["status"] == "OPEN":
                 out.append(base(by_seq[x["seq"]], "action", f"Decision needed: {x.get('title') or x['kind']}"))
+        failed = [r for r in st["reqs"].values() if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW")]
+        if failed and not any(x["status"] == "OPEN" for x in st["exceptions"].values()):
+            out.append(base(by_seq[failed[0]["seq"]], "action",
+                            f"Blocked: {failed[0]['title']} failed; the decision on the file is yours"))
         if st["status"] == "READY_FOR_DECISION":
             ready = max(e["seq"] for e in case.ledger.events
                         if e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION")

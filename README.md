@@ -114,6 +114,8 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **Quotes are verified:** every extracted field carries a verbatim quote. A field whose quote isn't in the document text is dropped and can never serve as evidence.
 
 ## Known limitations (demo scope)
+- **Access control is a demo stub.** `STAFF_TOKEN` gates only a few staff calls, and the client routes accept any company or case id. Fine for a demo with synthetic data; a public deployment must not hold real data. Production takes identity and permissions from the bank's SSO.
+- **Credit-bureau consent is recorded, not enforced.** An SME loan file can reach "complete" before the client consents, so that a presenter who skips the click doesn't break the demo. Production would gate the bureau check on it.
 - **Identity is simulated.** Roles (client, employee, compliance) and names (analyst, supervisor) come from the request; there is no login. `STAFF_TOKEN` can gate staff-only calls. Production would take identity from the bank's SSO, which is what makes the maker-checker rule binding.
 - **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.
 - **Learned check backtest.** It runs on a synthetic labelled set (`backend/eval/address_cases.jsonl`) that includes small-town counterexamples, where the naive rule makes 8 false approvals. It is evidence for the demo, not a substitute for backtesting on the bank's historical rulings.

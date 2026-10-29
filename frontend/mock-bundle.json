@@ -32,7 +32,7 @@
         {
           "doc_id": "doc-app",
           "field": "cui",
-          "quote": "CUI: RO48392014"
+          "quote": "CUI: RO94123877"
         }
       ],
       "updated_at": "2026-10-28T09:00:00Z"
@@ -407,7 +407,7 @@
         "type": "agent",
         "id": "case-agent"
       },
-      "summary": "lookup_registry(CUI RO48392014) returned status ACTIVĂ",
+      "summary": "lookup_registry(CUI RO94123877) returned status ACTIVĂ",
       "hash": "4cdeca465926213afbdb24471b9ac4ca7d480624f96983574d642657fd18c5e9",
       "prev_hash": "d00b16162ce59e5b9a82a30bc0e58a5abd27e4fdf3f2bacaebd8bc2970d71ffd"
     },
@@ -623,9 +623,9 @@
       "reason": "New application pack received; verify company identity first",
       "tool": "validate_cui",
       "input": {
-        "cui": "RO48392014"
+        "cui": "RO94123877"
       },
-      "output": "CUI RO48392014: checksum valid (HR-01)",
+      "output": "CUI RO94123877: checksum valid (HR-01)",
       "gate": "-"
     },
     {
@@ -634,7 +634,7 @@
       "reason": "Checksum is valid; check the trade register for status and associates",
       "tool": "lookup_registry",
       "input": {
-        "cui": "RO48392014"
+        "cui": "RO94123877"
       },
       "output": "ONRC: BRUTĂRIA AURORA S.R.L. · Stare firmă: ACTIVĂ · Asociați: MARINESCU ION 75%, POP RADU 25% · Sediu: Cluj-Napoca, Str. Fabricii nr. 12A",
       "gate": "-"

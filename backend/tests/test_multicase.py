@@ -282,3 +282,52 @@ def test_hard_rule_cards_cite_the_rule_that_failed_and_use_the_files_wording():
     review = _run("carpatic", "kyb_review")
     card = next(x for x in review.state()["exceptions"].values() if x["kind"] == "tax_debt")
     assert "annual review sign-off" in card["actions"][0]["label"] and "credit" not in card["actions"][0]["label"]
+
+
+# ----------------------------------------------------------------------------- final review fixes (03:30)
+def test_version_poll_never_reveals_the_hold():
+    _hold_demo()
+    assert c.get("/api/cases/demo-1/version").json()["status"] == "OPEN"
+
+
+def test_staff_names_reach_clients_only_as_plain_names():
+    from app.messages import client_facing_name
+    assert client_facing_name("Ana Pop - Compliance") == "Ana Pop"
+    assert client_facing_name("Ana Pop, Compliance Officer") == "Ana Pop"
+    assert client_facing_name("analyst-1") == client_facing_name("compliance-1") == "Bank team"
+
+
+def test_people_are_mentionable_only_once_a_document_names_them():
+    c.post("/api/demo/reset")
+    assert c.get("/api/cases/demo-1/mentionables", params={"role": "employee"}).json()["people"] == []
+    c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"})
+    c.post("/api/cases/demo-1/inbound", json={"item_id": "onrc-cert"})
+    people = [p["id"] for p in c.get("/api/cases/demo-1/mentionables", params={"role": "employee"}).json()["people"]]
+    assert "Radu Pop" in people and len(people) == len(set(people)) == 3
+
+
+def test_learned_checks_come_back_after_a_restart():
+    from app import learner, main
+    c.post("/api/demo/reset")
+    for item in ("day0-pack", "onrc-cert"):
+        c.post("/api/cases/demo-1/inbound", json={"item_id": item})
+    card = next(x for x in c.get("/api/cases/demo-1/bundle").json()["exceptions"] if x["kind"] == "address_uncertain")
+    c.post(f"/api/cases/demo-1/exceptions/{card['id']}/resolve", json={"action_id": "same_address"})
+    try:
+        assert c.post("/api/learning/proposals/P-address-variant/promote", json={"by": "supervisor-9"}).status_code == 200
+        learner.PROMOTED.clear()
+        main._load()
+        assert [k["proposal_id"] for k in learner.PROMOTED] == ["P-address-variant"]
+    finally:
+        learner.PROMOTED.clear()
+
+
+def test_annual_review_offers_no_loan_samples_and_blocked_files_notify_the_bank():
+    cid = c.post("/api/cases", json={"template": "kyb_review", "company_id": "verde"}).json()["case"]["id"]
+    keys = {s["key"].partition(":")[0] for s in c.get(f"/api/cases/{cid}/sample-files").json()}
+    assert not keys & {"application", "financial_statement", "signatory_mandate"}
+    carpatic = next(i for i, k in CASES.items() if k.profile["id"] == "carpatic" and i.startswith("case-"))
+    card = next(x for x in c.get(f"/api/cases/{carpatic}/bundle").json()["exceptions"] if x["status"] == "OPEN")
+    c.post(f"/api/cases/{carpatic}/exceptions/{card['id']}/resolve", json={"action_id": "acknowledge"})
+    staff = c.get("/api/notifications", params={"role": "employee"}).json()
+    assert any(n["case_id"] == carpatic and n["text"].startswith("Blocked:") for n in staff)

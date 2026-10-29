@@ -32,7 +32,7 @@ def _reason_for(action: dict, st: dict) -> str:
         return f"{p['req_id']} is {r['status']} — a human must decide; build a triage card with only the conflicting evidence"
     if tool == "request_document":
         return f"{_key_label(p['key'])} missing or expired — request it from the client (reminder in {T.REMINDER_AFTER_DAYS} days)"
-    return "All requirements satisfied and no open exceptions — hand the file to a human for the credit decision"
+    return f"All requirements satisfied and no open exceptions — hand the file to a human for the {T.TEMPLATES[st['template']]['decision']}"
 
 
 class BaseAgent:
