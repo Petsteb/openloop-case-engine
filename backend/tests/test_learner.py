@@ -82,3 +82,12 @@ def test_promoted_check_resolves_address_without_judge(monkeypatch):
     r3 = next(r for r in b["requirements"] if r["id"] == "R3")
     assert r3["status"] == "SATISFIED" and "Learned check LC-1" in r3["reason"]
     assert not any(x["kind"] == "address_uncertain" for x in b["exceptions"])
+
+
+def test_full_reset_forgets_promoted_checks_like_a_restart_would():
+    from fastapi.testclient import TestClient
+    from app import learner
+    from app.main import app
+    learner.PROMOTED.append({"id": "LC-9", "proposal_id": learner.PROPOSAL_ID, "promoted_by": "supervisor-1"})
+    TestClient(app).post("/api/demo/reset?all=true")
+    assert not learner.PROMOTED  # otherwise the next demo run settles the address with no card

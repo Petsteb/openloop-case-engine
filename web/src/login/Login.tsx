@@ -31,7 +31,8 @@ function destination(app: 'staff' | 'client'): string {
   if (app === 'client' && !path.startsWith('/client')) path = '/client/'  // a client never lands on the bank screen
   if (app === 'staff' && path.startsWith('/login')) path = '/'
   const hash = window.location.hash
-  return path + (hash && /^#\/[\w\-/]*$/.test(hash) ? hash : '')
+  if (hash && /^#\/[\w\-/]*$/.test(hash)) return path + hash
+  return path === '/' ? '/#/' : path  // staff land on the work queue; the portal picks the client's own files
 }
 
 declare global {

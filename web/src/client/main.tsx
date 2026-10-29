@@ -12,11 +12,8 @@ import { writeCompany } from './store'
 
 // Set the theme before the first paint (the bank screen's stored choice, else the system setting).
 document.documentElement.dataset.theme = initialTheme()
-// No hash: the demo file (#/case/demo-1), without a history entry, so /client/ links keep opening demo-1.
-ensureHash()
-// A 401 means the session ended: sign in again. A signed-in client always views its own company.
+// A 401 means the session ended: sign in again.
 installSessionGuard('client')
-void loadMe().then((me) => { if (me?.auth && me.client?.company_id) writeCompany(me.client.company_id) })
 
 // Pill buttons: the hover fill grows as a circle from the point where the cursor entered (same as the bank screen).
 document.addEventListener('pointerover', (e) => {
@@ -27,9 +24,15 @@ document.addEventListener('pointerover', (e) => {
   b.style.setProperty('--my', `${e.clientY - r.top}px`)
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <PortalBoundary><App /></PortalBoundary>
-    <Toaster position="bottom-center" />
-  </StrictMode>,
-)
+// A signed-in client always views its own company, so learn it before the first render. Then no hash opens that
+// company's files, or the demo file (#/case/demo-1) for the demo's company, without a history entry (ensureHash).
+void loadMe().then((me) => {
+  if (me?.auth && me.client?.company_id) writeCompany(me.client.company_id)
+  ensureHash()
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <PortalBoundary><App /></PortalBoundary>
+      <Toaster position="bottom-center" />
+    </StrictMode>,
+  )
+})
