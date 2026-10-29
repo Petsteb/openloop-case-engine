@@ -23,11 +23,22 @@ CREATE TABLE IF NOT EXISTS cases (
 """
 
 
+def connect(path: str | Path) -> sqlite3.Connection:
+    """One SQLite file holds the ledgers and the users, through separate connections. WAL lets readers and the
+    writer work at the same time (a reset rewriting ~500 events no longer starves a sign-in lookup), and a writer
+    waits up to 30 s for the file instead of failing at once. Writes within one connection are serialised by its lock."""
+    db = sqlite3.connect(str(path), check_same_thread=False, timeout=30)
+    if str(path) != ":memory:":
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")  # with WAL: durable across app crashes, one fsync per checkpoint
+    return db
+
+
 class Store:
     def __init__(self, path: str | Path):
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(path), check_same_thread=False)  # writes are serialised by main.LOCK
+        self.db = connect(path)
         self.lock = threading.Lock()
         with self.lock:
             self.db.executescript(SCHEMA)
