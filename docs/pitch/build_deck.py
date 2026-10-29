@@ -147,26 +147,6 @@ text(s, 0.95, 4.98, 11.4, 1.3, [
      ("— Raiffeisen Bank Romania on a 14,000-client remediation (research/01)", {"color": MUTED, "size": 14})]],
     size=18, after=8)
 
-# ---------------------------------------------------------------- 3. the real case
-s = new_slide("Both fines are public (ANSPDCP 2022 and 2024, research/01). The pattern is a sequence over time, which no "
-              "single-document check sees. SR-01 and SR-02 encode exactly the corrective order.")
-title(s, "The risk is in the sequence, not the document", "Two real data-protection fines against Raiffeisen Bank Romania")
-for i, (year, body, col) in enumerate([
-        ("2022", "Credit-bureau queries without the applicant's signed consent; a client's phone number replaced with an "
-                 "employee's", REVIEW),
-        ("2024", "An employee changed clients' phone and email details, then applied for credit products — all without "
-                 "consent", CONFLICT)]):
-    y = 2.15 + i * 1.55
-    dot(s, 0.6, y + 0.12, 0.34, col)
-    text(s, 1.15, y, 1.4, 0.6, year, size=26, bold=True, color=col)
-    text(s, 2.55, y + 0.05, 10.1, 1.2, body, size=18)
-box(s, 0.6, 5.3, 12.1, 1.35, fill=SURFACE)
-text(s, 0.95, 5.5, 11.4, 1.0, [
-    [("OpenLoop watches the ledger: ", {"bold": True}),
-     ("SR-01 flags a staff contact change followed by a credit action within 48 h with no client confirmation. "
-      "SR-02: the client confirms or disputes the change in the portal; a dispute opens a card that can put the file on hold.", {})]],
-    size=17)
-
 # ---------------------------------------------------------------- 4. architecture picture
 s = new_slide("One ledger per file; state is a replay of events. Code runs the pipeline; Claude plans behind a gate; the "
               "judge settles fuzzy matches; people decide on cards; both apps read the same ledger.")
@@ -192,26 +172,27 @@ box(s, 6.75, 5.2, 5.95, 1.05, line=LINE)
 text(s, 7.05, 5.38, 5.4, 1.1, [[("Two screens, one ledger  ", {"bold": True, "color": ATTN}),
                                 ("the bank's work queue and the client portal, each in its own words", {})]], size=16)
 
-# ---------------------------------------------------------------- 5. demo storyline
-s = new_slide("This is the video. Each step is one click on the demo toolbar or one analyst decision.")
-title(s, "One file, start to decision", "The bakery's SME loan and KYB file — the demo, in six moments")
-steps = [("Day 0", "4 documents arrive; DSCR 1.4 verified; the agent asks for what's missing", ATTN),
-         ("Register", "an undeclared 25% owner starts the legal clock; the address is written two ways", CONFLICT),
-         ("The gate", "a client email arrives; the agent tries to ask for a new declaration — denied until a person decides", REVIEW),
-         ("Decided", "two analyst clicks; corrected documents; the clock is cancelled; file complete", OK),
-         ("Expiry", "the certificate expires a week later; the engine reopens the file by itself", EXPIRED),
-         ("Insider", "a staff phone change, then a credit check; the client says “No, I didn't”; file on hold", CONFLICT)]
-for i, (head, body, col) in enumerate(steps):
-    x = 0.6 + i * 2.06
-    text(s, x, 2.15, 1.9, 0.5, f"{i + 1}", size=30, bold=True, color=col)
-    dot(s, x, 2.85, 0.2, col)
-    if i < len(steps) - 1:
-        line = s.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x + 0.24), Inches(2.95), Inches(x + 2.02), Inches(2.95))
-        line.line.color.rgb, line.line.width = rgb(LINE), Pt(1)
-    text(s, x, 3.3, 1.85, 0.5, head, size=18, bold=True)
-    text(s, x, 3.8, 1.85, 2.4, body, size=14, color=MUTED, spacing=1.15)
-text(s, 0.6, 6.5, 12.1, 0.5, "The credit decision stays human: the agent has no tool that approves credit.", size=16,
-     color=INK, bold=True)
+# ---------------------------------------------------------------- 5. one workflow, input to outcome
+s = new_slide("The video's story, in the organizers' frame for Operational Efficiency: input, rules and checks, outcome or "
+              "flagged exception, human review. Every step is real app behaviour on synthetic data.")
+title(s, "One workflow, input to outcome", "Brutăria Aurora's SME loan file: the demo in the video")
+flow = [("Input", "a new loan case from the client's phone · the application pack · certificates · e-mails · days passing", ATTN),
+        ("Rules and checks", "fields extracted with exact quotes · 16 rules: trade register, ANAF, beneficial owners, DSCR · "
+                             "two judges for fuzzy matches", INK),
+        ("Outcome or flag", "clean documents pass in seconds · a wrong file is rejected with the reason · a conflict "
+                                 "opens a decision card and the 14-day legal clock", CONFLICT),
+        ("Human review", "two analyst clicks; the ruling becomes a precedent · file complete: the reviewer checks the ledger · "
+                         "the credit decision stays human", OK)]
+for i, (head, body, col) in enumerate(flow):
+    x = 0.6 + i * 3.1
+    box(s, x, 2.2, 2.75, 3.6, line=LINE)
+    dot(s, x + 0.3, 2.5, 0.24, col)
+    text(s, x + 0.3, 2.95, 2.25, 0.5, head, size=19, bold=True, color=col)
+    text(s, x + 0.3, 3.55, 2.2, 2.2, body, size=14, color=MUTED, spacing=1.15)
+    if i < len(flow) - 1:
+        arrow(s, x + 2.78, 4.0, x + 3.07, 4.0)
+text(s, 0.6, 6.25, 12.1, 0.5, "In the demo file a person makes 2 decisions; the agent does the rest. Synthetic data; registry "
+     "and e-mail simulated; time jumps are simulated.", size=15, color=INK, bold=True)
 
 # ---------------------------------------------------------------- 6. agent design
 s = new_slide("We first let Claude plan everything; it skipped checks and took 45-60 s per click. The hybrid measured live: "
@@ -236,7 +217,7 @@ text(s, 0.6, 6.6, 12.1, 0.5, "Measured live: 3.5–13 s per click, 0 fallbacks �
 s = new_slide("Calibration on 150 labelled pairs: the classifier alone auto-approved 7 wrong matches (e.g. Str. Gării vs "
               "Calea Gării at p = 1.0). Requiring the similarity check too gave 0. backend/eval/calibration.json.")
 title(s, "Tested, calibrated, measured", "Evidence in the repo, reproducible offline")
-stat(s, 0.6, 2.1, "132", "automated tests: the full demo, every rule\npath, role leaks, tamper detection", color=INK, w=3.4)
+stat(s, 0.6, 2.1, "201", "backend tests: the full demo, every rule\npath, role leaks, tamper detection", color=INK, w=3.4)
 stat(s, 0.6, 4.25, "8 / 8", "synthetic companies end on their intended\nproblem (one rule path each)", color=OK, w=3.4)
 cd = CategoryChartData()
 cd.categories = ["Classifier alone", "Classifier + similarity"]
@@ -264,7 +245,7 @@ for ax in (ch.category_axis, ch.value_axis):
 ch.value_axis.has_major_gridlines = False
 ch.value_axis.maximum_scale = 8
 stat(s, 9.2, 2.1, "8 → 0", "false approvals of the learned address\ncheck after small-town counterexamples", color=EXPIRED, w=3.5)
-stat(s, 9.2, 4.25, "390–2560", "pixel widths browser-tested, both apps,\nno console errors", color=ATTN, w=3.5)
+stat(s, 9.2, 4.25, "≈ $0.26", "of Claude calls per file (list prices);\np50 52–60 ms with 200 users", color=ATTN, w=3.5)
 
 # ---------------------------------------------------------------- 8. architecture & reproducibility
 s = new_slide("SQLite for the demo; in production the same append-only table runs in PostgreSQL on the bank's own servers. "
@@ -288,6 +269,9 @@ text(s, 0.6, 4.25, 6.0, 1.8, [[("Offline mode ", {"bold": True}), ("(scripted pl
                                                                      "demo with no API keys. ", {}),
                                ("Live mode ", {"bold": True}), ("swaps in Claude and the Featherless judge with the same "
                                                               "UI and the same ledger.", {})]], size=16, spacing=1.2)
+text(s, 0.6, 5.65, 6.0, 0.9, [[("Deployed ", {"bold": True}), ("on Railway with sign-in and 2FA, four staff roles and a "
+                                                               "fail-closed access policy on every API route.", {})]],
+     size=16, spacing=1.2)
 
 # ---------------------------------------------------------------- 9. domain
 s = new_slide("All rules are code with rule IDs; the judge only settles fuzzy matches after the hard facts match.")
@@ -339,19 +323,30 @@ for i, (head, body, col) in enumerate(items):
     text(s, x + 0.9, y + 0.33, 4.8, 0.55, head, size=22, bold=True)
     text(s, x + 0.35, y + 1.0, 5.3, 0.9, body, size=16, color=MUTED, spacing=1.15)
 
-# ---------------------------------------------------------------- 12. ask
-s = new_slide("Close: the ask is a measured pilot, not a promise.")
-ledger_motif(s, 1.2, colors={2: ATTN, 5: OK, 9: OK, 13: OK})
-text(s, 0.6, 2.0, 12, 1.0, "A 4-week shadow pilot", size=48, bold=True)
-text(s, 0.6, 3.1, 11.5, 0.6, "on annual business reviews with one back-office team", size=24, color=INK)
-for i, (head, body) in enumerate([("Plug in", "the bank's document AI and the ONRC / ANAF data feeds, on-prem"),
-                                  ("Measure", "hours per file, days to complete, re-requests and audit findings"),
+# ---------------------------------------------------------------- 12. limits and the next step
+s = new_slide("What remains limited or untested, said plainly; the next step is a measured pilot, not a promise.")
+title(s, "What's limited, and what's next")
+box(s, 0.6, 1.6, 6.0, 4.7, line=LINE)
+text(s, 0.95, 1.85, 5.4, 0.5, "Limits today", size=20, bold=True, color=REVIEW)
+for i, line_ in enumerate(["Synthetic data only; the trade register, ANAF and e-mail are simulated",
+                           "PDFs are stored but not read: a person reads them (no OCR yet)",
+                           "Credit-bureau consent is recorded, not yet enforced",
+                           "Our own security audit: 2 Medium findings still open",
+                           "Templates are code: the admin template editor is not built"]):
+    y = 2.5 + i * 0.75
+    dot(s, 0.95, y + 0.1, 0.16, REVIEW)
+    text(s, 1.3, y, 5.1, 0.7, line_, size=15, spacing=1.1)
+box(s, 6.75, 1.6, 5.95, 4.7, line=LINE)
+text(s, 7.1, 1.85, 5.4, 0.5, "Next: a 4-week shadow pilot", size=20, bold=True, color=OK)
+for i, (head, body) in enumerate([("Where", "annual business reviews with one back-office team"),
+                                  ("Plug in", "the bank's document AI and the ONRC / ANAF feeds, on-prem"),
+                                  ("Measure", "hours per file, days to complete, re-requests, audit findings"),
                                   ("Decide", "with numbers from the bank's own files")]):
-    y = 4.2 + i * 0.75
-    dot(s, 0.6, y + 0.1, 0.22, OK)
-    text(s, 1.0, y, 11.5, 0.5, [[(head + "  ", {"bold": True}), (body, {"color": MUTED})]], size=20)
-text(s, 0.6, 6.65, 12, 0.4, "OpenLoop · github.com/Petsteb/openloop-case-engine (private) · synthetic data only",
-     size=13, color=MUTED)
+    y = 2.5 + i * 0.92
+    dot(s, 7.1, y + 0.1, 0.16, OK)
+    text(s, 7.45, y, 5.0, 0.85, [[(head + "  ", {"bold": True}), (body, {"color": MUTED})]], size=15, spacing=1.1)
+text(s, 0.6, 6.65, 12, 0.4, "OpenLoop · github.com/Petsteb/openloop-case-engine · openloop-production.up.railway.app · "
+     "synthetic data only", size=13, color=MUTED)
 
 prs.save(OUT)
 print(OUT)
