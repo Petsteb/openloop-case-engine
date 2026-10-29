@@ -590,7 +590,8 @@ a.btn { text-decoration: none; }
 @media (max-width: 1180px) {
   .l-three { grid-template-columns: var(--lw, 270px) minmax(0, 1fr); }
   .l-three > .right-col { grid-column: 1 / -1; }
-  .l-three > .rail-right { position: static; flex-direction: row; width: auto; justify-self: start; padding: 6px 14px; }
+  /* its own full row under the other two (folded is the default): never squeezed into the 44 px left rail's column */
+  .l-three > .rail-right { grid-column: 1 / -1; position: static; flex-direction: row; width: auto; justify-self: start; padding: 6px 14px; }
   .rail-right .rail-label, .rail-right .rail-time { writing-mode: horizontal-tb; transform: none; }
   .case-side { align-items: flex-start; }
   .case-meta, .case-tools { justify-content: flex-start; }

@@ -19,16 +19,11 @@ import { markMsgsSeen, markSeen, readMsgsSeen, useSeenRev } from './store'
 import type { ThreadItem } from '@/shared/thread/types'
 import type { CaseRow, Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
+import { usePanels } from '@/shared/panels'
 
-/* ---------- panels: the bank case screen's layout (.l-three), remembered in this browser ---------- */
+/* ---------- panels: the bank case screen's layout (.l-three), remembered per case (ol:client:panels:{caseId}) ---------- */
 type PaneTab = 'messages' | 'ask'
-const PREF = 'openloop-client-'
-function readPref<T extends string>(key: string, ok: readonly T[], fallback: T): T {
-  try { const v = window.localStorage.getItem(PREF + key); return ok.includes(v as T) ? (v as T) : fallback } catch { return fallback }
-}
-function writePref(key: string, value: string) {
-  try { window.localStorage.setItem(PREF + key, value) } catch { /* this page only */ }
-}
+const PANE_TABS: readonly PaneTab[] = ['messages', 'ask']
 const isTyping = (e: KeyboardEvent) =>
   e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable="true"]')
 /** The newest thread item from the bank's side: a staff message or an automatic email (not the client's own). */
@@ -162,13 +157,9 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
   const inputs = useRef(new Map<string, HTMLInputElement>())
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  /* ---------- panels: documents on the left, messages and questions on the right; [ and ] fold them like the bank's ---------- */
-  const [left, setLeft] = useState(() => readPref('left', ['open', 'closed'] as const, 'open') === 'open')
-  const [right, setRight] = useState(() => readPref('right', ['open', 'closed'] as const, 'open') === 'open')
-  const [tab, setTab] = useState<PaneTab>(() => readPref<PaneTab>('rtab', ['messages', 'ask'], 'messages'))
-  useEffect(() => writePref('left', left ? 'open' : 'closed'), [left])
-  useEffect(() => writePref('right', right ? 'open' : 'closed'), [right])
-  useEffect(() => writePref('rtab', tab), [tab])
+  /* ---------- panels: documents on the left, messages and questions on the right; [ and ] fold them like the bank's.
+     Folded to rails the first time a case is opened; remembered per case (shared/panels.ts). ---------- */
+  const { left, right, tab, setLeft, setRight, showTab } = usePanels<PaneTab>('client', caseId, PANE_TABS, 'messages')
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return
@@ -177,7 +168,7 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setLeft, setRight])
   const [docVisible, setDocVisible] = useState(() => document.visibilityState !== 'hidden')
   useEffect(() => {
     const onVis = () => setDocVisible(document.visibilityState !== 'hidden')
@@ -185,20 +176,19 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
   const openPane = (t?: PaneTab) => {
-    if (t) setTab(t)
-    setRight(true)
+    if (t) showTab(t)
+    else setRight(true)
   }
-  // the bell (in the top bar) picked a message of this case: show the Messages tab
+  // the bell (in the top bar) picked a message of this case: show the Messages tab (unfolding the right side)
   useEffect(() => {
     const on = (e: Event) => {
       if ((e as CustomEvent<{ caseId?: string }>).detail?.caseId !== caseId) return
-      setTab('messages')
-      setRight(true)
+      showTab('messages')
       requestAnimationFrame(() => document.querySelector('.pt-three > .right-col')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     }
     window.addEventListener(OPEN_MESSAGES_EVENT, on)
     return () => window.removeEventListener(OPEN_MESSAGES_EVENT, on)
-  }, [caseId])
+  }, [caseId, showTab])
 
   /* ---------- unread dots: a bank message the Messages tab has not shown, an answer the Ask tab has not shown ---------- */
   useSeenRev()   // re-render when the bell's "Mark all read" or another tab moves the messages mark
@@ -475,7 +465,7 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
 
           {/* kept mounted while folded (like the bank's): the thread keeps polling and the chat keeps its answers */}
           <section className="panel side-panel right-col" aria-label="Messages and questions" hidden={!right}>
-            <Tabs.Root value={tab} onValueChange={(v) => setTab(v as PaneTab)} className="right-tabs pt-tabs">
+            <Tabs.Root value={tab} onValueChange={(v) => showTab(v as PaneTab)} className="right-tabs pt-tabs">
               <PaneHead side="right" onHide={() => setRight(false)} label="messages and questions">
                 <Tabs.List className="rtabs pt-rtabs" aria-label="Messages and questions">
                   <Tabs.Trigger value="messages" className="rtab" title={msgsDot ? 'New message from the bank' : undefined}>

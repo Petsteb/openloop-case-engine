@@ -51,7 +51,7 @@ export function RightPanel(p: Props) {
     outbox: String(arr(bundle.outbox).length + arr(bundle.events).filter((e) => e.type === 'MESSAGE_POSTED').length),
     docs: null,
   }
-  const labels: Record<RightTab, string> = { ask: 'Ask', activity: 'Activity', reasoning: 'Reasoning', ledger: 'Ledger', outbox: 'Messages', docs: 'Docs' }
+  const labels: Record<RightTab, string> = { ask: 'Ask AI', activity: 'Activity', reasoning: 'Reasoning', ledger: 'Ledger', outbox: 'Messages', docs: 'Docs' }
   const titles: Partial<Record<RightTab, string>> = {
     activity: `${counts.activity} activity items`, reasoning: `${counts.reasoning} agent steps`, outbox: `${counts.outbox} messages and emails`,
   }
@@ -78,7 +78,7 @@ export function RightPanel(p: Props) {
   const unread = p.unreadMessages ?? 0
   return (
     <Tabs value={p.tab} onValueChange={(v) => p.onTab(v as RightTab)} className="right-tabs" style={{ gap: 0 }}>
-      <PanelHead side="right" title="Ask and activity" onHide={p.onHide}>
+      <PanelHead side="right" title="Ask AI and activity" label="Ask AI and activity" onHide={p.onHide}>
         <TabsList ref={listRef} className="rtabs" aria-label="Right panel">
           {(Object.keys(labels) as RightTab[]).map((t) => (
             <TabsTrigger key={t} value={t} className="rtab"

@@ -5,6 +5,7 @@ import { arr, checklist, checklistNote, docRows, fTime, latestActivity, plural, 
 import type { Citation, Exception_, LearningState, VerifyResult } from '@/lib/types'
 import { isTyping, store } from '@/lib/store'
 import { failureText, useCase } from '@/hooks/useCase'
+import { usePanels } from '@/shared/panels'
 import { useDocList } from '@/hooks/useDocs'
 import { toast } from 'sonner'
 import { Boundary } from './components/Btn'
@@ -30,6 +31,8 @@ const initialTheme = (): Theme => {
   if (saved === 'dark' || saved === 'light') return saved
   try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' } catch { return 'dark' }
 }
+
+const RIGHT_TABS: readonly RightTab[] = ['ask', 'activity', 'reasoning', 'ledger', 'outbox', 'docs']
 
 const lastSeq = (ev: { seq: number }[] | undefined) => (Array.isArray(ev) && ev.length ? Number(ev[ev.length - 1].seq) || 0 : 0)
 
@@ -70,9 +73,8 @@ interface CaseViewProps {
 
 function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewProps) {
   const { bundle, busy, error, missing, act, load, refresh, caseId } = useCase(routeId)
-  const [left, setLeft] = useState<boolean>(() => store.get('left-open', true))
-  const [right, setRight] = useState<boolean>(() => store.get('right-open', true))
-  const [tab, setTab] = useState<RightTab>(() => store.get<RightTab>('rtab', 'ask'))
+  // folded to rails the first time a case is opened; remembered per case (ol:bank:panels:{caseId}, shared/panels.ts)
+  const { left, right, tab, setLeft, setRight, showTab } = usePanels<RightTab>('bank', caseId, RIGHT_TABS, 'ask')
   const [selected, setSelected] = useState<string | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   const [docOpen, setDocOpen] = useState<string | null>(null)
@@ -81,10 +83,6 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
   const [learning, setLearning] = useState<LearningState | null>(null)
   const [learningOk, setLearningOk] = useState(false)
   const [learningOpen, setLearningOpen] = useState(false)
-
-  useEffect(() => store.set('left-open', left), [left])
-  useEffect(() => store.set('right-open', right), [right])
-  useEffect(() => store.set('rtab', tab), [tab])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -95,7 +93,7 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setDock])
+  }, [setDock, setLeft, setRight])
 
   const eventCount = arr(bundle?.events).length
   const seq = lastSeq(bundle?.events)
@@ -141,7 +139,7 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
     const s = getSeen(caseId)
     return clientSeqs.filter((x) => x > s).length
   }, [msgsOnScreen, caseId, clientSeqs, seenRev]) // eslint-disable-line react-hooks/exhaustive-deps
-  const openMessages = useCallback(() => { setRight(true); setTab('outbox') }, [])
+  const openMessages = useCallback(() => showTab('outbox'), [showTab])
   const company = bundle ? String((bundle.case as typeof bundle.case & CaseExtra)?.company || '') : ''
   useEffect(() => { document.title = `${company || caseId} | OpenLoop` }, [company, caseId])
   // a new bundle makes an earlier integrity check stale
@@ -192,10 +190,9 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
   }, [busy])
 
   const openLedger = useCallback((seq: number | null) => {
-    setRight(true)
-    setTab('ledger')
+    showTab('ledger')   // unfolds the right side too
     setHighlight(seq)
-  }, [])
+  }, [showTab])
   // The viewer is a modal sheet over the panels: close it first, then show the ledger event or the check.
   const ledgerFromDoc = useCallback((seq: number | null) => { setDocOpen(null); openLedger(seq) }, [openLedger])
   const checkFromDoc = useCallback((id: string) => { setDocOpen(null); setSelected(id) }, [])
@@ -268,12 +265,12 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
                 onOpenLedger={openLedger} onOpenDoc={setDocOpen} onVerify={doVerify} verifyText={v?.text ?? null} onRelease={onRelease} />
             </Boundary>
           </section>
-          <section className="panel side-panel right-col" aria-label="Ask and activity" hidden={!right}>
-            <RightPanel bundle={bundle} caseId={caseId} tab={tab} onTab={setTab} onHide={() => setRight(false)} highlight={highlight}
+          <section className="panel side-panel right-col" aria-label="Ask AI and activity" hidden={!right}>
+            <RightPanel bundle={bundle} caseId={caseId} tab={tab} onTab={showTab} onHide={() => setRight(false)} highlight={highlight}
               onCite={onCite} onAnswered={() => void refresh()} verifyText={v?.text ?? null} verifyOk={!!v?.ok} verifying={verifying} onVerify={doVerify}
               docs={docs} onOpenDoc={setDocOpen} unreadMessages={unreadMsgs} />
           </section>
-          {!right ? <RightRail latest={latest} unreadMessages={unreadMsgs} onOpen={(t) => { if (t) setTab(t); setRight(true) }} /> : null}
+          {!right ? <RightRail latest={latest} unreadMessages={unreadMsgs} onOpen={(t) => { if (t) showTab(t); else setRight(true) }} /> : null}
         </div>
       </main>
       {dock ? <DemoDock bundle={bundle} caseId={caseId} busy={busy} onInbound={onInbound} onAdvance={onAdvance}

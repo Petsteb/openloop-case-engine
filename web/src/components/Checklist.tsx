@@ -66,9 +66,12 @@ export function ChecklistRail({ items, onOpen }: { items: CheckItem[]; onOpen: (
   )
 }
 
-export function PanelHead({ title, count, side, onHide, children }: { title?: string; count?: number; side: 'left' | 'right'; onHide: () => void; children?: ReactNode }) {
+/** `label`: the name in "Hide …" when the lowercased title would not read right ("Ask AI and activity"). */
+export function PanelHead({ title, label, count, side, onHide, children }: {
+  title?: string; label?: string; count?: number; side: 'left' | 'right'; onHide: () => void; children?: ReactNode
+}) {
   const key = side === 'left' ? '[' : ']'
-  const name = title ? title.toLowerCase() : 'panel'
+  const name = label ?? (title ? title.toLowerCase() : 'panel')
   return (
     <div className="panel-head">
       {children ?? <h3>{title}{count != null ? <span className="mono">{count}</span> : null}</h3>}
@@ -79,16 +82,17 @@ export function PanelHead({ title, count, side, onHide, children }: { title?: st
   )
 }
 
-/** Collapsed right panel: ‹ (last tab), AI pill (Ask), Activity, unread client messages, and the time of the last activity. */
+/** Collapsed right panel: ‹ (last tab), AI pill (Ask AI), Activity, unread client messages, and the time of the last
+ *  activity. The default on a case's first visit, so the unread count lives here too. */
 export function RightRail({ latest, unreadMessages = 0, onOpen }: {
   latest: { time: string; text: string } | null; unreadMessages?: number; onOpen: (tab?: 'ask' | 'activity' | 'outbox') => void
 }) {
   return (
-    <div className="rail rail-right rail-split" role="group" aria-label="AI and activity, hidden">
-      <button type="button" className="rail-btn" onClick={() => onOpen()} aria-label="Show AI and activity" aria-expanded="false" title="Show AI and activity (])">
+    <div className="rail rail-right rail-split" role="group" aria-label="Ask AI and activity, hidden">
+      <button type="button" className="rail-btn" onClick={() => onOpen()} aria-label="Show Ask AI and activity" aria-expanded="false" title="Show Ask AI and activity (])">
         <Icon name="chevronL" size={14} />
       </button>
-      <button type="button" className="rail-btn rail-ai" onClick={() => onOpen('ask')} title="Open the AI chat">AI</button>
+      <button type="button" className="rail-btn rail-ai" onClick={() => onOpen('ask')} aria-label="Open Ask AI" title="Open Ask AI">AI</button>
       <button type="button" className="rail-btn rail-label" onClick={() => onOpen('activity')} title="Open activity">Activity</button>
       {unreadMessages ? (
         <button type="button" className="rail-btn" onClick={() => onOpen('outbox')} title={`${plural(unreadMessages, 'new message')} from the client`}
