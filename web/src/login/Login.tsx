@@ -103,6 +103,27 @@ export function Login() {
     document.head.appendChild(s)
   }, [me, step, startMfa])
 
+  // Microsoft (Entra ID: Teams / work and school accounts, and personal accounts), loaded only when used
+  const microsoftSignIn = async () => {
+    const clientId = me?.microsoft_client_id
+    if (!clientId) return
+    setBusy(true); setError(null)
+    try {
+      const { PublicClientApplication } = await import('@azure/msal-browser')
+      const pca = new PublicClientApplication({
+        auth: { clientId, authority: 'https://login.microsoftonline.com/common', redirectUri: `${window.location.origin}/login/` },
+        cache: { cacheLocation: 'sessionStorage' },
+      })
+      await pca.initialize()
+      const r = await pca.loginPopup({ scopes: ['openid', 'profile', 'email'], prompt: 'select_account' })
+      startMfa(await post<Challenge>('/api/auth/microsoft', { credential: r.idToken }))
+    } catch (err) {
+      const m = (err as Error).message || ''
+      setError(/cancel|user_cancelled|popup_window_error|empty_window/i.test(m) ? 'Microsoft sign-in was cancelled.'
+        : /^no OpenLoop|could not be verified|did not include/.test(m) ? m : 'Microsoft sign-in failed. Please try again.')
+    } finally { setBusy(false) }
+  }
+
   const submitPassword = async (e?: React.FormEvent, override?: { email: string; password: string }) => {
     e?.preventDefault()
     setBusy(true); setError(null)
@@ -163,7 +184,7 @@ export function Login() {
           <form onSubmit={(e) => void submitCode(e)} className="lg-form" noValidate>
             <h1 id="lg-title" className="lg-title">Your one-time code</h1>
             <p className="lg-sub">
-              {step.via === 'google' ? 'Google confirmed your e-mail. ' : ''}
+              {step.via === 'google' ? 'Google confirmed your e-mail. ' : step.via === 'microsoft' ? 'Microsoft confirmed your e-mail. ' : ''}
               Open your authenticator app and type the 6-digit code for OpenLoop, {step.name}.
             </p>
             <label className="lg-label" htmlFor="lg-code">6-digit code</label>
@@ -195,10 +216,19 @@ export function Login() {
             <div className="lg-row">
               <button type="submit" className="btn primary" disabled={busy || !email || !password}>Continue</button>
             </div>
-            {me?.google_client_id ? (
+            {me?.google_client_id || me?.microsoft_client_id ? (
               <div className="lg-alt">
                 <span className="lg-or">or</span>
-                <div ref={googleRef} className="lg-google" />
+                {me.google_client_id ? <div ref={googleRef} className="lg-google" /> : null}
+                {me.microsoft_client_id ? (
+                  <button type="button" className="btn lg-ms" onClick={() => void microsoftSignIn()} disabled={busy}>
+                    <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
+                      <rect x="1" y="1" width="9" height="9" fill="#f25022" /><rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" /><rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    Sign in with Microsoft
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </form>

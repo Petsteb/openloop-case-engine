@@ -17,7 +17,14 @@ document.addEventListener('pointerover', (e) => {
   b.style.setProperty('--my', `${e.clientY - r.top}px`)
 })
 
-// /login/#/users: user management (supervisor, admin); everything else: sign-in
-const page = window.location.hash.startsWith('#/users') ? <Users /> : <Login />
-window.addEventListener('hashchange', () => window.location.reload())
-createRoot(document.getElementById('root')!).render(<StrictMode>{page}</StrictMode>)
+// Inside the Microsoft sign-in popup, this page is only the redirect target: hand the response to the opener
+// (MSAL's bridge, over a BroadcastChannel) instead of showing the sign-in form again.
+const url = window.location.hash + window.location.search
+if (/[#&?](code|error)=/.test(url) && /[#&?]state=/.test(url)) {
+  void import('@azure/msal-browser/redirect-bridge').then((m) => m.broadcastResponseToMainFrame()).catch(() => window.close())
+} else {
+  // /login/#/users: user management (supervisor, admin); everything else: sign-in
+  const page = window.location.hash.startsWith('#/users') ? <Users /> : <Login />
+  window.addEventListener('hashchange', () => window.location.reload())
+  createRoot(document.getElementById('root')!).render(<StrictMode>{page}</StrictMode>)
+}
