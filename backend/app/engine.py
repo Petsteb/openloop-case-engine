@@ -667,8 +667,9 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if doc_expired(st, fisc):
             return {"status": "EXPIRED", "reason": f"Fiscal certificate older than {T.DOC_VALIDITY_DAYS} days (HR-03)",
                     "evidence": ev, "details": {"doc_id": fisc["id"]}}
-        if not rules.fiscal_clean(extract.field(ef, "outstanding_obligations")["value"]):
-            return {"status": "CONTRADICTED", "reason": "Outstanding tax obligations (HR-08)", "evidence": ev,
+        owed = extract.field(ef, "outstanding_obligations")["value"]
+        if not rules.fiscal_clean(owed):
+            return {"status": "CONTRADICTED", "reason": f"Outstanding tax obligations: {owed} (HR-08)", "evidence": ev,
                     "details": {"kind": "tax_debt"}}
         return {"status": "SATISFIED", "reason": "No outstanding tax obligations; certificate valid", "evidence": ev,
                 "details": {"doc_id": fisc["id"], "expires_at": rules.doc_expires_at(_dt(fisc['issued_at'])).isoformat()}}

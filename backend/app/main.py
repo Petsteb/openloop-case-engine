@@ -161,6 +161,8 @@ def _seed() -> None:
                 if i:
                     _advance(case, agent, 1)
                 agent.handle_batch(case, case.deliver(item))
+                if item == "day0-pack" and template == "sme_loan":  # consent comes with the signed application
+                    agent.handle_batch(case, [case.client_confirm("credit_check_consent", "yes")])
                 notifier.flush(case, mode="outbox")
     finally:
         if judge_mode is None:
