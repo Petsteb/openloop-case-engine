@@ -333,3 +333,39 @@ def test_old_user_table_gets_the_microsoft_column(tmp_path):
     con.executescript(old_schema)
     con.close()
     assert "ms_sub" in {r[1] for r in auth.Users(str(db)).db.execute("PRAGMA table_info(users)")}
+
+
+def test_user_lookups_keep_working_while_the_event_store_writes(tmp_path):
+    """A reset rewrites hundreds of events through the store's connection; sign-in lookups use a second connection
+    on the same file and must never fail with 'database is locked' (it did, on Railway, before WAL)."""
+    import threading
+    from app.store import Store
+    db = str(tmp_path / "shared.db")
+    store, people = Store(db), auth.Users(db)
+    people.create("someone@bank.example", "Someone", "analyst", "a-long-password")
+    errors, done = [], threading.Event()
+
+    def write():
+        for seq in range(1, 600):
+            store.append("c-1", {"seq": seq, "type": "NOTE"}, '{"x": 1}')
+        done.set()
+
+    t = threading.Thread(target=write)
+    t.start()
+    while not done.is_set():
+        try:
+            assert people.by_email("someone@bank.example")  # uncached: a real read on the shared file
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+            break
+    t.join()
+    assert not errors, errors
+    assert people.db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_cached_user_is_dropped_on_every_change():
+    u = auth.users().by_email(VICTOR)
+    assert auth.users().get(u["id"])["active"] == 1
+    auth.users().update(u["id"], active=0)
+    assert auth.users().get(u["id"])["active"] == 0  # not the cached copy
+    auth.users().update(u["id"], active=1)
