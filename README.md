@@ -48,6 +48,7 @@ cd web && npm ci && npm run build && cd ..   # React UI; without it the older st
 python -m uvicorn app.main:app --app-dir backend --port 8000
 # bank app: http://localhost:8000    client portal: http://localhost:8000/client/    sign-in: /login/
 # sign in with the "Demo authenticator" on the login page (password demo + the live code); OPENLOOP_AUTH=off skips login
+# the deployed site hides that panel (DEMO_LOGINS=0): use an authenticator app; every demo account is in docs/auth.md
 # reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
@@ -118,7 +119,7 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **Login and access control are real but demo-seeded** (`docs/auth.md`):
   - users sign in with a password plus a TOTP code, or with Google plus the code;
   - one fail-closed policy covers every `/api` route: clients reach only their own company, staff act within their role, and identity comes from the session;
-  - with `DEMO_LOGINS=1` the login page shows the synthetic accounts' live codes, so anyone can sign in as any demo account. Production sets `DEMO_LOGINS=0` and connects the bank's SSO through the same OIDC check.
+  - with `DEMO_LOGINS=1` the login page shows the synthetic accounts' live codes, so anyone can sign in as any demo account. The deployed site already runs with `DEMO_LOGINS=0`; production would also connect the bank's SSO through the same OIDC check.
 - **Credit-bureau consent is recorded, not enforced.** An SME loan file can reach "complete" before the client consents, so that a presenter who skips the click doesn't break the demo. Production would gate the bureau check on it.
 - **Rate limits are per process.** Login lockouts, the chat limit and the model-call budget (`llm.Budget`) live in memory. More than one process would need a shared store.
 - **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.

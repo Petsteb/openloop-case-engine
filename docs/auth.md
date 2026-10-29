@@ -43,16 +43,32 @@
   - 12 chat questions per user per minute, because each one may be a paid model call;
   - security headers: `nosniff`, `frame-ancestors 'none'`, `X-Frame-Options`, HSTS over HTTPS.
 
-## Demo accounts (synthetic, `DEMO_LOGINS=1`)
-The password for every demo account is `demo`. The login page's **demo authenticator** shows each account's live code; it stands in for the bank's mobile app on the projector. You can also add an account to a real authenticator app: on `/login/#/users`, "New 2FA" shows a QR code.
+## Demo accounts (synthetic)
+The password for every demo account is `demo`. The second factor is the code from an authenticator app: on `/login/#/users`, "New 2FA" shows an account's QR code.
+- **Deployed site (Railway):** `DEMO_LOGINS=0`, so the login page has no demo authenticator. Sign in with the authenticator app.
+- **Local runs and the E2E tests:** `DEMO_LOGINS=1` (the default). The login page's **demo authenticator** shows each account's live code, standing in for the bank's mobile app on a projector. Set `DEMO_LOGINS=1` on Railway to bring it back there.
 
-| Account | Role | Ledger identity |
+**Bank staff**
+
+| Account | Role | Ledger identity | Use it for |
+|---|---|---|---|
+| ana.pop@bank.example | Analyst | analyst-1 | the work queue, decision cards, chat with clients |
+| ioana.marin@bank.example | Supervisor | supervisor-1 | the maker-checker step: promoting a learned check |
+| victor.stan@bank.example | Compliance | compliance-1 | releasing a file put on hold (SR-01 / SR-02) |
+| admin@bank.example | Admin | admin-1 | the Users page: accounts, roles, 2FA |
+
+**Clients: one login per synthetic company; each sees only its company's cases**
+
+| Account | Company | What its case shows |
 |---|---|---|
-| ana.pop@bank.example | Analyst | analyst-1 |
-| ioana.marin@bank.example | Supervisor | supervisor-1 |
-| victor.stan@bank.example | Compliance | compliance-1 |
-| admin@bank.example | Admin | admin-1 |
-| Each synthetic company's e-mail (e.g. andrei.munteanu@brutaria-aurora.example) | Client | its company |
+| andrei.munteanu@brutaria-aurora.example | Brutăria Aurora SRL | demo-1, the scripted demo: undeclared owner, address, expiry, insider rule |
+| office@verde-logistic.example | Verde Logistic SRL | a clean loan file that completes with no human |
+| contabilitate@carpatic-lemn.example | Carpatic Lemn SRL | tax debt on the fiscal certificate (HR-08) |
+| contact@delta-pescaria.example | Delta Pescăria SRL | a suspended company in the trade register (HR-02) |
+| office@nordconstruct.example | Nord Construct Instal SRL | repayment capacity too low: DSCR 1.06 (HR-07) |
+| administrativ@medicaplus.example | Medica Plus Clinic SRL | signatory is not the administrator (JQ-02, mandate) |
+| office@solaris-agro.example | Solaris Agro SRL | a registry certificate 45 days old (HR-03) |
+| ana@atelier-croitorie.example | Atelier Croitorie Ana SRL | the annual business review template (kyb_review) |
 
 ## Configuration
 | Env | Default | Production |
