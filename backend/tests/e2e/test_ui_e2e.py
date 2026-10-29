@@ -40,6 +40,16 @@ AURORA = "andrei.munteanu@brutaria-aurora.example"         # the client of demo-
 VERDE = "office@verde-logistic.example"                    # another company's client
 INTERNAL = re.compile(r"HR-0|SR-0|GATE-|judge|insider|analyst-1|E-0317", re.I)
 DESKTOP = {"width": 1440, "height": 900}
+# The case screens start with both side panels folded, remembered per case in localStorage (web/src/shared/panels.ts).
+# The tests click the checklist and the right-panel tabs, so each context starts with them open, unless the case
+# already has a record (then a test's own folding is kept across reloads).
+OPEN_PANELS = """(() => { try {
+  const ids = ['demo-1'].concat(Array.from({ length: 60 }, (_, i) => 'case-' + (i + 2)));
+  for (const id of ids) for (const [app, tab] of [['bank', 'ask'], ['client', 'messages']]) {
+    const k = 'ol:' + app + ':panels:' + id;
+    if (localStorage.getItem(k) === null) localStorage.setItem(k, JSON.stringify({ left: true, right: true, tab }));
+  }
+} catch (e) { /* about:blank has no storage */ } })();"""
 
 expect.set_options(timeout=SLOW)
 
@@ -140,6 +150,7 @@ def browse(browser: Browser, sessions: Sessions, console: Console, request):
     def open_(*emails: str, viewport: dict | None = None, scale: float = 1, mobile: bool = False) -> BrowserContext:
         ctx = browser.new_context(base_url=BASE, viewport=viewport or DESKTOP, device_scale_factor=scale,
                                   is_mobile=mobile, has_touch=mobile)
+        ctx.add_init_script(OPEN_PANELS)
         for e in emails:
             ctx.add_cookies(sessions.cookies(e))
         ctx.on("page", lambda p: console.watch(p, f"page {len(ctx.pages)}"))
@@ -514,6 +525,7 @@ def test_learned_panel_proposal_and_approval(browse, sessions):
     decide(page, "Same address, only formatting differs")
     expect(status_line(page)).to_have_text("1 decision needs you")
     page.get_by_role("link", name="Work queue").click()
+    page.get_by_role("link", name=re.compile("^Learned checks")).click()  # the home tab #/learned
     panel = page.get_by_role("region", name="What the agent has learned")
     expect(panel).to_be_visible()
     waiting = panel.locator(".lp-col").filter(has=page.get_by_role("heading", name=re.compile("^Waiting for a second person")))
@@ -526,7 +538,7 @@ def test_learned_panel_proposal_and_approval(browse, sessions):
     shot(page, "02-queue-learned-panel")
 
     ioana = browse(IOANA).new_page()
-    ioana.goto("/#/")
+    ioana.goto("/#/learned")
     panel = ioana.get_by_role("region", name="What the agent has learned")
     waiting = panel.locator(".lp-col").filter(has=ioana.get_by_role("heading", name=re.compile("^Waiting for a second person")))
     waiting.get_by_role("button", name="Run backtest").click()
