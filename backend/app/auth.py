@@ -355,10 +355,19 @@ class Req:
         self.method, self.path, self.query, self.body, self.staff, self.client = method, path, query, body, staff, client
 
 
+def perms_of(user: dict) -> set[str]:
+    """The role's permissions. While DEMO_LOGINS shows every demo account's code to anyone, the demo accounts never
+    manage users: a visitor signed in as the demo admin must not disable, re-role or reset the team's real accounts."""
+    perms = set(PERMS.get(user["role"], set()))
+    if demo_logins() and user["email"] in {e for e, *_ in DEMO_STAFF} | {p["email"] for p in profiles.PROFILES.values()}:
+        perms.discard("users")
+    return perms
+
+
 def _staff(r: Req, perm: str | None = None) -> dict:
     if not r.staff:
         raise Denied(401, "sign in as bank staff")
-    if perm and perm not in PERMS.get(r.staff["role"], set()):
+    if perm and perm not in perms_of(r.staff):
         raise Denied(403, f"your role ({r.staff['role']}) may not do this")
     return r.staff
 
@@ -678,7 +687,7 @@ def me(request: Request):
             "microsoft_client_id": os.environ.get("MICROSOFT_CLIENT_ID") or None,
             "staff": public(staff) if staff and staff["role"] != "client" else None,
             "client": public(client) if client and client["role"] == "client" else None,
-            "perms": sorted(PERMS.get(staff["role"], set())) if staff and staff["role"] != "client" else []}
+            "perms": sorted(perms_of(staff)) if staff and staff["role"] != "client" else []}
 
 
 @router.post("/api/auth/login")

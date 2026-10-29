@@ -184,7 +184,21 @@ def test_cross_site_post_and_huge_body_are_refused(fresh):
                   headers={"Content-Type": "application/json"}).status_code == 413
 
 
-def test_disabled_user_is_signed_out_everywhere(fresh):
+def test_demo_accounts_never_manage_users_while_their_codes_are_public(fresh, monkeypatch):
+    for email in ("admin@bank.example", IOANA):  # demo admin and supervisor: anyone can sign in as them
+        c = session(email)
+        assert c.get("/api/users").status_code == 403
+        assert "users" not in c.get("/api/auth/me").json()["perms"]
+    if not auth.users().by_email("real.admin@bank.example"):
+        auth.users().create("real.admin@bank.example", "Real Admin", "admin", "a-long-password")
+    real = session("real.admin@bank.example")  # a real account keeps the Users page
+    assert real.get("/api/users").status_code == 200 and "users" in real.get("/api/auth/me").json()["perms"]
+    monkeypatch.setenv("DEMO_LOGINS", "0")  # codes no longer public: the demo admin manages users again
+    assert session("admin@bank.example").get("/api/users").status_code == 200
+
+
+def test_disabled_user_is_signed_out_everywhere(fresh, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGINS", "0")  # the demo admin may manage users only while its codes are not public
     client = session(AURORA)
     case = own_case("aurora")
     assert client.get(f"/api/cases/{case}/client-view").status_code == 200
@@ -195,7 +209,8 @@ def test_disabled_user_is_signed_out_everywhere(fresh):
     assert admin.post(f"/api/users/{uid}/enable", json={}).status_code == 200
 
 
-def test_admin_adds_a_user_who_can_then_sign_in(fresh):
+def test_admin_adds_a_user_who_can_then_sign_in(fresh, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGINS", "0")
     admin = session("admin@bank.example")
     r = admin.post("/api/users", json={"email": "new.analyst@bank.example", "name": "New Analyst",
                                        "role": "analyst", "password": "a-long-password"})
@@ -372,7 +387,8 @@ def test_cached_user_is_dropped_on_every_change():
     auth.users().update(u["id"], active=1)
 
 
-def test_admin_moves_a_user_between_staff_and_client(fresh):
+def test_admin_moves_a_user_between_staff_and_client(fresh, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGINS", "0")
     admin, supervisor = session("admin@bank.example"), session(IOANA)
     u = admin.post("/api/users", json={"email": "mover@bank.example", "name": "Mover", "role": "admin",
                                        "password": "a-long-password"}).json()["user"]
