@@ -1,25 +1,52 @@
-# OpenLoop: an AI case agent for long-running banking files
+# OpenLoop: an AI case agent for bank back-office files
 
-Banking back-office files stay open for days or weeks: documents arrive at different times, they have to be
-cross-checked against each other and against the policy, legal deadlines tick, and exceptions need a human.
-OpenLoop keeps each file as an **append-only, hash-chained event ledger**. **Code** computes every requirement's
-state and enforces the hard rules. An **agent** plans and calls tools, but only actions the rules allow can run.
-A **judge** (Featherless Simple JEV) settles fuzzy matches. Everything uncertain lands on an **analyst triage
-card**, and analyst rulings are reused as precedents.
+**NEXXT AI Hackathon 2026 · Raiffeisen Bank · AI for Operational Efficiency · Team 16 KratosMessi**
 
-Demo case: an SME working-capital loan and KYB file for a fictional bakery. The case covers:
-- an undeclared beneficial owner;
-- an ambiguous address (Str. vs Calea);
-- a certificate that expires while the file waits;
-- a client email that arrives at the wrong moment.
+*The agent runs the file; people make the decisions.*
 
-## Status (29 Oct 2026)
-- **Live:** https://openloop-production.up.railway.app (the login page's **demo authenticator** signs you in as any synthetic account: pick one, password `demo`, then its live code).
-- **Bank app** (`/`): the work queue (needs-you first, filters, New case) and a **Learned checks** tab; the case screen with timeline, checklist, decision cards, agent reasoning, ledger, messages, documents (View / Open the original) and notifications.
-- **Client portal** (`/client/`): **My cases**, "Start a new application", uploads, confirmations, chat with the bank and **Ask AI**. It updates live next to the bank app and works on a phone (tabs Pending / Documents / Chat / Ask AI).
-- **8 synthetic companies**, each built to show one rule, with documents modelled on the real Romanian forms (`research/09-document-templates.md`); **2 templates** (SME loan and KYB check, Annual business review); a SQLite event store.
-- **Tests:** 201 backend tests pass (`cd backend && python -m pytest -q`); a Playwright browser suite lives in `backend/tests/e2e/`.
-- **Not built:** an admin editor for case templates (templates are code in `backend/app/template.py`).
+| | |
+|---|---|
+| **Live demo** | https://openloop-production.up.railway.app: on the login page, pick an account in the **demo authenticator**, type the password `demo`, then the code it shows |
+| **3-minute video** | https://drive.google.com/file/d/1TldtOLnffvt6xbBnOqmZmpFhg4NNvPxL/view (also [`docs/pitch/OpenLoop-demo.mp4`](docs/pitch/OpenLoop-demo.mp4)) |
+| **Deck** | [`docs/pitch/OpenLoop-deck.pdf`](docs/pitch/OpenLoop-deck.pdf), 11 slides |
+| **Tests** | 201 backend tests: `cd backend && python -m pytest -q`; browser tests in `backend/tests/e2e/` |
+| **Data** | all synthetic: 8 fictional companies, documents modelled on the real Romanian forms |
+
+## What it is, and for whom
+A business-loan or annual KYB review file isn't one task. It stays open for weeks: documents arrive in any order and must agree with each other and with the policy, certificates expire, legal clocks run, and someone keeps chasing paper. **OpenLoop is an AI case agent for the bank's back-office analysts and their SME clients.** It owns the file between the human decisions: it asks for what's missing, checks every document, reminds the client, reopens the file when evidence goes stale, and hands a person only the decisions that need one.
+
+## One workflow, input to outcome
+1. **Input.** The client opens a case on the portal (phone or desktop) and uploads documents. E-mails, staff actions and the passing of time are events too.
+2. **Rules and checks.** Code extracts every field with an exact quote and enforces 16 rules: trade register, ANAF tax certificate, beneficial owners (Law 129/2019, AMLR), repayment capacity, signatory, and sequence rules. Claude (Opus 5.5 on Amazon Bedrock) plans the next step behind a **gate**; only actions the rules allow can run.
+3. **Outcome or exception.** Clean documents pass in seconds. A wrong file is rejected with the reason. A conflict opens a **decision card** for a person (and, for an undeclared owner, the 14-day AMLR clock). Fuzzy matches need two judges to agree: a Featherless classifier and a similarity check.
+4. **Human review.** The analyst decides in a click. Rulings become precedents, then learned checks once a supervisor approves (maker-checker). When the file is complete, the reviewer checks the hash-chained ledger. The credit decision stays human: the agent has no tool that approves credit.
+
+## A 5-minute tour of the live site
+1. Sign in as **Ana Pop (Analyst)**. The work queue lists 8 synthetic files, the ones that need you first.
+2. Open **Brutăria Aurora** (demo-1). The demo toolbar at the bottom plays the story: **Next client event**, **3 days**, **A week**. Decide the cards (**Same address**, **Confirm discrepancy**), then open the right panel (`]`) → **Ledger** → **Check ledger**.
+3. **Preview client view** (case header) shows the same file as the client sees it; it works on a phone too.
+4. **Ask AI**, on either side, answers from the file and cites the ledger events and documents.
+5. Each other file shows one rule: Verde completes with no human; Carpatic has a tax debt; Delta is suspended; Nord's DSCR is 1.06; Medica's signatory isn't the administrator; Solaris's certificate is too old; Atelier is an annual review.
+
+The live site is shared, so other visitors may change the cases. **Reset demo** in the toolbar restores demo-1. Every demo account and what it shows: [`docs/auth.md`](docs/auth.md).
+
+## Where to look, by judging criterion
+| Criterion | Evidence |
+|---|---|
+| Agent design and orchestration | the hybrid planner and its fallbacks (`backend/app/agent.py`), the gate (`backend/app/engine.py`), two-judge consensus (`backend/app/judge.py`), learning with maker-checker (`backend/app/learner.py`) |
+| Functional completeness and testability | the live site; 201 tests (`backend/tests/`); judge calibration on 150 labelled pairs, 0 false approvals (`backend/eval/`) |
+| Architecture and reproducibility | [`docs/design.md`](docs/design.md); one command to run offline (below); `Dockerfile` and the Railway deploy |
+| Problem research and domain | [`research/`](research/) (sourced); the forms in `research/09-document-templates.md`; the rules in `backend/app/template.py` |
+| Originality | time as a first-class ledger; rules over sequences of events (SR-01); an agent that cannot overstep; learning only through a supervisor |
+
+## Limits, plainly
+- Synthetic data only; the trade register, ANAF and e-mail are simulated.
+- PDFs are stored but not read (no OCR yet): they wait for a person.
+- Credit-bureau consent is recorded, not enforced.
+- Our own security audit has 2 Medium findings open ([`docs/security-audit.md`](docs/security-audit.md)).
+- Templates are code; an admin template editor isn't built.
+
+More detail under "Known limitations" below.
 
 ## Run it (one command, no API keys)
 ```bash
