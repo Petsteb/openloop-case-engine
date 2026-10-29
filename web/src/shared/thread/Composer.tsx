@@ -55,6 +55,8 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
   const suppressed = !trigger || closedFor === trigger.start || closedByCompleteToken(trigger.char, trigger.query, all)
   const waiting = !suppressed && !mentionables && loadingMentions
   const open = !suppressed && options.length > 0
+  // nothing to reference yet (a fresh file has no people until its documents arrive): say so instead of staying silent
+  const none = !suppressed && !!mentionables && all.length === 0
   const tKey = trigger ? `${trigger.start}:${trigger.query}` : ''
   const activeIdx = Math.min(act.k === tKey ? act.i : 0, Math.max(0, options.length - 1))
   const setActive = (i: number) => setAct({ k: tKey, i })
@@ -74,7 +76,7 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
 
   // the list opens above the box and never taller than the visible space above it (a phone keyboard shrinks that space)
   useEffect(() => {
-    if (!open && !waiting) return
+    if (!open && !waiting && !none) return
     const fit = () => {
       const f = formRef.current
       if (!f) return
@@ -88,7 +90,7 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
     vv?.addEventListener('scroll', fit)
     window.addEventListener('resize', fit)
     return () => { vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); window.removeEventListener('resize', fit) }
-  }, [open, waiting])
+  }, [open, waiting, none])
 
   // touch screens: keep the box above the on-screen keyboard while it grows
   useEffect(() => {
@@ -152,7 +154,7 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
       if (e.key === 'ArrowUp') { e.preventDefault(); setActive((activeIdx - 1 + options.length) % options.length); return }
       if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { e.preventDefault(); pick(options[activeIdx]); return }
     }
-    if (e.key === 'Escape' && (open || waiting) && trigger) { e.preventDefault(); e.stopPropagation(); setClosedFor(trigger.start); return }
+    if (e.key === 'Escape' && (open || waiting || none) && trigger) { e.preventDefault(); e.stopPropagation(); setClosedFor(trigger.start); return }
     if (e.key === 'Enter' && !e.shiftKey && !isCoarse()) { e.preventDefault(); void submit() }
   }
 
@@ -160,7 +162,7 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
 
   return (
     <form ref={formRef} className="thr-composer" onSubmit={onFormSubmit} aria-busy={sending || undefined}>
-      {open || waiting ? (
+      {open || waiting || none ? (
         <div className="thr-pop" style={{ maxHeight: popMax }}>
           {open ? (
             <ul ref={listRef} id={listId} role="listbox" className="thr-opts" aria-label={trigger?.char === '@' ? 'People' : 'Documents and events'}
@@ -174,7 +176,10 @@ export function Composer({ role, mentionables, loadingMentions, onNeedMentions, 
                 </li>
               ))}
             </ul>
-          ) : <p className="thr-pop-wait" role="status">Loading suggestions…</p>}
+          ) : waiting ? <p className="thr-pop-wait" role="status">Loading suggestions…</p>
+            : <p className="thr-pop-wait" role="status">
+              {trigger?.char === '@' ? 'No people on this file yet. They appear once the documents arrive.' : 'Nothing to reference on this file yet.'}
+            </p>}
         </div>
       ) : null}
       <div className="thr-box">
