@@ -69,7 +69,7 @@ Open the bank app at `http://localhost:8000/#/case/demo-1`. The demo toolbar at 
 8. **Next client event → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
 9. **Next internal event ×2** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
 10. **Ask tab** (chat, two roles):
-    - **Employee:** "When did we learn about Radu Pop and what did we do?" The answer cites ledger events `[#seq]`.
+    - **Employee:** type "When did we learn about Radu Pop and what did we do?" (the suggestion chips are generated from each case). The answer cites ledger events `[#seq]`.
     - **Client:** "What do you still need from me?" The answer is plain-language. The client role never sees internal reviews.
 11. **Messages tab**: the client got one Romanian email per step (documents needed, reminders, file complete), never anything internal. Bank staff and the client can also write to each other there, referencing documents (`#doc-3`), events (`#12`) and people (`@Radu Pop`).
 12. **Check ledger**: the hash chain is intact, including every chat turn and email.
