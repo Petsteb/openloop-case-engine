@@ -1,5 +1,7 @@
 /* Pure helpers for the portal: the client copy filter, state and progress derivation, and request/document matching. */
-import type { ClientDocument, ClientView, Confirmation, MissingDocument, PortalState, TimelineItem } from './types'
+import type {
+  CaseRow, ClientDocument, ClientView, Confirmation, MissingDocument, PortalNotification, PortalState, TimelineItem,
+} from './types'
 
 export const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
 
@@ -37,7 +39,8 @@ export function shortLabel(m: MissingDocument): string {
   const [type, person] = m.key.split(':')
   if (type === 'id_card' && person) return `${person}’s identity card`
   const base = safe(m.label, 'document').replace(/\s*\([^)]*\)\s*$/, '')
-  return base.charAt(0).toLowerCase() + base.slice(1)
+  // "Fiscal certificate" reads "fiscal certificate" mid-sentence; an acronym ("UBO declaration") keeps its capitals
+  return /^[A-Z][a-z]/.test(base) ? base.charAt(0).toLowerCase() + base.slice(1) : base
 }
 
 /* ---------- state ---------- */
@@ -163,3 +166,86 @@ export function dayOf(iso: string, v: ClientView): number | null {
 export const hhmm = (iso: string) => (/T(\d{2}:\d{2})/.exec(iso)?.[1] ?? '')
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+/* ---------- the one next action (shared by the file page and My files) ---------- */
+export const IDLE_TEXT: Record<PortalState, string> = {
+  needs_you: 'Nothing to do right now.',
+  under_review: 'Nothing to do right now. The bank is reviewing your file and will tell you if it needs anything.',
+  in_progress: 'Nothing to do right now. We are checking your documents.',
+  complete: 'Nothing to do. A bank officer will contact you with the decision.',
+}
+
+/** What the client should do next, from what is pending. Null when nothing is asked of them. */
+export function needsText(state: PortalState, missing: number, confirmations: number): string | null {
+  // complete, but a question is still open (credit-bureau consent stays pending by design): never "Complete" next to it
+  if (pillState(state, missing, confirmations) !== state) {
+    return `Your documents are complete. ${confirmations === 1 ? 'One question left.' : `${confirmations} questions left.`}`
+  }
+  if (missing && confirmations) return `Please send ${plural(missing, 'document', 'documents')} and answer ${plural(confirmations, 'question', 'questions')}.`
+  if (missing) return missing === 1 ? 'Please send us one document.' : `Please send us ${missing} documents.`
+  if (confirmations) return confirmations === 1 ? 'Please answer one question from the bank.' : `Please answer ${confirmations} questions from the bank.`
+  return null
+}
+export const nextText = (state: PortalState, missing: number, confirmations: number) =>
+  needsText(state, missing, confirmations) ?? IDLE_TEXT[state]
+
+/* ---------- files (multi-case) ---------- */
+/** The client's name for a kind of file. The server's titles are written for staff ("SME loan and KYB check"). */
+const CLIENT_TEMPLATES: Record<string, { title: string; eyebrow: string; about: string; decides: string }> = {
+  sme_loan: {
+    title: 'Working-capital loan',
+    eyebrow: 'Your financing file',
+    about: 'Financing for your day-to-day business. We ask for your documents, check them, and a bank officer decides.',
+    decides: 'A bank officer makes the credit decision.',
+  },
+  kyb_review: {
+    title: 'Annual business review',
+    eyebrow: 'Your annual business review',
+    about: 'Your yearly check-in with the bank: we confirm that your company, its owners and its taxes are up to date.',
+    decides: 'A bank officer completes the review.',
+  },
+}
+export function templateTitle(id: string | undefined, serverTitle?: string): string {
+  const known = id ? CLIENT_TEMPLATES[id] : undefined
+  return known ? known.title : safe(serverTitle, 'Your file')
+}
+/** The line above the company name on a file page. */
+export const fileEyebrow = (id: string | undefined, serverTitle?: string) =>
+  (id ? CLIENT_TEMPLATES[id]?.eyebrow : undefined) ?? templateTitle(id, serverTitle)
+export function templateAbout(id: string | undefined, serverText?: string): string {
+  const known = id ? CLIENT_TEMPLATES[id] : undefined
+  return known ? known.about : safe(serverText, 'A new file with the bank.')
+}
+export const decidesLine = (id: string | undefined) =>
+  (id ? CLIENT_TEMPLATES[id]?.decides : undefined) ?? 'A bank officer makes the final decision.'
+/** The loan amount line ("Working-capital loan, 500,000 RON") only belongs to a loan file: the server sends the
+ *  company's product on every file, an annual review included. */
+export const productFor = (template: string | undefined, product: string | undefined) =>
+  (!template || template === 'sme_loan') && product ? safe(product, '') : ''
+
+const asState = (s: unknown): PortalState => (STATES.includes(s as PortalState) ? (s as PortalState) : 'in_progress')
+export const rowState = (r: CaseRow) => asState(r.state)
+/** How many things the file asks of the client. */
+export const rowNeeds = (r: CaseRow) => Math.max(0, Number(r.needs_you ?? r.waiting_on_client ?? 0) || 0)
+/** The row's pill tone: like the file page, a complete file with a question still open reads "needs you". */
+export const rowTone = (r: CaseRow): PortalState => {
+  const s = rowState(r)
+  return s === 'complete' && rowNeeds(r) > 0 ? 'needs_you' : s
+}
+export const STATE_SHORT: Record<PortalState, string> = {
+  needs_you: 'Needs you', under_review: 'Under review', in_progress: 'In progress', complete: 'Complete',
+}
+/** Files that need the client first (state, then how much they ask), then the most recently active. */
+export function sortRows(rows: CaseRow[]): CaseRow[] {
+  const rank = (r: CaseRow) => (rowTone(r) === 'needs_you' ? 0 : rowNeeds(r) > 0 ? 1 : 2)
+  return [...rows].sort((a, b) => (rank(a) - rank(b)) || (rowNeeds(b) - rowNeeds(a))
+    || String(b.last_activity ?? '').localeCompare(String(a.last_activity ?? '')) || String(a.id).localeCompare(String(b.id)))
+}
+
+/** A notification line for the bell. The server sends client-safe text; a staff role written after the author
+ *  ("Ana Pop (analyst): ...") is dropped, and anything else that looks internal falls back to a neutral line. */
+export function notificationText(n: PortalNotification): string {
+  const fallback = n.kind === 'action' ? 'Your file needs something from you.' : 'New message from the bank.'
+  const raw = typeof n.text === 'string' ? n.text.replace(/^([^:()]{1,60}?)\s*\([^)]{1,40}\)\s*:/, '$1:') : ''
+  return safe(raw, fallback)
+}

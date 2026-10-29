@@ -74,3 +74,50 @@ export interface SampleFile { key: string; label: string; filename: string; vari
 export interface Citation { kind: 'event' | 'doc' | string; ref: string | number; label?: string }
 export interface ChatHistoryItem { role: 'user' | 'assistant'; content: string }
 export interface ChatResponse { answer: string; citations?: Citation[]; tools_used?: unknown[]; mode?: string }
+
+/* ---------- multi-case (contract v3) ---------- */
+export interface GlobalVersion { cases: number; events: number }
+
+/** One row of GET /api/cases?role=client&company_id=: the client wording only (no open decisions). */
+export interface CaseRow {
+  id: string
+  title?: string
+  template?: string
+  template_title?: string
+  company_id?: string
+  company?: string
+  product?: string
+  status?: string
+  state?: PortalState | string
+  status_text?: string
+  waiting_on_client?: number
+  needs_you?: number
+  day?: number
+  events?: number
+  last_message_seq?: number
+  last_action_seq?: number
+  last_activity?: string
+}
+
+/** GET /api/companies. `story` is a staff note for the demo: never shown on the portal. */
+export interface Company {
+  id: string
+  name: string
+  cui?: string
+  city?: string
+  county?: string
+  product?: string
+  templates?: string[]
+}
+
+export interface Template { id: string; title: string; description?: string; requirements?: string[] }
+
+/** GET /api/notifications?role=client&company_id=, newest first. */
+export interface PortalNotification {
+  case_id: string
+  company?: string
+  kind: 'action' | 'message' | string
+  text: string
+  seq: number
+  day?: number
+}

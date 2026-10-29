@@ -33,11 +33,14 @@ export function failureText(e: unknown): string {
  * and `busy` is true. Every POST returns a Bundle, which replaces the whole state.
  * Live updates: another window (the client portal, a second bank screen) can change the case, so the hook polls
  * `/version` and refetches only when the ledger length changed; see the effect at the end.
+ * One hook instance serves one case: App mounts the case screen with `key={caseId}`, so switching cases starts fresh.
  */
-export function useCase(caseId = 'demo-1') {
+export function useCase(caseId: string) {
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** The server does not know this case id (only demo-1 is created on demand). */
+  const [missing, setMissing] = useState(false)
   const lock = useRef(false)
   // Every bundle that lands bumps `gen`, so a slower poll answer can never overwrite a newer bundle.
   const gen = useRef(0)
@@ -74,11 +77,13 @@ export function useCase(caseId = 'demo-1') {
       const b = await api.getBundle(caseId)
       setB(b)
       setError(null)
+      setMissing(false)
     } catch (e) {
       // A fresh server may not know the case yet: create the demo case once.
       if (e instanceof ApiError && e.status === 404 && caseId === 'demo-1') {
         try { setB(await api.reset()); setError(null); return } catch (e2) { setError(failureText(e2)); return }
       }
+      if (e instanceof ApiError && e.status === 404) { setMissing(true); setError('This case does not exist on this server. It may have been removed by a demo reset.'); return }
       setError(failureText(e))
     }
   }, [caseId, setB])
@@ -132,5 +137,5 @@ export function useCase(caseId = 'demo-1') {
     return () => { stopped = true; window.clearTimeout(timer) }
   }, [caseId, setB])
 
-  return { bundle, busy, error, act, load, refresh, caseId }
+  return { bundle, busy, error, missing, act, load, refresh, caseId }
 }

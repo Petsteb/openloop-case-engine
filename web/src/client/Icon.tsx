@@ -15,6 +15,8 @@ const ICONS: Record<string, ReactNode> = {
   alert: <g><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.5h.01" /></g>,
   clock: <g><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></g>,
   phone: <path d="M6.6 3.5h2.6l1.4 4-2 1.3a12 12 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A17 17 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z" />,
+  bell: <g><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></g>,
+  plus: <path d="M12 5v14M5 12h14" />,
   external: <g><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" /></g>,
 }
 

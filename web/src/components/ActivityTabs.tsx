@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  arr, blockedWhy, byTag, caseClock, eventText, feedItems, fTime, fWeekDate, gateRule, ms, parseMaybe, plain, shortHash,
+  arr, blockedWhy, byTag, caseClock, eventText, feedItems, fTime, fWeekDate, gateRule, parseMaybe, plain, shortHash,
   tidy, whoLabel,
 } from '@/lib/derive'
-import type { Bundle, OutboxEmail, TraceStep } from '@/lib/types'
+import type { Bundle, TraceStep } from '@/lib/types'
 import { Btn } from './Btn'
-import { Icon } from './Icon'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -100,50 +99,6 @@ export function ReasoningList({ bundle }: { bundle: Bundle }) {
         return <div key={s.seq}>{head}<Step s={s} ruleText={(id) => tidy(rules.get(id) || '')} /></div>
       })}
       {steps.length > limit ? <button type="button" className="linkish" onClick={() => setLimit((l) => l + 60)}>Show older steps</button> : null}
-    </div>
-  )
-}
-
-function Mail({ m, clockTime }: { m: OutboxEmail; clockTime: string }) {
-  const [open, setOpen] = useState(false)
-  const failed = m.status === 'failed'
-  const gmail = m.mode === 'gmail'
-  return (
-    <article className={'mail' + (failed ? ' failed' : '')}>
-      <span className="when">{clockTime}</span>
-      <div style={{ minWidth: 0 }}>
-        {/* subject and body are the client's Romanian email, shown verbatim */}
-        <button type="button" className="mail-subj" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <Icon name="chevron" size={13} />
-          <span>{m.subject || 'No subject'}</span>
-        </button>
-        <div className="mail-meta">
-          <span className="mail-to">To <span className="mono">{m.to || 'the client'}</span></span>
-          <span className="tag">{gmail ? 'Gmail' : 'Outbox, not sent'}</span>
-          {failed ? <span className="st st-conflict"><i aria-hidden="true" />Failed</span> : gmail ? <span>Sent</span> : null}
-        </div>
-        {failed && m.error ? <p className="mail-err">{String(m.error)}</p> : null}
-        {open ? <pre className="mail-body">{m.body || 'This email has no text.'}</pre> : null}
-      </div>
-    </article>
-  )
-}
-
-/** Client emails, newest first as the server sends them. Bodies open on click. */
-export function OutboxList({ bundle }: { bundle: Bundle }) {
-  const clock = caseClock(bundle)
-  const mails = arr(bundle.outbox)
-  if (!mails.length) return <p className="empty">No emails to the client yet.</p>
-  const times = mails.map((m) => ms(m.sim_time))
-  const days = times.map((t) => (t === null ? null : clock.dayNo(t)))
-  return (
-    <div className="feed">
-      {mails.map((m, i) => {
-        const t = times[i]
-        const head = i === 0 || days[i] !== days[i - 1]
-          ? <div className="feed-day">{t === null ? 'Undated' : `Day ${days[i]}, ${fWeekDate(t)}`}</div> : null
-        return <div key={m.seq ?? i}>{head}<Mail m={m} clockTime={t === null ? '' : fTime(t)} /></div>
-      })}
     </div>
   )
 }

@@ -2,7 +2,8 @@
    narrowed to the client endpoints in the spec's API table. Every function is safe to call against an older
    server: a missing endpoint throws an ApiError that isUnavailable() recognises. */
 import type {
-  ChatHistoryItem, ChatResponse, ClientDocument, ClientDocumentDetail, ClientView, ConfirmKind, SampleFile, VersionInfo,
+  CaseRow, ChatHistoryItem, ChatResponse, ClientDocument, ClientDocumentDetail, ClientView, Company, ConfirmKind, GlobalVersion,
+  PortalNotification, SampleFile, Template, VersionInfo,
 } from './types'
 
 /** Every failed call throws this. `status` 0 means the server could not be reached; -1 means it answered without JSON. */
@@ -61,13 +62,35 @@ export const upload = (id: string, key: string, filename: string, contentB64: st
 /** Demo only: uploads the prepared synthetic file for a request. `wrong_company` sends another firm's certificate. */
 export const uploadSample = (id: string, key: string, variant: 'ok' | 'wrong_company' = 'ok') =>
   call<ClientView>('POST', `${c(id)}/upload-sample`, { key, variant })
-export const sampleFiles = () => call<SampleFile[]>('GET', '/api/demo/sample-files')
+/** The case's prepared sample files (keys spelled like that case's requests). An older server only has the demo-1 list. */
+export async function sampleFiles(id: string): Promise<SampleFile[]> {
+  try {
+    return await call<SampleFile[]>('GET', `${c(id)}/sample-files`)
+  } catch (e) {
+    if (isUnavailable(e) && id === 'demo-1') return call<SampleFile[]>('GET', '/api/demo/sample-files')
+    throw e
+  }
+}
 /** 409 when nothing of that kind is pending. */
 export const clientConfirm = (id: string, kind: ConfirmKind, answer: 'yes' | 'no') =>
   call<ClientView>('POST', `${c(id)}/client-confirm`, { kind, answer })
 /** The chat with the role fixed to "client": the portal can never ask as an employee. */
 export const chat = (id: string, message: string, history: ChatHistoryItem[]) =>
   call<ChatResponse>('POST', `${c(id)}/chat`, { role: 'client', message, history: history.slice(-10) })
+
+/* ---------- multi-case: the client's home ---------- */
+const q = encodeURIComponent
+/** A cheap global change detector: refetch the lists when it changes. */
+export const getGlobalVersion = () => call<GlobalVersion>('GET', '/api/version')
+export const listCases = (companyId: string) => call<CaseRow[]>('GET', `/api/cases?role=client&company_id=${q(companyId)}`)
+export const listCompanies = () => call<Company[]>('GET', '/api/companies')
+export const listTemplates = () => call<Template[]>('GET', '/api/templates')
+export const notifications = (companyId: string) =>
+  call<PortalNotification[]>('GET', `/api/notifications?role=client&company_id=${q(companyId)}`)
+/** Opens a new file. Answers with the bank's bundle: only `case.id` is read here. 422 for a pair the company has no
+ *  documents for. */
+export const createCase = (template: string, companyId: string) =>
+  call<{ case?: { id?: string } }>('POST', '/api/cases', { template, company_id: companyId })
 
 /** The server's limit (backend `_ingest_upload`: more than 1,000,000 bytes is refused). */
 export const MAX_UPLOAD_BYTES = 1_000_000

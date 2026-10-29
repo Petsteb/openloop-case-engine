@@ -1,37 +1,38 @@
-import { Icon } from './Icon'
-import { dayOf, hhmm } from './derive'
-import type { ClientEmail, ClientView } from './types'
+import { useCallback, useRef, useState } from 'react'
+import { Thread } from '@/shared/thread'
+import * as api from './api'
+import { isUnavailable } from './api'
+import { DocSheet, type DetailState } from './Documents'
+import type { ClientDocument } from './types'
 
-export const mailId = (e: ClientEmail, i: number) => `${e.sim_time}#${i}`
+/** "Messages with the bank": the client's thread with the bank, including the bank's automatic emails. A document
+ *  named in a message opens in the portal's own document sheet (this component keeps its own copy of the sheet). */
+export function Messages({ caseId, role }: { caseId: string; role: 'client' }) {
+  const [sheet, setSheet] = useState<{ doc: ClientDocument; detail: DetailState } | null>(null)
+  const want = useRef<string | null>(null)
 
-interface Props {
-  view: ClientView
-  emails: { e: ClientEmail; id: string }[]   // newest first
-  open: Set<string>
-  flash: string | null
-  onToggle: (id: string) => void
-}
+  const openDoc = useCallback(async (id: string) => {
+    want.current = id
+    setSheet({ doc: { id, type: '', name: 'Document', received_day: null, status: '', status_word: '' }, detail: 'loading' })
+    const [rows, detail] = await Promise.all([
+      api.getDocuments(caseId).catch(() => null),
+      api.getDocument(caseId, id).then((d) => d as DetailState).catch((e) => (isUnavailable(e) ? 'unavailable' : 'error') as DetailState),
+    ])
+    if (want.current !== id) return   // closed, or another document was opened meanwhile
+    const row = Array.isArray(rows) ? rows.find((d) => d.id === id) : undefined
+    const det = typeof detail === 'object' ? detail : undefined
+    setSheet({
+      doc: row ?? { id, type: '', name: det?.name ?? 'Document', received_day: det?.received_day ?? null, status: '', status_word: det?.status_word ?? '' },
+      detail,
+    })
+  }, [caseId])
 
-/** The emails the bank sent, verbatim in Romanian, newest first. The body opens on click. */
-export function Messages({ view, emails, open, flash, onToggle }: Props) {
-  if (!emails.length) return <p className="pt-empty">No messages yet.</p>
+  const close = () => { want.current = null; setSheet(null) }
+
   return (
-    <ul className="pt-mails">
-      {emails.map(({ e, id }) => {
-        const isOpen = open.has(id)
-        const day = dayOf(e.sim_time, view)
-        const bodyId = `mail-${id.replace(/[^a-z0-9]/gi, '')}`
-        return (
-          <li key={id} className={`pt-mail${flash === id ? ' pt-flash' : ''}`} data-mail={id}>
-            <button type="button" className="pt-mail-head" aria-expanded={isOpen} aria-controls={bodyId} onClick={() => onToggle(id)}>
-              <Icon name="chevron" size={14} className="pt-chev" />
-              <span className="pt-mail-subj" lang="ro">{e.subject || '(fără subiect)'}</span>
-              <span className="pt-mail-when">{day != null ? `Day ${day}, ` : ''}{hhmm(e.sim_time)}</span>
-            </button>
-            {isOpen ? <div id={bodyId} className="pt-mail-body" lang="ro">{e.body}</div> : null}
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      <Thread caseId={caseId} role={role} onOpenDoc={(id) => void openDoc(id)} className="thr-portal" />
+      <DocSheet doc={sheet?.doc} detail={sheet?.detail} onClose={close} />
+    </>
   )
 }

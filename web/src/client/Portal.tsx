@@ -3,47 +3,18 @@ import { toast } from 'sonner'
 import * as api from './api'
 import { ApiError, isUnavailable } from './api'
 import { Ask } from './Ask'
-import { PortalBoundary } from './Boundary'
+import { PortalBoundary, SectionBoundary } from './Boundary'
 import { DocSheet, Documents, type DetailState } from './Documents'
 import { Icon } from './Icon'
-import { Messages, mailId } from './Messages'
+import { Messages } from './Messages'
 import { ConfirmCard, DisputeNotice, RequestCard, type CardState } from './Needs'
 import {
-  arr, latestDispute, pillState, plural, portalState, progressSteps, safe, sameKey, shortLabel, sortRequests, STATE_PILL, type Step,
+  arr, decidesLine, latestDispute, nextText as nextTextFor, pillState, portalState, productFor, progressSteps, safe, sameKey,
+  shortLabel, sortRequests, STATE_PILL, fileEyebrow, type Step,
 } from './derive'
-import type { Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
+import { markSeen } from './store'
+import type { CaseRow, Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
-
-/* ---------- theme: shares the bank screen's stored choice (openloop-theme), else follows the system ---------- */
-type Theme = 'dark' | 'light'
-const THEME_KEY = 'openloop-theme'
-function savedTheme(): Theme | null {
-  try {
-    const v = JSON.parse(window.localStorage.getItem(THEME_KEY) ?? 'null')
-    return v === 'dark' || v === 'light' ? v : null
-  } catch { return null }
-}
-export function initialTheme(): Theme {
-  const s = savedTheme()
-  if (s) return s
-  try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' } catch { return 'dark' }
-}
-function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(initialTheme)
-  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
-  useEffect(() => {
-    // the bank screen in the other window toggles the theme: follow it
-    const on = (e: StorageEvent) => { if (e.key === THEME_KEY) { const s = savedTheme(); if (s) setTheme(s) } }
-    window.addEventListener('storage', on)
-    return () => window.removeEventListener('storage', on)
-  }, [])
-  const toggle = () => setTheme((t) => {
-    const n = t === 'dark' ? 'light' : 'dark'
-    try { window.localStorage.setItem(THEME_KEY, JSON.stringify(n)) } catch { /* storage unavailable */ }
-    return n
-  })
-  return [theme, toggle]
-}
 
 const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
 
@@ -69,35 +40,43 @@ function Progress({ steps }: { steps: Step[] }) {
   )
 }
 
-const IDLE_TEXT: Record<PortalState, string> = {
-  needs_you: 'Nothing to do right now.',
-  under_review: 'Nothing to do right now. The bank is reviewing your file and will tell you if it needs anything.',
-  in_progress: 'Nothing to do right now. We are checking your documents.',
-  complete: 'Nothing to do. A bank officer will contact you with the decision.',
+const maxSeq = (v: ClientView) => arr(v.timeline).reduce((m, e) => Math.max(m, Number(e?.seq) || 0), 0)
+
+interface PortalProps {
+  caseId: string
+  /** this file's row in My files (template, title), once the chosen company's list has it */
+  file?: CaseRow
+  /** the file's company name, so the demo can view the portal as that company */
+  onCompanyName?: (name: string) => void
 }
 
-export function Portal() {
-  const { view, docs, error, refresh, track, mutate, caseId, gen } = useClientView('demo-1')
-  const [theme, toggleTheme] = useTheme()
+/** One file. Rendered with key={caseId}: switching files remounts it, so no state carries over. */
+export function Portal({ caseId, file, onCompanyName }: PortalProps) {
+  const { view, docs, error, refresh, track, mutate, gen, ledger } = useClientView(caseId)
+  const companyName = view?.overview?.company
+  useEffect(() => { if (companyName && onCompanyName) onCompanyName(companyName) }, [companyName, onCompanyName])
+  // opening the file marks it seen up to the newest ledger seq this page knows (the client timeline hides some)
+  useEffect(() => { if (view) markSeen(caseId, Math.max(ledger ?? 0, maxSeq(view)), ledger) }, [caseId, view, ledger])
+  useEffect(() => {
+    const name = companyName ? safe(companyName, '') : ''
+    document.title = name ? `${name} · Your file` : 'Your file'
+  }, [companyName])
   if (!view) {
     return (
-      <div className="pt">
-        <DemoStrip theme={theme} onTheme={toggleTheme} />
-        <div className="pt-wrap">
-          {error ? (
-            <div className="pt-loading" role="alert">
-              <p>{error}</p>
-              <button type="button" className="btn" onClick={() => void refresh()}>Try again</button>
-            </div>
-          ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your file…</p>}
-        </div>
+      <div className="pt-wrap">
+        {error ? (
+          <div className="pt-loading" role="alert">
+            <p>{error}</p>
+            <button type="button" className="btn" onClick={() => void refresh()}>Try again</button>
+          </div>
+        ) : <p className="pt-loading" role="status"><Icon name="spinner" size={16} className="spin" />Loading your file…</p>}
       </div>
     )
   }
   // a demo reset (the ledger got shorter) remounts the page: no notes, chat or open rows from the previous run
   return (
-    <PortalBoundary key={gen}>
-      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} theme={theme} toggleTheme={toggleTheme}
+    <PortalBoundary key={gen} inner>
+      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} file={file}
         track={track} mutate={mutate} refresh={refresh} />
     </PortalBoundary>
   )
@@ -108,8 +87,7 @@ interface FileProps {
   docs: ClientDocument[] | null
   error: string | null
   caseId: string
-  theme: Theme
-  toggleTheme: () => void
+  file?: CaseRow
   track: <T>(p: Promise<T>) => Promise<T>
   mutate: ReturnType<typeof useClientView>['mutate']
   refresh: () => Promise<boolean>
@@ -118,14 +96,13 @@ interface FileProps {
 const toggleIn = (s: Set<string>, id: string) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }
 const docNo = (id: string) => Number(String(id ?? '').replace(/\D/g, '')) || 0
 
-function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate, refresh }: FileProps) {
+function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: FileProps) {
   const [cards, setCards] = useState<Record<string, CardState>>({})
   const [ghosts, setGhosts] = useState<Record<string, MissingDocument>>({})
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<{ kind: string; answer: 'yes' | 'no' } | null>(null)
   const [hiddenDispute, setHiddenDispute] = useState<number | null>(null)   // "Hide this message" (this page only)
   const [samples, setSamples] = useState<SampleFile[] | null>(null)
-  const [openMail, setOpenMail] = useState<Set<string>>(() => new Set())
   const [openDocs, setOpenDocs] = useState<Set<string>>(() => new Set())
   const [details, setDetails] = useState<Record<string, { word: string; d: DetailState }>>({})
   const [sheet, setSheet] = useState<string | null>(null)
@@ -136,9 +113,9 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   /* sample files: only offer "Use sample file" when one exists for the request */
   useEffect(() => {
     let live = true
-    api.sampleFiles().then((s) => { if (live) setSamples(Array.isArray(s) ? s : []) }).catch(() => { if (live) setSamples([]) })
+    api.sampleFiles(caseId).then((s) => { if (live) setSamples(Array.isArray(s) ? s : []) }).catch(() => { if (live) setSamples([]) })
     return () => { live = false }
-  }, [])
+  }, [caseId])
 
   const docList = useMemo(() => [...arr(docs ?? undefined)].sort((a, b) =>
     ((b.received_day ?? 0) - (a.received_day ?? 0)) || (docNo(b.id) - docNo(a.id))), [docs])
@@ -171,15 +148,16 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   const state = portalState(view)
   const missing = arr(view.missing_documents)
   const confirmations = arr(view.confirmations)
-  const company = safe(view.overview?.company, 'Brutăria Aurora SRL')
-  const product = view.overview?.product ? safe(view.overview.product, '') : ''
+  const company = safe(view.overview?.company, 'Your company')
+  // the server sends the company's loan line on every file: show it on a loan file only
+  const product = file ? productFor(file.template, view.overview?.product) : ''
+  const kind = file ? fileEyebrow(file.template, file.template_title) : 'Your file with the bank'
 
   // pending requests plus the ones that were just received (kept for a moment to show "Received")
   const requests = useMemo(() => {
     const keys = new Set(missing.map((m) => m.key))
     return sortRequests([...missing, ...Object.values(ghosts).filter((g) => !keys.has(g.key))])
   }, [missing, ghosts])
-  const emails = useMemo(() => arr(view.emails).map((e, i) => ({ e, id: mailId(e, i) })).reverse(), [view.emails])
   const steps = progressSteps(view, docList)
   const known = useMemo(() => ({
     seqs: new Set<number>([...arr(view.timeline).map((e) => e.seq), ...missing.map((m) => m.seq ?? -1), ...confirmations.map((c) => c.ref_seq ?? -1)]),
@@ -287,13 +265,6 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
         return flashTo(d.id, `[data-doc="${CSS.escape(d.id)}"]`)
       }
     }
-    if (ev && (ev.type === 'REMINDER_SENT' || ev.type === 'DOCUMENT_REQUESTED')) {
-      const m = emails.find((x) => x.e.sim_time === ev.when)
-      if (m) {
-        setOpenMail((s) => new Set(s).add(m.id))
-        return flashTo(m.id, `[data-mail="${CSS.escape(m.id)}"]`)
-      }
-    }
     if (ev) toast(`Day ${ev.day}: ${safe(ev.what, 'Your file was updated.')}`)
     else toast(c.label ? safe(c.label, 'Your file was updated.') : 'This item is no longer on your file.')
   }
@@ -304,13 +275,8 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   const pill = pillState(state, missing.length, confirmations.length)
   const dispute = latestDispute(view)
   const showDispute = !!dispute && hiddenDispute !== dispute.seq
-  let nextText: string
-  // complete, but a question is still open (credit-bureau consent stays pending by design): never "Complete" next to it
-  if (pill !== state) nextText = `Your documents are complete. ${confirmations.length === 1 ? 'One question left.' : `${confirmations.length} questions left.`}`
-  else if (missing.length && confirmations.length) nextText = `Please send ${plural(missing.length, 'document', 'documents')} and answer ${plural(confirmations.length, 'question', 'questions')}.`
-  else if (missing.length) nextText = missing.length === 1 ? 'Please send us one document.' : `Please send us ${missing.length} documents.`
-  else if (confirmations.length) nextText = confirmations.length === 1 ? 'Please answer one question from the bank.' : `Please answer ${confirmations.length} questions from the bank.`
-  else nextText = IDLE_TEXT[state]
+  // complete with a question still open (credit-bureau consent stays pending by design) never reads "Complete"
+  const nextText = nextTextFor(state, missing.length, confirmations.length)
   const needsYou = missing.length + confirmations.length > 0
   const nextAction = () => {
     if (first) {
@@ -327,12 +293,11 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
   const sheetDoc = docList.find((d) => d.id === sheet)
 
   return (
-    <div className="pt">
-      <DemoStrip theme={theme} onTheme={toggleTheme} />
+    <>
       <div className="pt-wrap">
         <header className="pt-head">
           <div className="pt-head-main">
-            <p className="pt-eyebrow">Your financing file</p>
+            <p className="pt-eyebrow">{kind}</p>
             <h1 className="pt-company">{company}</h1>
             {product ? <p className="pt-product">{product}</p> : null}
           </div>
@@ -382,9 +347,10 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
           </section>
 
           <section className="pt-sec pt-a-msgs" aria-labelledby="h-msgs">
-            <h2 id="h-msgs" className="pt-h2">Messages from the bank{emails.length ? <span className="pt-count">{emails.length}</span> : null}</h2>
-            <Messages view={view} emails={emails} open={openMail} flash={flash}
-              onToggle={(id) => setOpenMail((s) => toggleIn(s, id))} />
+            <h2 id="h-msgs" className="pt-h2">Messages with the bank</h2>
+            <SectionBoundary fallback="Messages can’t be shown right now. Please reload the page.">
+              <Messages caseId={caseId} role="client" />
+            </SectionBoundary>
           </section>
 
           {docList.length ? (
@@ -403,26 +369,10 @@ function FileView({ view, docs, error, caseId, theme, toggleTheme, track, mutate
 
         <footer className="pt-foot">
           <Icon name="shield" size={16} />
-          <p>Internal reviews and staff notes are not shown here. A bank officer makes the credit decision.</p>
+          <p>Internal reviews and staff notes are not shown here. {decidesLine(file?.template)}</p>
         </footer>
       </div>
       <DocSheet doc={sheetDoc} detail={sheetDoc ? details[sheetDoc.id]?.d : undefined} onClose={() => setSheet(null)} />
-    </div>
-  )
-}
-
-function DemoStrip({ theme, onTheme }: { theme: Theme; onTheme: () => void }) {
-  return (
-    <div className="pt-demo">
-      <div className="pt-demo-in">
-        <p><b>Demo:</b> client view of Brutăria Aurora SRL</p>
-        <div className="pt-demo-tools">
-          <a className="pt-demo-link" href="/" target="_blank" rel="noopener"><span>Bank screen</span><Icon name="external" size={13} /></a>
-          <button type="button" className="pt-icon-btn" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
-          </button>
-        </div>
-      </div>
-    </div>
+    </>
   )
 }

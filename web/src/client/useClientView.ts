@@ -16,6 +16,8 @@ const maxSeq = (v: ClientView | null) =>
  * - pauses while a request from this tab is in flight (`track`);
  * - falls back to refetching every 5 s when /version is not available, and asks for /version again every 30 s.
  * A mutation that returns a client view replaces the state at once, and a poll that started before it is discarded.
+ * Paused while the tab is hidden. `ledger` is the case's ledger length from /version (the newest seq, including events
+ * the client timeline does not show): the file is marked seen up to it.
  * `gen` goes up when the ledger got shorter (a demo reset from the bank screen): the page remounts with clean state.
  */
 export function useClientView(caseId = 'demo-1') {
@@ -23,6 +25,7 @@ export function useClientView(caseId = 'demo-1') {
   const [docs, setDocs] = useState<ClientDocument[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [gen, setGen] = useState(0)
+  const [ledger, setLedger] = useState<number | null>(null)   // the case's ledger length (newest seq), from /version
   const inflight = useRef(0)
   const epoch = useRef(0)            // bumped by every mutation; stale poll results are dropped
   const lastLen = useRef<number | null>(null)
@@ -102,11 +105,13 @@ export function useClientView(caseId = 'demo-1') {
     const tick = async () => {
       let delay = POLL_MS
       try {
-        if (inflight.current === 0) {
+        // paused while the tab is hidden; the next tick after it shows again catches up
+        if (inflight.current === 0 && document.visibilityState !== 'hidden') {
           if (versionOk.current !== false) {
             try {
               const v = await api.getVersion(caseId)
               versionOk.current = true
+              if (Number.isFinite(v?.length)) setLedger(v.length)
               if (lastLen.current !== null && v.length < lastLen.current) resetSeen.current = true   // demo reset
               if (v.length !== lastLen.current) {
                 if (await refresh()) lastLen.current = v.length
@@ -132,5 +137,5 @@ export function useClientView(caseId = 'demo-1') {
     return () => { stopped = true; if (timer) clearTimeout(timer); if (retry) clearTimeout(retry) }
   }, [caseId, refresh])
 
-  return { view, docs, error, refresh, track, mutate, caseId, gen }
+  return { view, docs, error, refresh, track, mutate, caseId, gen, ledger }
 }

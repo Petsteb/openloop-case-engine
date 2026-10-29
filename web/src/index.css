@@ -105,7 +105,9 @@ button { font: inherit; color: inherit; }
 .mono { font-family: var(--mono); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.page { max-width: 1680px; margin: 0 auto; padding-block: 18px 110px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+/* Fluid: big screens use their width (no max-width cap); the gutter grows a little with the window.
+   The bottom padding keeps room for the fixed demo dock (one row, about 42px, 16px off the bottom). */
+.page { --gutter: clamp(16px, 1.5vw, 40px); max-width: none; margin: 0 auto; padding-block: 18px 110px; padding-left: max(var(--gutter), env(safe-area-inset-left, 0px)); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .panel { min-width: 0; border-top: 1px solid var(--line); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 6px; min-width: 0; }
 .panel-head h3 { font-size: 13px; font-weight: 500; color: var(--muted); min-width: 0; }
@@ -312,7 +314,8 @@ button { font: inherit; color: inherit; }
 .release-note:focus-visible { border-color: var(--attn); outline: 2px solid var(--attn); outline-offset: 2px; }
 
 /* ---------- three columns with collapsible side panels ---------- */
-.l-three { display: grid; grid-template-columns: var(--lw, 290px) minmax(0, 1fr) var(--rw, 340px); gap: 36px; align-items: start; transition: grid-template-columns .35s cubic-bezier(.2, .7, .2, 1); min-width: 0; }
+/* Side panels grow modestly with the window (290/340 at 1440, at most 400/500); the centre takes the rest. */
+.l-three { display: grid; grid-template-columns: var(--lw, clamp(290px, 20vw, 400px)) minmax(0, 1fr) var(--rw, clamp(340px, 23.6vw, 500px)); gap: clamp(24px, 2.5vw, 56px); align-items: start; transition: grid-template-columns .35s cubic-bezier(.2, .7, .2, 1); min-width: 0; }
 .l-three > * { min-width: 0; }
 .side-panel { min-width: 0; }
 .collapse { border: 0; background: transparent; color: var(--muted); border-radius: 999px; width: 30px; height: 30px; display: grid; place-items: center; cursor: pointer; transition: color .2s ease, background .2s ease; flex: none; }
@@ -564,10 +567,23 @@ a.btn { text-decoration: none; }
 .docrow-uses .mono { font-size: 11px; color: var(--ink-2); }
 
 /* ---------- demo dock (presenter only) ---------- */
-.dock { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line-2); border-radius: 999px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center; }
+.dock { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line-2); border-radius: 999px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: calc(100vw - 24px); flex-wrap: nowrap; justify-content: center; }
 .dock-label { font-size: 11px; color: var(--muted); padding: 0 6px 0 10px; font-family: var(--mono); }
 .dock .sep { width: 1px; height: 20px; background: var(--line-2); }
 .dock .btn.armed { border-color: var(--conflict); color: var(--conflict); }
+/* always ONE row: below 1024px the secondary controls (3 days, a week, reset) move into the ⋯ menu */
+.dock > * { flex: none; }
+.dock .btn { white-space: nowrap; }
+.dock .dock-narrow, .dock .menu button.dock-narrow { display: none; }
+.dock .menu button.armed { color: var(--conflict); }
+@media (max-width: 1023px) {
+  .dock .dock-wide { display: none; }
+  .dock .menu-wrap.dock-narrow { display: block; }
+  .dock .menu button.dock-narrow { display: flex; }
+  .dock .dock-more { order: 9; }
+  .dock .menu.up { left: auto; right: 0; transform: none; }
+}
+@media (max-width: 420px) { .dock-label { display: none; } }
 
 @media (max-width: 1180px) {
   .l-three { grid-template-columns: var(--lw, 270px) minmax(0, 1fr); }
@@ -589,3 +605,96 @@ a.btn { text-decoration: none; }
   .bt { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ---------- messages thread (src/shared/thread): the bank's Messages tab and the portal's messages section ----------
+   Flat, no bubbles. A 2px rule on the left tells the sides apart (client in ink, bank in a hairline), the viewer's own
+   side is indented, and the bank's automatic emails are compact rows. Phones get 44px targets (media query below). */
+.thr { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.thr-listwrap { position: relative; min-width: 0; }
+.thr-list { max-height: min(500px, 58vh); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; min-width: 0; border-radius: 6px; }
+.thr-list:focus-visible { outline-offset: 0; }
+.thr-items { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.thr-items > li { min-width: 0; }
+.thr-empty { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 8px 0; }
+.thr-icon { flex: none; display: block; }
+.thr-spin { animation: spin .8s linear infinite; }
+
+.thr-msg { margin: 6px 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--line-2); min-width: 0; }
+.thr-msg.is-client { border-left-color: var(--ink-2); }
+.thr-msg.is-mine { margin-left: 20px; }
+.thr-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; min-width: 0; font-size: 12px; color: var(--muted); }
+.thr-who { font-size: 13px; font-weight: 600; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.thr-when { margin-left: auto; font: 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.thr-text { margin-top: 2px; font-size: 14px; line-height: 1.5; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.thr-person { font-weight: 600; color: var(--ink); }
+.thr-ref { display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; margin: 0 1px; padding: 0 7px; border: 1px solid var(--line-2); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; line-height: 1.6; white-space: nowrap; vertical-align: baseline; text-align: left; }
+button.thr-ref { cursor: pointer; }
+button.thr-ref:hover { border-color: var(--attn); color: var(--attn); }
+.thr-ref-code { font: 11px var(--mono); color: var(--muted); flex: none; }
+button.thr-ref:hover .thr-ref-code { color: inherit; }
+.thr-ref-label { min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
+.thr-refrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-width: 0; }
+.thr-docbtn { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; max-width: 100%; padding: 5px 14px 5px 12px; border: 1px solid var(--line-2); border-radius: 999px; background: transparent; color: var(--ink); font-size: 13.5px; line-height: 1.35; text-align: left; cursor: pointer; }
+.thr-docbtn > span { min-width: 0; overflow-wrap: anywhere; }
+.thr-docbtn .thr-icon { color: var(--muted); }
+.thr-docbtn:hover { border-color: var(--ink); }
+
+.thr-mail { margin: 2px 0; min-width: 0; }
+.thr-mail-head { display: grid; grid-template-columns: 14px auto minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; width: 100%; min-height: 32px; padding: 6px 0; border: 0; background: transparent; color: var(--ink-2); font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; }
+.thr-chev { align-self: start; margin-top: 3px; color: var(--muted); transition: transform .2s ease; }
+.thr-mail-head[aria-expanded="true"] .thr-chev { transform: rotate(90deg); }
+.thr-tag { font-size: 11px; line-height: 1.6; padding: 0 7px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.thr-mail-subj { min-width: 0; overflow-wrap: anywhere; }
+.thr-mail-head:hover .thr-mail-subj { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.thr-mail-body { margin: 2px 0 8px 22px; padding: 10px 12px; border-radius: 10px; background: var(--surface); font: 13px/1.55 var(--ui); color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.thr-mail-from { margin-top: 8px; font-size: 12px; color: var(--muted); white-space: normal; }
+.thr-tag.is-failed { display: inline-block; margin-right: 6px; vertical-align: 1px; color: var(--conflict); border-color: color-mix(in srgb, var(--conflict) 60%, transparent); }
+.thr-mail-err { margin: 0 0 8px; font: 11px/1.45 var(--mono); color: var(--conflict); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.thr-pill { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 13px; border: 1px solid var(--attn); border-radius: 999px; background: var(--bg); color: var(--attn); font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+
+.thr-composer { position: relative; min-width: 0; }
+.thr-box { display: flex; align-items: flex-end; gap: 8px; min-width: 0; padding: 4px 4px 4px 14px; border: 1px solid var(--field); border-radius: 18px; }
+.thr-box:focus-within { border-color: var(--attn); }
+.thr-input { flex: 1; min-width: 0; min-height: 32px; max-height: 140px; padding: 5px 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; line-height: 1.45; resize: none; overflow-y: auto; outline: none; box-shadow: none; }
+.thr-input::placeholder { color: var(--muted); }
+.thr-input:focus-visible { outline: none; }
+.thr-send { flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: var(--accent-ink); cursor: pointer; transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
+.thr-send:hover:not(:disabled) { background: var(--attn); border-color: var(--attn); color: var(--attn-ink); }
+.thr-send:disabled { opacity: .5; cursor: not-allowed; }
+.thr-hint { margin-top: 5px; font-size: 12px; color: var(--muted); }
+.thr-pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 30; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.thr-opts { position: relative; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.thr-opt { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 8px; min-height: 32px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2); font-size: 13px; line-height: 1.4; cursor: pointer; }
+.thr-opt.is-active { background: var(--surface-2); color: var(--ink); box-shadow: inset 2px 0 0 var(--attn); }
+.thr-opt-code { font: 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.thr-opt-at { color: var(--muted); }
+.thr-opt-label { min-width: 0; overflow-wrap: anywhere; }
+.thr-opt-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.thr-pop-wait { padding: 10px 12px; font-size: 13px; color: var(--muted); }
+
+/* the portal: more air, 15px text, 16px in the box (no zoom on focus on iPhone); the client's refs read as words */
+.thr-portal { gap: 12px; }
+.thr-portal .thr-list { max-height: min(560px, 64vh); }
+.thr-portal .thr-msg { margin: 8px 0; padding-left: 14px; }
+.thr-portal .thr-msg.is-mine { margin-left: min(15%, 64px); }
+.thr-portal .thr-text { font-size: 15px; line-height: 1.55; }
+.thr-portal .thr-mail-head { font-size: 14px; }
+.thr-portal .thr-input { font-size: 16px; }
+.thr.is-client .thr-ref { display: inline; padding: 0; margin: 0; border: 0; color: var(--ink); font-size: inherit; font-weight: 500; white-space: normal; }
+.thr.is-client .thr-ref-label { max-width: none; overflow: visible; }
+
+/* phones (and phone-sized frames on a desktop, where pointer: coarse does not match): every control is 44px or taller */
+@media (pointer: coarse), (max-width: 640px) {
+  .thr-send { width: 44px; height: 44px; }
+  .thr-input { min-height: 44px; padding: 10px 0; }
+  .thr-box { padding: 3px 3px 3px 14px; border-radius: 24px; }
+  .thr-mail-head { min-height: 44px; padding: 10px 0; grid-template-columns: 14px auto minmax(0, 1fr); }
+  .thr-mail-head .thr-when { grid-column: 3; margin-left: 0; }
+  .thr-mail-body { margin-left: 0; }
+  .thr-docbtn { min-height: 44px; }
+  button.thr-ref { min-height: 44px; align-items: center; vertical-align: middle; }
+  .thr-opt { min-height: 44px; align-items: center; padding: 8px 12px; }
+  .thr-pill { min-height: 44px; padding: 0 18px; font-size: 13px; }
+  .thr-portal .thr-msg.is-mine { margin-left: 24px; }
+}
