@@ -260,3 +260,38 @@ def test_api_docs_are_for_staff_only():
     assert TestClient(app).get("/docs").status_code == 404
     assert session(ANA).get("/openapi.json").status_code == 200
     assert session(VERDE).get("/openapi.json").status_code == 404
+
+
+def _google_token(key, claims: dict, kid: str = "k1") -> str:
+    import base64
+    import json as _json
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+    head = b64(_json.dumps({"alg": "RS256", "kid": kid}).encode())
+    body = b64(_json.dumps(claims).encode())
+    sig = key.sign(f"{head}.{body}".encode(), padding.PKCS1v15(), hashes.SHA256())
+    return f"{head}.{body}.{b64(sig)}"
+
+
+def test_google_sign_in_verifies_the_token_then_asks_for_the_code(monkeypatch):
+    import time as _time
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    key, other = (rsa.generate_private_key(public_exponent=65537, key_size=2048) for _ in range(2))
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client.apps.googleusercontent.com")
+    monkeypatch.setattr(auth, "_google_key", lambda kid: key.public_key() if kid == "k1" else None)
+    good = {"iss": "https://accounts.google.com", "aud": "test-client.apps.googleusercontent.com", "sub": "g-123",
+            "email": VICTOR, "email_verified": True, "exp": _time.time() + 600}
+    c = TestClient(app)
+    r = c.post("/api/auth/google", json={"credential": _google_token(key, good)})
+    assert r.status_code == 200 and r.json()["mfa_required"] and r.json()["via"] == "google"
+    assert c.get("/api/cases").status_code == 401  # Google alone is not a session: the bank's code comes next
+    for bad in ({**good, "aud": "someone-else"}, {**good, "exp": _time.time() - 1}, {**good, "iss": "evil.example"},
+                {**good, "email_verified": False}):
+        assert c.post("/api/auth/google", json={"credential": _google_token(key, bad)}).status_code == 401
+    assert c.post("/api/auth/google", json={"credential": _google_token(other, good)}).status_code == 401  # forged
+    stranger = {**good, "email": "nobody@gmail.example", "sub": "g-999"}
+    assert c.post("/api/auth/google", json={"credential": _google_token(key, stranger)}).status_code == 403
+    hijack = {**good, "sub": "g-other"}  # the account is now bound to g-123
+    assert c.post("/api/auth/google", json={"credential": _google_token(key, hijack)}).status_code == 403
+    auth.users().update(auth.users().by_email(VICTOR)["id"], google_sub=None)

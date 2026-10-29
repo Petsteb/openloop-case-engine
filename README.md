@@ -46,7 +46,8 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 pip install -r requirements.txt
 cd web && npm ci && npm run build && cd ..   # React UI; without it the older static UI in frontend/ is served
 python -m uvicorn app.main:app --app-dir backend --port 8000
-# bank app: http://localhost:8000    client portal: http://localhost:8000/client/
+# bank app: http://localhost:8000    client portal: http://localhost:8000/client/    sign-in: /login/
+# sign in with the "Demo authenticator" on the login page (password demo + the live code); OPENLOOP_AUTH=off skips login
 # reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
@@ -114,9 +115,12 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **Quotes are verified:** every extracted field carries a verbatim quote. A field whose quote isn't in the document text is dropped and can never serve as evidence.
 
 ## Known limitations (demo scope)
-- **Access control is a demo stub.** `STAFF_TOKEN` gates only a few staff calls, and the client routes accept any company or case id. Fine for a demo with synthetic data; a public deployment must not hold real data. Production takes identity and permissions from the bank's SSO.
+- **Login and access control are real but demo-seeded** (`docs/auth.md`):
+  - users sign in with a password plus a TOTP code, or with Google plus the code;
+  - one fail-closed policy covers every `/api` route: clients reach only their own company, staff act within their role, and identity comes from the session;
+  - with `DEMO_LOGINS=1` the login page shows the synthetic accounts' live codes, so anyone can sign in as any demo account. Production sets `DEMO_LOGINS=0` and connects the bank's SSO through the same OIDC check.
 - **Credit-bureau consent is recorded, not enforced.** An SME loan file can reach "complete" before the client consents, so that a presenter who skips the click doesn't break the demo. Production would gate the bureau check on it.
-- **Identity is simulated.** Roles (client, employee, compliance) and names (analyst, supervisor) come from the request; there is no login. `STAFF_TOKEN` can gate staff-only calls. Production would take identity from the bank's SSO, which is what makes the maker-checker rule binding.
+- **Rate limits are per process.** Login lockouts, the chat limit and the model-call budget (`llm.Budget`) live in memory. More than one process would need a shared store.
 - **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.
 - **Learned check backtest.** It runs on a synthetic labelled set (`backend/eval/address_cases.jsonl`) that includes small-town counterexamples, where the naive rule makes 8 false approvals. It is evidence for the demo, not a substitute for backtesting on the bank's historical rulings.
 
