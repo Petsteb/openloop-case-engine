@@ -13,15 +13,21 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a certificate that expires while the file waits;
 - a client email that arrives at the wrong moment.
 
-## Status for Theo (updated 29 Oct, 01:00)
-**Works on `main`** (98 backend tests pass):
-- **Bank screen** (React, `web/`): requirements, triage cards, agent trace, case chat, client outbox, ledger check, document viewer with per-file history.
-- **Customer portal** (`/client/`): status, uploads (incl. a wrong-company demo file), confirmations, bank messages, documents, chat. It updates live next to the bank screen.
-- **The whole demo script below**, browser-tested both live (Claude on Bedrock + Featherless judge) and fully offline.
+## Status for Theo (updated 29 Oct, 03:00)
+**Works on `main`** (125 backend tests pass; both apps browser-tested at 390 px to 2560 px):
+- **Bank app** (`/`):
+  - **Work queue** (`#/`): every file, needs-you first, filters, New case.
+  - **Case screen** (`#/case/<id>`): timeline, checklist, decision cards, agent reasoning, ledger, Messages, documents with history, notification bell.
+- **Client portal** (`/client/`):
+  - **My files:** with "Start a new application" and a "viewing as" picker for the 8 demo companies.
+  - **Each file:** status, uploads (incl. a wrong-company demo file), confirmations, Messages with the bank, documents, chat.
+  - **Live and responsive:** it updates live next to the bank app and works on a phone.
+- **Many cases** in a SQLite store (`data/openloop.db`, git-ignored; cases survive restarts).
+  - **8 synthetic companies:** each has one problem and realistic Romanian documents built from the real forms (`research/09-document-templates.md`).
+  - **2 templates:** "SME loan and KYB check" and "Annual business review".
+- **The whole demo script below**, browser-tested offline and live (Claude on Bedrock + Featherless judge).
 
-- **Many cases** (API v3, backend done): a SQLite store, 8 synthetic companies each with one problem, the templates "SME loan and KYB" and "Annual business review", a client↔staff message thread, notifications.
-
-**Still being done tonight by Petru + 2 Claude sessions:** the home screens, Messages and the bell (UI), more realistic synthetic documents, a browser check-and-fix loop on both apps, then the deck and video script.
+**Still being done tonight by Petru + 2 Claude sessions:** a last UI polish pass, final code reviews, then the deck and video script.
 **Parked on purpose:** an admin editor for case templates. It comes last, after everything else.
 
 **Not done yet: what you can pick up** (details in `docs/TASKS.md`):
@@ -40,34 +46,49 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 pip install -r requirements.txt
 cd web && npm ci && npm run build && cd ..   # React UI; without it the older static UI in frontend/ is served
 python -m uvicorn app.main:app --app-dir backend --port 8000
-# bank screen: http://localhost:8000    customer portal: http://localhost:8000/client/
+# bank app: http://localhost:8000    client portal: http://localhost:8000/client/
+# reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
 
 ## Demo script (≈3 min)
-1. **Inbound → "Day 0"**: 4 documents arrive.
+Open the bank app at `http://localhost:8000/#/case/demo-1`. The demo toolbar at the bottom drives the case: **Next client event** (documents and emails), **Next internal event** (staff actions), **Skip 1 day / 3 days / A week**, **Reset demo**.
+
+1. **Next client event (day 0)**: 4 documents arrive.
    - DSCR 1.4 auto-verifies.
    - The agent requests the missing trade-register certificate, the fiscal certificate and the co-owner's ID.
-2. **+3 days**: the reminder timers fire and the agent reminds the client.
-3. **Inbound → trade register certificate**:
+2. **3 days**: the reminder timers fire and the agent reminds the client.
+3. **Next client event → trade register certificate**:
    - The registry API check passes.
    - **Beneficial-owner discrepancy**: Radu Pop holds 25% but isn't declared. This starts the 14-day AMLR clock and opens a triage card.
    - **Address**: "Str." vs "Calea". The judge is unsure (below the 0.9 threshold), so it opens a triage card.
-4. **Inbound → client email** ("shareholder changed"). The agent attaches it to the open card. It tries to ask the client for a new declaration, and the **gate denies it** (GATE-01: the analyst hasn't decided yet).
-5. **Triage**: rule "same address" (stored as a precedent), then "confirm discrepancy". The agent now asks for the corrected declaration.
-6. **Inbound → updated documents**: the beneficial owners match, the IDs are on file, and the legal clock is **cancelled**. Every check passes, so the file becomes **READY_FOR_DECISION**.
-7. **+7 days**: the certificate passes 30 days and becomes **EXPIRED**. The engine enforces this, not the agent. The file **reopens** and the agent re-requests the certificate.
-8. **Inbound → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
-9. **Inbound → internal staff events** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
-10. **Ask the case** (chat, two roles):
+4. **Next client event → client email** ("shareholder changed"). The agent attaches it to the open card. It tries to ask the client for a new declaration, and the **gate denies it** (GATE-01: the analyst hasn't decided yet).
+5. **Decision cards**: rule "same address" (stored as a precedent), then "confirm discrepancy". The agent now asks for the corrected declaration.
+6. **Next client event → updated documents**: the beneficial owners match, the IDs are on file, and the legal clock is **cancelled**. Every check passes, so the file becomes **READY_FOR_DECISION**.
+7. **A week**: the certificate passes 30 days and becomes **EXPIRED**. The engine enforces this, not the agent. The file **reopens** and the agent re-requests the certificate.
+8. **Next client event → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
+9. **Next internal event ×2** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
+10. **Ask tab** (chat, two roles):
     - **Employee:** "When did we learn about Radu Pop and what did we do?" The answer cites ledger events `[#seq]`.
     - **Client:** "What do you still need from me?" The answer is plain-language. The client role never sees internal reviews.
-11. **Outbox**: the client got one Romanian email per step: documents needed, reminders, file complete. Never anything internal.
-12. **Verify ledger**: the hash chain is intact, including every chat turn and email.
+11. **Messages tab**: the client got one Romanian email per step (documents needed, reminders, file complete), never anything internal. Bank staff and the client can also write to each other there, referencing documents (`#doc-3`), events (`#12`) and people (`@Radu Pop`).
+12. **Check ledger**: the hash chain is intact, including every chat turn and email.
 
 **Two-screen moments.** Open the customer portal (`/client/`) beside the bank screen; both update live.
 - **After step 2:** on the portal, click "I consent" on the credit-check question. Then use "Try a wrong file (demo)": the upload shows "Not accepted", the client gets a Romanian email, and the bank's document viewer shows why (another company's tax ID).
 - **At step 9:** on the portal, answer "No, I didn't" to the contact-change question. This opens a second card for the bank (SR-02), and the client sees "Our team will contact you".
+
+**Many files (the work queue).** Open `http://localhost:8000/#/` for the queue of 8 synthetic files, each built to show one rule.
+- **Verde Logistic:** the agent completed it with no human involved.
+- **Carpatic Lemn:** tax debt on the ANAF certificate.
+- **Delta Pescăria:** the company is suspended in the trade register.
+- **Nord Construct:** debt service coverage of 1.06.
+- **Medica Plus:** the application was signed by someone other than the administrator.
+  - **Decide:** "Different person, ask for a mandate".
+  - **Then:** Next client event → the mandate arrives and the file completes.
+- **Solaris Agro:** the certificate was already 45 days old, so a fresh one is requested.
+- **Atelier Croitorie:** an annual business review, a second template.
+**New case** opens a file for any company and template, and the agent immediately asks the client for the starting documents. On the portal (`/client/`), pick a company in "viewing as". Then "Start a new application" and "Use sample file" on each request complete a file from the client side.
 
 ## Modes
 | Env | Values | Notes |

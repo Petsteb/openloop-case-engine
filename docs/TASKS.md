@@ -39,12 +39,15 @@ Each task is independent. Take them in order and stop at freeze.
    - **Prompts:** tighten `agent.SYSTEM` and `chat.SYSTEM` wording based on the benchmark.
    - **Speed:** warm the Featherless cache by running the demo once before recording, so the cache file gets committed.
 5. **Rehearsal support (08:00–10:00):** run the offline-mode recording as the backup video, and keep a clean browser profile at 1440×900.
-6. **E2E for the multi-case features**, once the home screens land:
-   - Open a new case from the bank home.
-   - Upload its sample files on the portal until it reads "Ready".
-   - Post a client message with `#doc-1` and `@Name`.
-   - Check that the bell counts go up and clear.
-   - Use `POST /api/demo/reset?all=true` before each run. The portal stores read state in localStorage under `openloop-seen:<role>:<caseId>`.
+6. **E2E for the multi-case features.** The UI is landed, so these selectors are real:
+   - **Reset:** before each run, `POST /api/demo/reset?all=true` (8 files: demo-1 and case-2 … case-8).
+   - **Bank queue** `#/`: rows are needs-you first. "New case" opens a dialog (company, then template).
+   - **Case screen** `#/case/demo-1`: the demo toolbar is `getByRole('toolbar', {name: /demo/i})`.
+     - Its buttons are "Next client event" (it becomes "Next internal event" for staff events, and "All events sent" at the end), "Skip 1 day", and "3 days" / "A week" (use `exact: true`: timeline marks have similar names). "Reset demo" shows on demo-1; "Reset all demo cases" shows elsewhere.
+   - **Messages:** the composer textarea has aria-label "Message to the bank" (portal), and the button is "Send message". Typing `#` or `@` opens an autocomplete list.
+   - **Portal** `/client/#/`: the "viewing as" picker is a combobox. Then "Start", and "Use sample file" per request until the file reads "Complete".
+   - **Read state** is kept in localStorage under `openloop-seen:<role>:<caseId>`; clear it between runs.
+   - **Assert no console errors** at 1440×900 @1.8, 948×532 and 390×844.
 7. **Last, only if everything else is done:** an admin editor for case templates (Petru parked it on purpose). Templates live in `backend/app/template.py` (`TEMPLATES`, `REQUIREMENTS`, `RULES`).
 
 ## Petru + Claude (two sessions)
