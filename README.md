@@ -13,8 +13,8 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a certificate that expires while the file waits;
 - a client email that arrives at the wrong moment.
 
-## Status for Theo (updated 29 Oct, 03:00)
-**Works on `main`** (125 backend tests pass; both apps browser-tested at 390 px to 2560 px):
+## Status for Theo (updated 29 Oct, 04:10)
+**Works on `main`** (132 backend tests pass; both apps browser-tested at 390 px to 2560 px):
 - **Bank app** (`/`):
   - **Work queue** (`#/`): every file, needs-you first, filters, New case.
   - **Case screen** (`#/case/<id>`): timeline, checklist, decision cards, agent reasoning, ledger, Messages, documents with history, notification bell.
@@ -27,7 +27,7 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
   - **2 templates:** "SME loan and KYB check" and "Annual business review".
 - **The whole demo script below**, browser-tested offline and live (Claude on Bedrock + Featherless judge).
 
-**Still being done tonight by Petru + 2 Claude sessions:** a last UI polish pass, final code reviews, then the deck and video script.
+**Done tonight as well:** final code reviews (backend and web) with fixes, three browser QA passes, and the pitch deck plus video script in `docs/pitch/`.
 **Parked on purpose:** an admin editor for case templates. It comes last, after everything else.
 
 **Not done yet: what you can pick up** (details in `docs/TASKS.md`):
