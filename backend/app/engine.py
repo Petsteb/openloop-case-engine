@@ -113,6 +113,39 @@ def _issued_from_text(text: str) -> datetime | None:
     return _date_of(m) if m else None
 
 
+# SEC-23: lines a rule needs. An upload without one is quarantined (still requested) instead of fulfilling the
+# request and leaving its requirement waiting forever. ID cards: _id_problem. UBO declarations: >= 1 owner line.
+REQUIRED_FIELDS = {
+    "application": ["cui", "address", "postal_code", "new_annual_debt_service", "signatory"],
+    "financial_statement": ["ebitda", "existing_annual_debt_service"],
+    "onrc_certificate": ["cui", "status", "address", "postal_code", "administrator", "issued"],
+    "fiscal_certificate": ["outstanding_obligations", "issued"],
+    "address_proof": ["address", "postal_code"],
+    "signatory_mandate": ["administrator", "authorized_person"],
+}
+
+
+def _missing_lines(doc_type: str, text: str) -> list[str]:
+    """Required lines missing from a client upload, named as printed on the form (e.g. 'Obligații fiscale restante').
+    Uses the same routed extractor and quote check as the pipeline, so what passes here is what the rules see."""
+    need = REQUIRED_FIELDS.get(doc_type, [])
+    if not need and doc_type != "ubo_declaration":
+        return []
+    try:
+        ex, _ = extractors.extract(doc_type, text)
+        bad = set(extract.verify_quotes(text, ex))
+    except Exception:  # an extractor that cannot read the file accepts nothing
+        return ["(document could not be read)"]
+    have = {f["field"] for f in ex.get("fields", []) if f["quote"] not in bad}
+    printed = {v: k for k, v in extract.FIELD_MAP.get(doc_type, {}).items()}
+    missing = [printed.get(f, f).capitalize() for f in need if f not in have]
+    if doc_type == "ubo_declaration" and not [o for o in ex.get("declared_owners", []) if o["quote"] not in bad]:
+        missing.append("Beneficiar real")
+    if doc_type in T.EXPIRING_DOCS and _issued_from_text(text) is None and "Data eliberării" not in missing:
+        missing.append("Data eliberării")  # HR-03 needs a readable issue date: never assume "issued today"
+    return missing
+
+
 def _date_problem(text: str, now: datetime) -> str | None:
     """SEC-04/05: the issue date comes from client-supplied text. It must be a real date, not later than the case's
     clock (a future date would keep a certificate valid for years), and not absurd (it would overflow expiry maths)."""
@@ -376,6 +409,8 @@ class Case:
             kind = "bad_date"
         if not reason and not pdf and doc_type == "id_card" and (problem := _id_problem(text, self.now)):
             kind, reason = problem
+        if not reason and not pdf and (missing := _missing_lines(doc_type, text)):
+            kind, reason = "incomplete", f"a required line is missing: {', '.join(missing)}"
         issued = None if reason else _issued_from_text(text)  # a rejected date is never stored as the issue date
         payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
                    "issued_at": (issued or self.now).isoformat(), "source": "upload",

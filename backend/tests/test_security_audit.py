@@ -237,6 +237,40 @@ def test_sec07_featherless_outage_does_not_auto_accept(monkeypatch):
     assert not j["auto_accept"]
 
 
+# ----------------------------------------------------------------------------- SEC-23 pipeline errors fail closed
+def test_sec23_fiscal_certificate_without_obligations_line_is_not_accepted():
+    start_demo()
+    r = upload("fiscal_certificate", FISCAL.replace("{issued}", today()).replace("Obligații fiscale restante: NU\n", ""))
+    assert r.status_code == 200
+    assert "fiscal_certificate" in {m["key"] for m in r.json()["missing_documents"]}          # re-requested, not silent
+    assert any(d["type"] == "fiscal_certificate" and d["status_word"] == "Not accepted" for d in r.json()["documents"])
+    assert CASES["demo-1"].state()["reqs"]["R6"]["status"] != "SATISFIED"
+
+
+def test_sec23_incomplete_document_that_bypassed_ingestion_opens_a_card():
+    case, agent = Case("sec-incomplete"), ScriptedAgent()
+    agent.handle(case, case.ledger.events[0])
+    ev = case.emit("DOCUMENT_RECEIVED", case.client, {
+        "id": "doc-1", "type": "fiscal_certificate", "name": "Fiscal certificate", "issued_at": case.now.isoformat(),
+        "text": FISCAL.replace("{issued}", "28.10.2026").replace("Obligații fiscale restante: NU\n", "")}, "delivered")
+    agent.handle(case, ev)
+    assert case.state()["reqs"]["R6"]["status"] == "NEEDS_REVIEW"
+    assert any(x["requirement_id"] == "R6" and x["status"] == "OPEN" for x in case.state()["exceptions"].values())
+
+
+def test_sec23_every_synthetic_sample_file_passes_ingestion():
+    """The demo's 'Use sample file' must keep working for every company and request."""
+    from app import engine as E, profiles
+    now = CASES["demo-1"].now
+    for pid in profiles.PROFILES:
+        for key, (_, tmpl) in profiles.samples_for(pid).items():
+            doc_type = key.partition(":")[0]
+            text = tmpl.replace("{issued}", now.strftime("%d.%m.%Y"))
+            assert not E._date_problem(text, now), (pid, key)
+            assert not E._missing_lines(doc_type, text), (pid, key, E._missing_lines(doc_type, text))
+            assert doc_type != "id_card" or not E._id_problem(text, now), (pid, key)
+
+
 # ----------------------------------------------------------------------------- SEC-12 planner write tools outside the gate
 def _hijacked(script):
     """A planner whose output an attacker controls (what a successful prompt injection amounts to)."""
