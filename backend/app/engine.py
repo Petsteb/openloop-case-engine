@@ -482,6 +482,11 @@ def _ev(doc: dict, ext: dict, name: str) -> list[dict]:
     return [{"doc_id": doc["id"], "label": doc["name"], "field": name, "quote": f["quote"]}] if f else []
 
 
+def _same_seat(a: str, b: str) -> bool:
+    """Same street and number (the part before the first comma); city and county spellings vary between forms."""
+    return rules.norm_text(a.split(",")[0]) == rules.norm_text(b.split(",")[0]) != ""
+
+
 def _id_quote(d: dict) -> str:
     m = re.search(r"^Nume\s*:.*$", d.get("text") or "", re.M)
     return m.group(0) if m else d["name"]
@@ -586,6 +591,14 @@ def _evaluate(st: dict, req_id: str) -> dict:
                     "details": {"precedent": prec["exception_id"], **({"decided_by": "analyst"} if fresh else {})}}
         ruling = _ruling(st, "R3", max(app["seq"], onrc["seq"]))
         if ruling and ruling["resolution"]["action_id"] == "different_address":
+            proof = latest_doc(st, "address_proof")
+            if proof and have(proof) and proof["seq"] > ruling["resolution"]["seq"]:
+                ep = X[proof["id"]]
+                pp = (extract.field(ep, "postal_code") or {}).get("value", "")
+                if _same_seat((extract.field(ep, "address") or {}).get("value", ""), b) and rules.postal_match(pp, po):
+                    return {"status": "SATISFIED", "reason": f"Proof of registered office ({proof['id']}) matches the "
+                            "trade register", "evidence": ev + _ev(proof, ep, "address"),
+                            "details": {"doc_id": proof["id"], "decided_by": "analyst"}}
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the addresses differ ({ruling['id']}); "
                     "client must clarify the registered office", "evidence": ev, "details": {"kind": "address_differs"}}
         learned = learner.promoted_check_for(a, b, pa, po)
@@ -627,6 +640,15 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "SATISFIED", "reason": f"Analyst confirmed signatory = administrator ({ruling['id']})",
                     "evidence": ev, "details": {"decided_by": "analyst"}}
         if ruling and ruling["resolution"]["action_id"] == "different_person":
+            mandate = latest_doc(st, "signatory_mandate")
+            if mandate and have(mandate) and mandate["seq"] > ruling["resolution"]["seq"]:
+                em = X[mandate["id"]]
+                agent_of = (extract.field(em, "authorized_person") or {}).get("value", "")
+                granted_by = (extract.field(em, "administrator") or {}).get("value", "")
+                if rules.same_name_exact(agent_of, s) and rules.same_name_exact(granted_by, adm):
+                    return {"status": "SATISFIED", "reason": f"Signatory acts under a mandate from the administrator "
+                            f"({mandate['id']})", "evidence": ev + _ev(mandate, em, "authorized_person"),
+                            "details": {"doc_id": mandate["id"], "decided_by": "analyst"}}
             return {"status": "CONTRADICTED", "reason": f"Analyst ruled the signatory is not the administrator ({ruling['id']}); "
                     "a signed mandate is required", "evidence": ev, "details": {"kind": "signatory_differs"}}
         j = judge("person", s, adm)
@@ -759,7 +781,8 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
 
 
 def t_mark_ready_for_decision(case: Case) -> dict:
-    case.emit("CASE_STATUS", AGENT, {"status": "READY_FOR_DECISION"}, "File complete — ready for human credit decision")
+    decision = T.TEMPLATES[case.template]["decision"]
+    case.emit("CASE_STATUS", AGENT, {"status": "READY_FOR_DECISION"}, f"File complete — ready for the human {decision}")
     return {"status": "READY_FOR_DECISION"}
 
 

@@ -22,6 +22,9 @@ FIELD_MAP = {
     "fiscal_certificate": {"contribuabil": "company_name", "cui": "cui",
                            "obligații fiscale restante": "outstanding_obligations", "data eliberării": "issued"},
     "email": {"de la": "from", "subiect": "subject"},
+    "address_proof": {"societate": "company_name", "cui": "cui", "sediu social": "address", "cod poștal": "postal_code"},
+    "signatory_mandate": {"societate": "company_name", "cui": "cui", "administrator": "administrator",
+                          "împuternicit": "authorized_person"},
 }
 OWNER_KEYS = {"beneficiar real": "declared_owners", "asociat": "register_owners"}
 OWNER_RE = re.compile(r"^(?P<name>.+?)\s+—\s+(?P<pct>\d+(?:[.,]\d+)?)%$")

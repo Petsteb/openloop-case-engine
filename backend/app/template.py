@@ -77,9 +77,14 @@ RULES = {
 }
 
 
+# Follow-up documents a rule asks for after an analyst ruling; their arrival re-checks that requirement.
+FOLLOW_UP_DOCS = {"address_proof": ["R3"], "signatory_mandate": ["R5"]}
+
+
 def requirements_needing(doc_type: str, active: object = None) -> list[str]:
     """Requirements that use this document type; `active` (a case's reqs) limits it to the case's template."""
-    return [r["id"] for r in REQUIREMENTS if doc_type in r["needs"] and (active is None or r["id"] in active)]
+    ids = [r["id"] for r in REQUIREMENTS if doc_type in r["needs"]] + FOLLOW_UP_DOCS.get(doc_type, [])
+    return [i for i in ids if active is None or i in active]
 
 
 # Case templates: the same engine, rules and agent; a template picks which requirements a file must satisfy.
@@ -87,12 +92,18 @@ TEMPLATES = {
     "sme_loan": {"id": "sme_loan", "title": "SME loan and KYB check", "goal": CASE_GOAL,
                  "description": "Working-capital loan for a small business: company, owners, office, repayment capacity, "
                                 "signatory and taxes are checked before a person makes the credit decision.",
-                 "requirements": ["R1", "R2", "R3", "R4", "R5", "R6"]},
+                 "requirements": ["R1", "R2", "R3", "R4", "R5", "R6"],
+                 # words the client and the bank see for this kind of file (emails are in Romanian)
+                 "decision": "credit decision", "file_ro": "dosarul de finanțare", "file_ro_gen": "dosarului de finanțare",
+                 "decision_ro": "Un consultant al băncii vă va contacta cu decizia de creditare."},
     "kyb_review": {"id": "kyb_review", "title": "Annual business review",
                    "goal": "File ready for the yearly compliance sign-off (the sign-off itself stays human)",
                    "description": "Yearly know-your-business refresh of an existing client: the company is active, the "
                                   "owners are declared and identified, and there are no tax debts.",
-                   "requirements": ["R1", "R2", "R6"]},
+                   "requirements": ["R1", "R2", "R6"],
+                   "decision": "annual review sign-off", "file_ro": "dosarul de revizuire anuală",
+                   "file_ro_gen": "dosarului de revizuire anuală",
+                   "decision_ro": "Banca finalizează revizuirea anuală și vă anunță dacă mai este nevoie de ceva."},
 }
 # Starting documents, in the order they are requested.
 BASE_DOCS = ["application", "financial_statement", "ubo_declaration", "onrc_certificate", "fiscal_certificate"]

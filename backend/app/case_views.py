@@ -99,8 +99,8 @@ def _client_safe(text: str, fallback: str) -> str:
     return fallback if _INTERNAL_MARKER.search(text or "") else text
 
 
-def _client_case_event(status) -> str:
-    return {"READY_FOR_DECISION": "Your file is complete and waiting for the bank's credit decision",
+def _client_case_event(status, template: str = "sme_loan") -> str:
+    return {"READY_FOR_DECISION": f"Your file is complete and waiting for the bank's {T.TEMPLATES[template]['decision']}",
             "ON_HOLD": UNDER_REVIEW,
             "OPEN": "Your file is open again while the bank completes its checks"}.get(status, "Your file status changed")
 
@@ -154,7 +154,7 @@ def overview(case: Case, role: str) -> dict:
         checks = [{"id": r["id"], "title": CLIENT_CHECK_TITLE.get(r["id"], "Another check"),
                    "status_word": CLIENT_STATUS_WORD.get(r["status"], UNDER_REVIEW)} for r in reqs]
         if st["status"] == "READY_FOR_DECISION" and not _disputed(st):
-            status_text = "Complete: waiting for the bank's credit decision"
+            status_text = f"Complete: waiting for the bank's {T.TEMPLATES[st['template']]['decision']}"
         elif st["status"] == "READY_FOR_DECISION":
             status_text = UNDER_REVIEW
         elif st["status"] == "ON_HOLD":
@@ -238,7 +238,7 @@ def _timeline_all(case: Case, role: str, since_day=None, until_day=None, types=N
         if (since_day is not None and day < since_day) or (until_day is not None and day > until_day):
             continue
         if role == "client":
-            what = (_client_case_event(e["payload"].get("status")) if t == "CASE_STATUS"
+            what = (_client_case_event(e["payload"].get("status"), case.template) if t == "CASE_STATUS"
                     else _client_answer_event(e) if t.startswith("CLIENT_")
                     else _client_safe(e["summary"], CLIENT_EVENT_FALLBACK[t]))
         else:
@@ -553,7 +553,9 @@ def case_row(case: Case, role: str) -> dict:
     other = "employee" if role == "client" else "client"
     row = {"id": case.id, "title": opened["payload"].get("title", t["title"]), "template": st["template"],
            "template_title": t["title"], "company_id": st["profile"]["id"], "company": st["profile"]["name"],
-           "product": st["profile"]["product"], "status": st["status"], "state": ov["state"],
+           "product": st["profile"]["product"],
+           # a client never sees the internal hold; "state" and "status_text" already say "under review"
+           "status": st["status"] if role == "employee" or st["status"] != "ON_HOLD" else "OPEN", "state": ov["state"],
            "status_text": ov["status_text"], "waiting_on_client": waiting, "day": ov["day"],
            "events": len(case.ledger.events), "last_activity": case.ledger.events[-1]["sim_time"],
            "last_message_seq": _last_seq(case, lambda e: (e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == other)
@@ -582,7 +584,7 @@ def _queue_text(st: dict, open_ex: list, waiting: int) -> str:
         more = f" (+{len(open_ex) - 1} more)" if len(open_ex) > 1 else ""
         return f"Decision needed: {first.get('title') or first['kind']}{more}"
     if st["status"] == "READY_FOR_DECISION":
-        return "Ready for the credit decision" if st["template"] == "sme_loan" else "Ready for sign-off"
+        return f"Ready for the {T.TEMPLATES[st['template']]['decision']}"
     failed = [r for r in st["reqs"].values() if r["status"] in ("CONTRADICTED", "NEEDS_REVIEW")]
     if failed:  # a human already saw the finding; the file cannot complete as it is
         return f"Blocked: {failed[0]['title']} failed; the decision on the file is yours"
@@ -614,7 +616,7 @@ def notifications(case: Case, role: str) -> list[dict]:
         if st["status"] == "READY_FOR_DECISION":
             ready = max(e["seq"] for e in case.ledger.events
                         if e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION")
-            out.append(base(by_seq[ready], "action", "File complete: the credit decision is yours"))
+            out.append(base(by_seq[ready], "action", f"File complete: the {T.TEMPLATES[st['template']]['decision']} is yours"))
         for e in case.ledger.events:
             if e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == "client":
                 out.append(base(e, "message", f"Client: {e['payload']['text'][:120]}"))
@@ -624,7 +626,7 @@ def notifications(case: Case, role: str) -> list[dict]:
             if r["key"] in seqs:
                 out.append(base(by_seq[seqs[r["key"]]], "action", f"Please send: {r['label']}"))
         for c in pending_confirmations(case.ledger.events):
-            ref = by_seq.get(c["ref_seq"]) or case.ledger.events[-1]
+            ref = by_seq.get(c["ref_seq"]) or case.ledger.events[0]
             out.append(base(ref, "action", "Please answer a question from the bank"))
         for e in case.ledger.events:
             if e["type"] == "MESSAGE_POSTED" and e["payload"]["role"] == "employee":
