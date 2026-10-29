@@ -261,7 +261,7 @@ class Case:
         t = T.TEMPLATES[template]
         title = f"{t['title']} — {self.profile['name']}"
         self.emit("CASE_OPENED", ENGINE, {"title": title, "goal": t["goal"], "template": template, "profile": self.profile},
-                  f"Case opened from template {template} for {self.profile['name']}")
+                  f"Case opened: {t['title']} for {self.profile['name']}")
 
     @property
     def client(self) -> dict:
