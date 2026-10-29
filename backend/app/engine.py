@@ -276,6 +276,9 @@ def needed_doc_keys(st: dict) -> list[str]:
         keys.append("ubo_declaration")
     for name in r2["details"].get("owners_without_id", []):
         keys.append(f"id_card:{name.title()}")
+    if (st["reqs"].get("R1", none)["details"].get("kind") == "certificate_mismatch"  # SEC-02: ask for a genuine copy
+            and "onrc_certificate" not in keys):
+        keys.append("onrc_certificate")
     if st["reqs"].get("R3", none)["details"].get("kind") == "address_differs":
         keys.append("address_proof")
     if st["reqs"].get("R5", none)["details"].get("kind") == "signatory_differs":
@@ -606,6 +609,51 @@ def _same_seat(a: str, b: str) -> bool:
     return rules.norm_text(a.split(",")[0]) == rules.norm_text(b.split(",")[0]) != ""
 
 
+def _registry_result(st: dict, cui: str | None) -> dict | None:
+    reg = st.get("registry")
+    return reg["result"] if reg and "result" in reg and reg.get("cui") == cui else None
+
+
+def _owner_set(owners: list[dict]) -> set[tuple[str, float]]:
+    return {(" ".join(sorted(rules.norm_text(o["name"]).split())), round(float(o["pct"]), 2)) for o in owners}
+
+
+def _register_owners(st: dict, onrc: dict) -> list[dict]:
+    """SEC-02: the owners HR-04 compares against come from the trade register API, the trusted source. A client-sent
+    certificate only supplies the verbatim quote for an owner it agrees on. Without a registry answer that lists
+    owners (an older ledger), the certificate's owners are used."""
+    ext = st["extractions"][onrc["id"]]
+    claimed = ext.get("register_owners", [])
+    trusted = (_registry_result(st, (extract.field(ext, "cui") or {}).get("value")) or {}).get("owners")
+    if not trusted:
+        return claimed
+    return [next((o for o in claimed if _owner_set([o]) == _owner_set([t])), None)
+            or {"name": t["name"], "pct": float(t["pct"]), "quote": f"Trade register API: {t['name']} — {t['pct']:g}%",
+                "source": "registry"} for t in trusted]
+
+
+def _register_snippets(onrc: dict, register: list[dict]) -> list[dict]:
+    """The certificate's own lines, plus (only when it hides someone) what the registry says instead."""
+    out = [{"doc_id": onrc["id"], "label": onrc["name"],
+            "quote": "\n".join(o["quote"] for o in register if o.get("source") != "registry")}]
+    api = [o["quote"] for o in register if o.get("source") == "registry"]
+    return out + ([{"doc_id": None, "label": "Trade register API", "quote": "\n".join(api)}] if api else [])
+
+
+def _certificate_mismatch(ext: dict, result: dict) -> list[str]:
+    """SEC-02: what a client-sent trade register certificate claims that the registry does not confirm."""
+    out = []
+    if result.get("owners") is not None and _owner_set(ext.get("register_owners", [])) != _owner_set(result["owners"]):
+        out.append("associates and shares")
+    adm = (extract.field(ext, "administrator") or {}).get("value")
+    if result.get("administrator") and not (adm and rules.same_name_exact(adm, result["administrator"])):
+        out.append("administrator")
+    pc = (extract.field(ext, "postal_code") or {}).get("value")
+    if result.get("postal_code") and not (pc and rules.postal_match(pc, result["postal_code"])):
+        out.append("postal code")
+    return out
+
+
 def _id_quote(d: dict) -> str:
     m = re.search(r"^Nume\s*:.*$", d.get("text") or "", re.M)
     return m.group(0) if m else d["name"]
@@ -639,6 +687,19 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if rules.norm_text(reg["result"]["status"]) != "activa":
             return {"status": "CONTRADICTED", "reason": f"Registry status {reg['result']['status']} (HR-02)", "evidence": ev,
                     "details": {"kind": "inactive"}}
+        mismatch = _certificate_mismatch(e, reg["result"])
+        if mismatch:  # SEC-02: a client-sent certificate is a claim; the registry API is the source of truth
+            r = reg["result"]
+            api = {"doc_id": None, "label": "Trade register API", "quote": "\n".join(
+                [f"Asociat: {o['name']} — {o['pct']:g}%" for o in r.get("owners") or []]
+                + [f"Administrator: {r['administrator']}"] * bool(r.get("administrator"))
+                + [f"Cod poștal: {r['postal_code']}"] * bool(r.get("postal_code")))}
+            cert = ev + _ev(onrc, e, "administrator") + _ev(onrc, e, "postal_code") + [
+                {"doc_id": onrc["id"], "label": onrc["name"], "field": "register_owners",
+                 "quote": "\n".join(o["quote"] for o in e.get("register_owners", []))}]
+            return {"status": "CONTRADICTED", "reason": f"The trade register certificate disagrees with the trade register "
+                    f"API on: {', '.join(mismatch)} (HR-09)", "evidence": cert,
+                    "details": {"kind": "certificate_mismatch", "snippets": cert + [api], "fields": mismatch}}
         return {"status": "SATISFIED", "reason": f"CUI {cui} checksum valid; registry ACTIVE; certificate valid until "
                 f"{rules.doc_expires_at(_dt(onrc['issued_at'])).date()}", "evidence": ev,
                 "details": {"doc_id": onrc["id"], "expires_at": rules.doc_expires_at(_dt(onrc['issued_at'])).isoformat()}}
@@ -653,7 +714,7 @@ def _evaluate(st: dict, req_id: str) -> dict:
         declared = X[ubo["id"]].get("declared_owners", [])
         ruling = _ruling(st, "R2", max(ubo["seq"], onrc["seq"] if onrc else 0))
         if ruling and ruling["resolution"]["action_id"] == "dismiss":  # dismissing waives the discrepancy, not the IDs
-            reg_ubos = ([o for o in X[onrc["id"]].get("register_owners", []) if o["pct"] >= T.UBO_THRESHOLD_PCT]
+            reg_ubos = ([o for o in _register_owners(st, onrc) if o["pct"] >= T.UBO_THRESHOLD_PCT]
                         if have(onrc) else [])
             missing_ids = rules.owners_without_id(reg_ubos, ids)
             if missing_ids:
@@ -662,7 +723,7 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "SATISFIED", "reason": f"Analyst dismissed the discrepancy ({ruling['id']}); owners have IDs",
                     "evidence": [], "details": {"analyst_override": ruling["id"], "decided_by": "analyst"}}
         if ruling and ruling["resolution"]["action_id"] == "confirm_discrepancy":
-            missing = rules.owners_without_id([o for o in X[onrc['id']].get('register_owners', [])
+            missing = rules.owners_without_id([o for o in _register_owners(st, onrc)
                                                if o['pct'] >= T.UBO_THRESHOLD_PCT] if have(onrc) else [], ids)
             # the missing names are part of the reason, so an ID arriving first is recorded (no stale re-request)
             return {"status": "OPEN_WAITING", "reason": f"Discrepancy confirmed by analyst ({ruling['id']}); waiting for "
@@ -672,13 +733,13 @@ def _evaluate(st: dict, req_id: str) -> dict:
             missing_ids = rules.owners_without_id([o for o in declared if o["pct"] >= T.UBO_THRESHOLD_PCT], ids)
             labels = [T.DOC_LABELS["onrc_certificate"]] + [f"ID — {n}" for n in missing_ids]
             return {**wait(*labels), "details": {"owners_without_id": missing_ids}}
-        register = X[onrc["id"]].get("register_owners", [])
+        register = _register_owners(st, onrc)  # SEC-02: the registry's owners, quoted from the certificate if it agrees
         res = rules.ubo_check(register, declared)
         if not res["ok"]:
             parts = [f"{o['name']} ({o['pct']:g}%) in register but not declared" for o in res["missing"]]
             parts += [f"{m['name']}: register {m['register_pct']:g}% vs declared {m['declared_pct']:g}%" for m in res["pct_mismatch"]]
-            snippets = [{"doc_id": onrc["id"], "label": onrc["name"], "quote": "\n".join(o["quote"] for o in register)},
-                        {"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
+            snippets = _register_snippets(onrc, register) + [
+                {"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
             return {"status": "CONTRADICTED", "reason": "; ".join(parts) + " (HR-04)", "evidence": snippets,
                     "details": {"kind": "ubo_discrepancy", "snippets": snippets, "missing": [o["name"] for o in res["missing"]]}}
         missing_ids = rules.owners_without_id(res["ubos"], ids)
@@ -889,13 +950,14 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     cards |= {  # hard-rule failures: the card names the problem, not the requirement it fails
         "tax_debt": ("high", "Outstanding tax debt on the ANAF certificate", noted),
         "inactive": ("high", "Company is not active in the trade register", noted),
+        "certificate_mismatch": ("high", "Trade register certificate disagrees with the trade register API", noted),
         "bad_cui": ("high", "Tax ID fails the official checksum", noted),
         "dscr": ("medium", f"Debt service coverage below {T.DSCR_MIN}", noted),
         "dscr_unreadable": ("medium", "Debt service coverage cannot be computed from the documents", noted),
     }
     severity, title, actions = cards.get(kind, ("medium", f"Check failed: {req['title']}", noted))
     # the rule the card cites is the one that failed, not the first rule of the requirement
-    rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
+    rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "certificate_mismatch": "HR-09", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
                "address_differs": "HR-06", "dscr": "HR-07", "dscr_unreadable": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
                "signatory_uncertain": "JQ-02", "signatory_differs": "JQ-02"}.get(
         kind, next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0]))

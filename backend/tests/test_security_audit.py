@@ -7,6 +7,7 @@ The plain (non-xfail) tests pin strengths the pitch relies on. Everything is off
 judge, outbox email, in-memory database (see conftest.py).
 """
 import base64
+import json
 from datetime import timedelta
 
 import pytest
@@ -56,7 +57,7 @@ def today() -> str:
 
 
 # ----------------------------------------------------------------------------- SEC-02 forged issuer document
-@xfail("SEC-02", "client-uploaded ONRC certificate is trusted as the register: a hidden 25% owner passes HR-04")
+# Fixed (theo/logic-fixes): R2 takes the owners from the registry API; R1 flags a certificate that disagrees (HR-09).
 def test_sec02_forged_register_certificate_cannot_hide_a_beneficial_owner():
     start_demo()
     forged = (ONRC.replace("{issued}", today())
@@ -70,6 +71,23 @@ def test_sec02_forged_register_certificate_cannot_hide_a_beneficial_owner():
     # Secure behaviour: the owners come from the registry (or a verified certificate), so the file cannot complete
     # with Radu Pop unidentified and no AMLR clock.
     assert st["status"] != "READY_FOR_DECISION" and st["reqs"]["R2"]["status"] != "SATISFIED", st["reqs"]["R2"]["reason"]
+    assert "POP RADU (25%) in register but not declared" in st["reqs"]["R2"]["reason"]
+    assert any(t["kind"] == "legal_deadline" for t in st["timers"].values())                 # the AMLR clock runs
+    assert st["reqs"]["R1"]["details"].get("kind") == "certificate_mismatch"
+    kinds = {x["kind"] for x in st["exceptions"].values() if x["status"] == "OPEN"}
+    assert {"certificate_mismatch", "ubo_discrepancy"} <= kinds                              # cards for the analyst
+    view = c.get("/api/cases/demo-1/client-view").json()
+    assert "onrc_certificate" in {m["key"] for m in view["missing_documents"]}               # a genuine copy is asked for
+    assert "certificate_mismatch" not in json.dumps(view) and "Trade register API" not in json.dumps(view)
+
+
+def test_sec02_registry_lists_the_same_owners_as_every_synthetic_certificate():
+    """The demo is unchanged: for every company, the mock registry agrees with its own certificate."""
+    from app import engine as E, extract as X, profiles, registry
+    for pid, c_ in profiles.PROFILES.items():
+        text = (ONRC if pid == "aurora" else profiles.onrc(c_)).replace("{issued}", today())
+        ext = X.extract_scripted("onrc_certificate", text)
+        assert E._certificate_mismatch(ext, registry.lookup(c_["cui"])) == [], pid
 
 
 # ----------------------------------------------------------------------------- SEC-03 identity from the key, not the document

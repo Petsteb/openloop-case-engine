@@ -350,11 +350,20 @@ def template_of(events: list[dict]) -> str:
     return "sme_loan" if t == "kyb_sme_v1" else t
 
 
+# The demo bakery's real register entry (scenario.ONRC prints the same): Radu Pop holds 25% but is not declared.
+AURORA_REGISTER_OWNERS = [{"name": "MUNTEANU ANDREI", "pct": 45.0}, {"name": "MUNTEANU ELENA", "pct": 30.0},
+                          {"name": "POP RADU", "pct": 25.0}]
+
+
 def registry_entries() -> dict[str, dict]:
-    """The mock trade register knows every synthetic company."""
+    """The mock trade register knows every synthetic company, including its associates (the trusted source the
+    engine checks a client-supplied certificate against, SEC-02)."""
     out = {}
     for c in PROFILES.values():
         admin = f"{c['admin']['last']} {c['admin']['first']}" if "admin" in c else "MUNTEANU ANDREI"
+        owners = ([{"name": f"{o['last']} {o['first']}", "pct": float(o["pct"])} for o in c["owners"]]
+                  if "owners" in c else AURORA_REGISTER_OWNERS)
         out[c["cui"]] = {"cui": c["cui"], "name": c["legal_name"], "status": c.get("registry_status", "ACTIVĂ"),
-                         "postal_code": c.get("postal_code", "400127"), "administrator": admin}
+                         "postal_code": c.get("postal_code", "400127"), "administrator": admin,
+                         "owners": [dict(o) for o in owners]}
     return out

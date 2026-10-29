@@ -63,6 +63,8 @@ RULES = {
     "HR-06": "Registered-office postal code must match across documents.",
     "HR-07": f"DSCR = EBITDA / (existing + new annual debt service) must be ≥ {DSCR_MIN}.",
     "HR-08": "Fiscal certificate must show no outstanding tax obligations.",
+    "HR-09": "A trade register certificate sent by the client is a claim: its associates, administrator and postal code "
+             "must match the trade register API.",
     "JQ-01": f"Judge: are both addresses the same place? Auto-accept only if the similarity check (p ≥ "
              f"{HEURISTIC_THRESHOLD}) and, when the classifier is used, the classifier (p ≥ {JUDGE_THRESHOLD}) agree.",
     "JQ-02": f"Judge: is the signatory the registered administrator? Auto-accept only if the similarity check (p ≥ "

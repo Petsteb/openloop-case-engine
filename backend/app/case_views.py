@@ -55,6 +55,7 @@ CLIENT_RULE_TEXT: dict[str, str] = {
     "HR-06": "We check that the company's registered office is the same in all of your documents.",
     "HR-07": "We check that the company's income comfortably covers its loan repayments.",
     "HR-08": "We check that your company has no unpaid tax obligations.",
+    "HR-09": "We check the documents you send against the official registers.",
     "JQ-01": "We check that the address on your application and the one in the trade register are the same place, "
              "even when they are written differently.",
     "JQ-02": "We check that the person who signed the application is the company's legal representative.",
@@ -68,7 +69,7 @@ CLIENT_RULE_TEXT: dict[str, str] = {
 CLIENT_EVENT_TYPES = ("DOCUMENT_RECEIVED", "DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS",
                       "CLIENT_CONFIRMATION", "CLIENT_DISPUTE", "CLIENT_CONSENT")
 EMPLOYEE_HIDDEN_EVENT_TYPES = ("AGENT_STEP", "CHAT_TURN")   # the trace goes through explain_step; chat is audit only
-CLIENT_HIDDEN_EXCEPTION_KINDS = ("sequence_insider",)
+CLIENT_HIDDEN_EXCEPTION_KINDS = ("sequence_insider", "certificate_mismatch")  # suspected forgery: no tipping-off
 CLIENT_EVENT_FALLBACK = {"DOCUMENT_RECEIVED": "A document was received", "DOCUMENT_REQUESTED": "The bank asked you for a document",
                          "REMINDER_SENT": "A reminder was sent to you", "CASE_STATUS": "Your file status changed"}
 # Anything that looks internal is replaced by a neutral sentence before it can reach a client.
