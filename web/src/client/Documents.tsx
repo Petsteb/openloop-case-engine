@@ -1,4 +1,5 @@
 import { Dialog } from 'radix-ui'
+import { docFileUrl } from '@/shared/docfile'
 import { Icon } from './Icon'
 import { safe } from './derive'
 import type { ClientDocument, ClientDocumentDetail } from './types'
@@ -44,6 +45,7 @@ function History({ detail }: { detail: DetailState | undefined }) {
 }
 
 interface ListProps {
+  caseId: string
   docs: ClientDocument[]
   open: Set<string>
   details: Record<string, DetailState>
@@ -53,7 +55,7 @@ interface ListProps {
 }
 
 /** Every document the client sent, with a status chip, a View button (the document sheet) and a History expander. */
-export function Documents({ docs, open, details, flash, onToggle, onView }: ListProps) {
+export function Documents({ caseId, docs, open, details, flash, onToggle, onView }: ListProps) {
   return (
     <ul className="pt-docs">
       {docs.map((d) => {
@@ -72,6 +74,8 @@ export function Documents({ docs, open, details, flash, onToggle, onView }: List
               </span>
               <span className="pt-doc-acts">
                 <button type="button" className="btn sm pt-doc-view" onClick={() => onView(d.id)} aria-label={`View ${name}`}>View</button>
+                <a className="btn sm pt-doc-view" href={docFileUrl(caseId, d.id, 'client')} target="_blank" rel="noopener"
+                  aria-label={`Open the original ${name} (new tab)`}>Open<Icon name="external" size={13} /></a>
                 <button type="button" className="pt-doc-hist" aria-expanded={isOpen} aria-controls={panel} onClick={() => onToggle(d.id)}>
                   History<Icon name="chevron" size={14} className="pt-chev" />
                 </button>
@@ -90,13 +94,15 @@ export function Documents({ docs, open, details, flash, onToggle, onView }: List
 }
 
 interface SheetProps {
+  /** with a case id the sheet links to the original file */
+  caseId?: string
   doc: ClientDocument | undefined
   detail: DetailState | undefined
   onClose: () => void
 }
 
 /** The document itself: its text in the serif "paper" style, plus its history. */
-export function DocSheet({ doc, detail, onClose }: SheetProps) {
+export function DocSheet({ caseId, doc, detail, onClose }: SheetProps) {
   const det = typeof detail === 'object' ? detail : undefined
   const name = safe(det?.name ?? doc?.name, 'Document')
   const chipDoc = det ? { status: doc?.status, status_word: det.status_word } : doc
@@ -111,6 +117,10 @@ export function DocSheet({ doc, detail, onClose }: SheetProps) {
               <p className="pt-sheet-meta">
                 <span>{receivedLine(det?.received_day ?? doc?.received_day)}</span>
                 {chipDoc ? <StatusChip doc={chipDoc} /> : null}
+                {caseId && doc ? (
+                  <a className="btn sm pt-doc-view" href={docFileUrl(caseId, doc.id, 'client')} target="_blank" rel="noopener"
+                    aria-label={`Open the original ${name} (new tab)`}>Open<Icon name="external" size={13} /></a>
+                ) : null}
               </p>
             </div>
             <Dialog.Close className="pt-icon-btn" aria-label="Close"><Icon name="x" size={16} /></Dialog.Close>

@@ -427,7 +427,7 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
               </PaneHead>
               <div className="panel-body">
                 {docList.length ? (
-                  <Documents docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
+                  <Documents caseId={caseId} docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
                     flash={flash} onToggle={toggleDoc} onView={openDoc} />
                 ) : <p className="pt-empty">Nothing sent yet. The documents you send appear here.</p>}
               </div>
@@ -510,7 +510,7 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
           <p>Internal reviews and staff notes are not shown here. {decidesLine(decision)}</p>
         </footer>
       </div>
-      <DocSheet doc={sheetDoc} detail={sheetDoc ? details[sheetDoc.id]?.d : undefined} onClose={() => setSheet(null)} />
+      <DocSheet caseId={caseId} doc={sheetDoc} detail={sheetDoc ? details[sheetDoc.id]?.d : undefined} onClose={() => setSheet(null)} />
     </>
   )
 }

@@ -4,6 +4,7 @@ import {
 } from '@/lib/derive'
 import type { Bundle } from '@/lib/types'
 import { useDocDetail } from '@/hooks/useDocs'
+import { docFileUrl } from '@/shared/docfile'
 import { Boundary } from './Btn'
 import { Icon } from './Icon'
 import { StatusWord } from './StatusWord'
@@ -76,6 +77,12 @@ function Body({ bundle, v, loading, onOpenDoc, onOpenLedger, onSelectRequirement
         </div>
         <SheetTitle>{v.name}</SheetTitle>
         <SheetDescription className="sr-only">The full document, the checks that use it and its history in the ledger.</SheetDescription>
+        {bundle.case?.id && v.origin !== 'missing' ? (
+          <div>
+            <a className="btn sm quiet doc-open" href={docFileUrl(String(bundle.case.id), v.id, 'employee')} target="_blank" rel="noopener"
+              aria-label={`Open the original ${v.name} (new tab)`}>Open original<Icon name="external" size={13} /></a>
+          </div>
+        ) : null}
         {quarantined ? (
           <div className="doc-flag conflict doc-quar" role="note">
             <strong>Quarantined. Nothing was extracted from it.</strong>

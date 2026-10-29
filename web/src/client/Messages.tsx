@@ -33,7 +33,7 @@ export function Messages({ caseId, role, onItems }: { caseId: string; role: 'cli
   return (
     <>
       <Thread caseId={caseId} role={role} onOpenDoc={(id) => void openDoc(id)} onItems={onItems} className="thr-portal" />
-      <DocSheet doc={sheet?.doc} detail={sheet?.detail} onClose={close} />
+      <DocSheet caseId={caseId} doc={sheet?.doc} detail={sheet?.detail} onClose={close} />
     </>
   )
 }
