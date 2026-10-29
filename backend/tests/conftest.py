@@ -7,3 +7,6 @@ os.environ.setdefault("AGENT_MODE", "scripted")
 os.environ.setdefault("JUDGE_MODE", "heuristic")
 os.environ.setdefault("EMAIL_MODE", "outbox")
 os.environ["OPENLOOP_DB"] = ":memory:"  # never touch the real data/openloop.db
+# The older tests drive the API without a login; tests/test_auth.py switches the policy on per test.
+os.environ.setdefault("OPENLOOP_AUTH", "off")
+os.environ.setdefault("OPENLOOP_SEED_USERS", "1")

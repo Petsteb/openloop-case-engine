@@ -12,14 +12,14 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI, Header, HTTPException, Query  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Query, Request  # noqa: E402
 from fastapi.responses import PlainTextResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from typing import Literal  # noqa: E402
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from . import case_views, chat, learner, messages, notifier, profiles, registry  # noqa: E402
+from . import auth, case_views, chat, learner, messages, notifier, profiles, registry  # noqa: E402
 from . import template as T  # noqa: E402
 from .agent import ScriptedAgent, make_agent  # noqa: E402
 from .engine import Case, _pending, keys_match, pending_confirmations  # noqa: E402
@@ -37,6 +37,8 @@ async def revalidate_pages(request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 CASES: dict[str, Case] = {}
+# Login and the access policy for every /api route (backend/app/auth.py). OPENLOOP_AUTH=off restores the open demo.
+auth.install(app, case_company=lambda case_id: CASES[case_id].profile["id"] if case_id in CASES else None)
 AGENT = make_agent()
 LOCK = threading.Lock()  # one writer at a time keeps the hash chain linear (e.g. laptop + projector tabs)
 # Every ledger lives in one SQLite table (production: PostgreSQL on the bank's own servers). OPENLOOP_DB=:memory: in tests.
@@ -63,6 +65,7 @@ class Advance(BaseModel):
 class Resolve(BaseModel):
     action_id: str
     note: str = ""
+    by: str | None = Field(default=None, max_length=80)  # set from the session by the auth policy
 
 
 class RegistryToggle(BaseModel):
@@ -246,8 +249,13 @@ def list_templates():
 
 
 @app.get("/api/companies")
-def list_companies():
-    """Synthetic client companies (all fictional), with the one problem each file exercises."""
+def list_companies(request: Request):
+    """Synthetic client companies (all fictional), with the one problem each file exercises.
+    A signed-in client sees only its own company, without the bank's note on what its file exercises."""
+    who = auth.actor(request)
+    if who and who["role"] == "client":
+        return [{k: p[k] for k in ("id", "name", "cui", "city", "county", "product", "templates")}
+                for p in profiles.PROFILES.values() if p["id"] == who["company_id"]]
     return [{k: p[k] for k in ("id", "name", "cui", "city", "county", "product", "story", "templates")}
             for p in profiles.PROFILES.values()]
 
@@ -333,7 +341,7 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
     with LOCK:
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
-            event = case.resolve(exception_id, body.action_id, body.note)
+            event = case.resolve(exception_id, body.action_id, body.note, by=body.by)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         AGENT.handle_batch(case, [event])

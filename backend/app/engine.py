@@ -380,12 +380,12 @@ class Case:
         self.now = target
         self.emit("CLOCK_ADVANCED", ENGINE, {"days": days, "to": target.isoformat()}, f"Clock advanced {days:g} day(s)")
 
-    def resolve(self, exception_id: str, action_id: str, note: str = "") -> dict:
+    def resolve(self, exception_id: str, action_id: str, note: str = "", by: str | None = None) -> dict:
         st = self.state()
         ex = st["exceptions"][exception_id]
         if ex["status"] != "OPEN" or action_id not in {a["id"] for a in ex["actions"]}:
             raise ValueError("exception not open or action not offered")
-        ev = self.emit("EXCEPTION_RESOLVED", ANALYST, {"id": exception_id, "action_id": action_id, "note": note,
+        ev = self.emit("EXCEPTION_RESOLVED", {"type": "analyst", "id": by} if by else ANALYST, {"id": exception_id, "action_id": action_id, "note": note,
                                                        "requirement_id": ex["requirement_id"]},
                        f"Analyst resolved {exception_id}: {action_id}")
         if ex["kind"] in ("sequence_insider", "client_dispute") and action_id == "escalate_compliance":
