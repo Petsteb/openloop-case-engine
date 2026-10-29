@@ -117,7 +117,7 @@ def otpauth_uri(user: dict) -> str:
 
 
 # ----------------------------------------------------------------------------- the user store (same SQLite file as the ledgers)
-USER_FIELDS = ("id", "email", "name", "role", "staff_id", "company_id", "active", "google_sub")
+USER_FIELDS = ("id", "email", "name", "role", "staff_id", "company_id", "active", "google_sub", "ms_sub")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id              TEXT PRIMARY KEY,
@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS users (
     totp_secret     TEXT NOT NULL,
     totp_last_step  INTEGER NOT NULL DEFAULT 0,   -- a code is accepted once (replay protection)
     google_sub      TEXT,
+    ms_sub          TEXT,                     -- Microsoft: "<tenant id>:<object id>", bound on the first sign-in
     active          INTEGER NOT NULL DEFAULT 1,
     session_version INTEGER NOT NULL DEFAULT 1,   -- bumped to sign the user out everywhere
     failed          INTEGER NOT NULL DEFAULT 0,
@@ -155,6 +156,9 @@ class Users:
         self.lock = threading.Lock()
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
+            columns = {r[1] for r in self.db.execute("PRAGMA table_info(users)")}
+            if "ms_sub" not in columns:  # a database created before Microsoft sign-in
+                self.db.execute("ALTER TABLE users ADD COLUMN ms_sub TEXT")
 
     def get(self, user_id: str) -> dict | None:
         with self.lock:
@@ -233,7 +237,7 @@ def public(user: dict | None) -> dict | None:
     """A user as the API shows it: never the password hash or the TOTP secret."""
     if not user:
         return None
-    out = {k: user.get(k) for k in USER_FIELDS if k != "google_sub"}
+    out = {k: user.get(k) for k in USER_FIELDS if k not in ("google_sub", "ms_sub")}
     company = profiles.PROFILES.get(user.get("company_id") or "")
     return out | {"company": company["name"] if company else None, "active": bool(user.get("active"))}
 
@@ -657,6 +661,7 @@ def me(request: Request):
     staff, client = session_user(cookies.get(STAFF_COOKIE)), session_user(cookies.get(CLIENT_COOKIE))
     return {"auth": enabled(), "demo_logins": enabled() and demo_logins(), "demo_mode": demo_mode(),
             "google_client_id": os.environ.get("GOOGLE_CLIENT_ID") or None,
+            "microsoft_client_id": os.environ.get("MICROSOFT_CLIENT_ID") or None,
             "staff": public(staff) if staff and staff["role"] != "client" else None,
             "client": public(client) if client and client["role"] == "client" else None,
             "perms": sorted(PERMS.get(staff["role"], set())) if staff and staff["role"] != "client" else []}
@@ -712,38 +717,70 @@ def logout(body: LogoutIn, request: Request):
     return response
 
 
-_GOOGLE_KEYS: dict = {"keys": {}, "exp": 0.0}
+GOOGLE_JWKS = "https://www.googleapis.com/oauth2/v3/certs"
+MICROSOFT_JWKS = "https://login.microsoftonline.com/common/discovery/v2.0/keys"  # every tenant + personal accounts
+_JWKS: dict = {}  # url -> {"keys": {kid: public key}, "exp": time}
+
+
+def _jwks_key(url: str, kid: str):
+    """An identity provider's signing key by id, from its published key set (cached for an hour)."""
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+    cached = _JWKS.get(url)
+    if not cached or kid not in cached["keys"] or cached["exp"] < time.time():
+        jwks = requests.get(url, timeout=5).json()
+        cached = _JWKS[url] = {"keys": {k["kid"]: RSAPublicNumbers(int.from_bytes(_unb64(k["e"]), "big"),
+                                                                   int.from_bytes(_unb64(k["n"]), "big")).public_key()
+                                        for k in jwks.get("keys", []) if k.get("kty") == "RSA"},
+                               "exp": time.time() + 3600}
+    return cached["keys"].get(kid)
 
 
 def _google_key(kid: str):
-    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
-    if kid not in _GOOGLE_KEYS["keys"] or _GOOGLE_KEYS["exp"] < time.time():
-        jwks = requests.get("https://www.googleapis.com/oauth2/v3/certs", timeout=5).json()
-        _GOOGLE_KEYS["keys"] = {k["kid"]: RSAPublicNumbers(int.from_bytes(_unb64(k["e"]), "big"),
-                                                           int.from_bytes(_unb64(k["n"]), "big")).public_key()
-                                for k in jwks.get("keys", [])}
-        _GOOGLE_KEYS["exp"] = time.time() + 3600
-    return _GOOGLE_KEYS["keys"].get(kid)
+    return _jwks_key(GOOGLE_JWKS, kid)
 
 
-def verify_google(credential: str, client_id: str) -> dict:
-    """Verifies a Google ID token (RS256 against Google's published keys, issuer, audience, expiry, verified e-mail)."""
+def _microsoft_key(kid: str):
+    return _jwks_key(MICROSOFT_JWKS, kid)
+
+
+def _verified_claims(credential: str, key_for, provider: str) -> dict:
+    """The claims of an RS256-signed ID token whose signature checks out against the provider's key."""
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import padding
     try:
         head, body, sig = credential.split(".")
         header, claims = json.loads(_unb64(head)), json.loads(_unb64(body))
-        key = _google_key(header.get("kid", "")) if header.get("alg") == "RS256" else None
+        key = key_for(header.get("kid", "")) if header.get("alg") == "RS256" else None
         if key is None:
             raise ValueError("unknown signing key")
         key.verify(_unb64(sig), f"{head}.{body}".encode(), padding.PKCS1v15(), hashes.SHA256())
     except (ValueError, InvalidSignature, json.JSONDecodeError, requests.RequestException):
-        raise HTTPException(401, "Google sign-in could not be verified")
+        raise HTTPException(401, f"{provider} sign-in could not be verified")
+    return claims
+
+
+def verify_google(credential: str, client_id: str) -> dict:
+    """Verifies a Google ID token (RS256 against Google's published keys, issuer, audience, expiry, verified e-mail)."""
+    claims = _verified_claims(credential, _google_key, "Google")
     if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com") or claims.get("aud") != client_id \
             or claims.get("exp", 0) < time.time() or not claims.get("email_verified"):
         raise HTTPException(401, "Google sign-in could not be verified")
     return claims
+
+
+def verify_microsoft(credential: str, client_id: str) -> dict:
+    """Verifies a Microsoft identity platform (Entra ID / Teams / personal account) v2.0 ID token: RS256 against
+    Microsoft's keys, the issuer of the token's own tenant, audience, expiry and not-before."""
+    claims = _verified_claims(credential, _microsoft_key, "Microsoft")
+    tid, now = claims.get("tid", ""), time.time()
+    if not re.fullmatch(r"[0-9a-f-]{36}", tid) or claims.get("iss") != f"https://login.microsoftonline.com/{tid}/v2.0" \
+            or claims.get("aud") != client_id or claims.get("exp", 0) < now or claims.get("nbf", 0) > now + 60:
+        raise HTTPException(401, "Microsoft sign-in could not be verified")
+    email = claims.get("email") or claims.get("preferred_username") or ""
+    if "@" not in email:
+        raise HTTPException(401, "Microsoft sign-in did not include an e-mail address")
+    return claims | {"email": email, "ms_sub": f"{tid}:{claims.get('oid') or claims.get('sub')}"}
 
 
 @router.post("/api/auth/google")
@@ -761,6 +798,24 @@ def google(body: GoogleIn, request: Request):
     if not user["google_sub"]:
         users().update(user["id"], google_sub=claims["sub"])
     return _challenge(user, "google")
+
+
+@router.post("/api/auth/microsoft")
+def microsoft(body: GoogleIn, request: Request):
+    """Microsoft (Entra ID: work and school accounts such as Teams, and personal accounts) proves the e-mail address,
+    as Google does. The account must exist, and the first sign-in binds it to that Microsoft identity (tenant +
+    object id), so a look-alike e-mail from another tenant can't take it over later. The bank's code is still asked."""
+    _limit(request)
+    client_id = os.environ.get("MICROSOFT_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(404, "Microsoft sign-in is not configured")
+    claims = verify_microsoft(body.credential, client_id)
+    user = users().by_email(claims["email"])
+    if not user or not user["active"] or (user["ms_sub"] and user["ms_sub"] != claims["ms_sub"]):
+        raise HTTPException(403, "no OpenLoop account for this Microsoft account; ask the bank to add you")
+    if not user["ms_sub"]:
+        users().update(user["id"], ms_sub=claims["ms_sub"])
+    return _challenge(user, "microsoft")
 
 
 @router.get("/api/auth/demo-accounts")

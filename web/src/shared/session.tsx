@@ -8,7 +8,7 @@ export type SessionUser = {
   company_id: string | null; company: string | null
 }
 export type Me = {
-  auth: boolean; demo_logins: boolean; demo_mode: boolean; google_client_id: string | null
+  auth: boolean; demo_logins: boolean; demo_mode: boolean; google_client_id: string | null; microsoft_client_id?: string | null
   staff: SessionUser | null; client: SessionUser | null; perms: string[]
 }
 export type SessionApp = 'staff' | 'client'

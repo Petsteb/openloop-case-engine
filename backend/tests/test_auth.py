@@ -295,3 +295,41 @@ def test_google_sign_in_verifies_the_token_then_asks_for_the_code(monkeypatch):
     hijack = {**good, "sub": "g-other"}  # the account is now bound to g-123
     assert c.post("/api/auth/google", json={"credential": _google_token(key, hijack)}).status_code == 403
     auth.users().update(auth.users().by_email(VICTOR)["id"], google_sub=None)
+
+
+def test_microsoft_sign_in_checks_tenant_issuer_and_binds_the_identity(monkeypatch):
+    import time as _time
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    key, other = (rsa.generate_private_key(public_exponent=65537, key_size=2048) for _ in range(2))
+    monkeypatch.setenv("MICROSOFT_CLIENT_ID", "11111111-2222-3333-4444-555555555555")
+    monkeypatch.setattr(auth, "_microsoft_key", lambda kid: key.public_key() if kid == "k1" else None)
+    tid = "9188040d-6c67-4c5b-b112-36a304b66dad"  # the personal-accounts tenant
+    good = {"iss": f"https://login.microsoftonline.com/{tid}/v2.0", "aud": "11111111-2222-3333-4444-555555555555",
+            "tid": tid, "oid": "o-1", "sub": "s-1", "preferred_username": IOANA, "exp": _time.time() + 600,
+            "nbf": _time.time() - 5}
+    c = TestClient(app)
+    r = c.post("/api/auth/microsoft", json={"credential": _google_token(key, good)})
+    assert r.status_code == 200 and r.json()["mfa_required"] and r.json()["via"] == "microsoft"
+    assert c.get("/api/cases").status_code == 401  # Microsoft alone is not a session: the bank's code comes next
+    other_tenant = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+    for bad in ({**good, "aud": "someone-else"}, {**good, "exp": _time.time() - 1},
+                {**good, "iss": f"https://login.microsoftonline.com/{other_tenant}/v2.0"},  # issuer of another tenant
+                {**good, "nbf": _time.time() + 3600}, {**good, "preferred_username": "no-at-sign"}):
+        assert c.post("/api/auth/microsoft", json={"credential": _google_token(key, bad)}).status_code == 401
+    assert c.post("/api/auth/microsoft", json={"credential": _google_token(other, good)}).status_code == 401  # forged
+    # the account is now bound to tid:o-1; the same e-mail from another tenant is refused
+    lookalike = {**good, "tid": other_tenant, "iss": f"https://login.microsoftonline.com/{other_tenant}/v2.0", "oid": "o-9"}
+    assert c.post("/api/auth/microsoft", json={"credential": _google_token(key, lookalike)}).status_code == 403
+    assert TestClient(app).get("/api/auth/me").json()["microsoft_client_id"] == "11111111-2222-3333-4444-555555555555"
+    auth.users().update(auth.users().by_email(IOANA)["id"], ms_sub=None)
+
+
+def test_old_user_table_gets_the_microsoft_column(tmp_path):
+    import sqlite3
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    old_schema = "\n".join(line for line in auth.SCHEMA.splitlines() if "ms_sub" not in line)
+    assert "ms_sub" not in old_schema
+    con.executescript(old_schema)
+    con.close()
+    assert "ms_sub" in {r[1] for r in auth.Users(str(db)).db.execute("PRAGMA table_info(users)")}
