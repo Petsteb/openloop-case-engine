@@ -239,7 +239,7 @@ def test_client_cannot_post_as_staff_and_failed_emails_show_for_the_bank():
 
 
 def test_consent_notification_stays_anchored_to_the_opening():
-    cid = next(i for i, k in CASES.items() if k.profile["id"] == "carpatic")
+    cid = c.post("/api/cases", json={"template": "sme_loan", "company_id": "carpatic"}).json()["case"]["id"]
     seqs = lambda: [n["seq"] for n in c.get("/api/notifications", params={"role": "client", "company_id": "carpatic"}).json()
                     if n["case_id"] == cid and "question" in n["text"]]
     before = seqs()
@@ -264,3 +264,11 @@ def test_an_annual_review_of_a_loan_company_is_not_labelled_a_loan():
     assert b["case"]["product"] == "Annual business review"
     assert c.post("/api/cases", json={"template": "sme_loan", "company_id": "verde"}).json()["case"]["product"].startswith(
         "Working-capital loan")
+
+
+def test_seeded_loan_clients_already_consented_and_tax_debt_reason_quotes_the_amount():
+    seeded = [k for k in CASES.values() if k.template == "sme_loan" and k.id != "demo-1" and k.id.startswith("case-")
+              and int(k.id.split("-")[1]) <= 8]
+    assert seeded and all(any(e["type"] == "CLIENT_CONSENT" for e in k.ledger.events) for k in seeded)
+    carpatic = next(k for k in seeded if k.profile["id"] == "carpatic")
+    assert "38.410 RON" in carpatic.state()["reqs"]["R6"]["reason"]
