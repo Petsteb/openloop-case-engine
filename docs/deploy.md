@@ -39,3 +39,20 @@ Keep `AGENT_MODE=scripted`, `JUDGE_MODE=heuristic` and `EMAIL_MODE=outbox` (the 
 
 ## Cost and size
 One instance with 512 MB of RAM is enough for the demo: Render `starter`, or Fly `shared-cpu-1x` with 512 MB. For measured memory and latency numbers, see `docs/pitch/performance.md`.
+
+## Railway
+`railway.json` makes Railway build the Dockerfile, check `/api/health`, and keep **one replica** (cases live in one process).
+```bash
+npm i -g @railway/cli          # needs Node 18+
+railway login                  # or: railway login --browserless
+railway init                   # new project "openloop"
+railway up --detach            # uploads this folder (.railwayignore keeps .env, .git and node_modules out)
+railway volume add --mount-path /data
+railway variables --set AGENT_MODE=scripted --set JUDGE_MODE=heuristic --set EMAIL_MODE=outbox \
+  --set OPENLOOP_DB=/data/openloop.db --set OPENLOOP_AUTH=on --set DEMO_LOGINS=1 \
+  --set SESSION_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(32))") --set RAILWAY_RUN_UID=0
+railway domain                 # a public https://<name>.up.railway.app URL
+```
+`RAILWAY_RUN_UID=0`: Railway mounts volumes as root, so the non-root image user could not write `/data` otherwise.
+Live mode: also set `AGENT_MODE=bedrock`, `JUDGE_MODE=featherless`, `AWS_BEARER_TOKEN_BEDROCK`, `FEATHERLESS_API_KEY`
+(the `llm.Budget` breaker caps paid calls: `LLM_MAX_CALLS_PER_HOUR`, default 300).

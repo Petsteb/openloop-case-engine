@@ -1,0 +1,12 @@
+.env
+.git
+.claude/
+node_modules/
+web/node_modules/
+web/dist/
+data/
+research/
+*.pdf
+*.pptx
+__pycache__/
+.venv/
