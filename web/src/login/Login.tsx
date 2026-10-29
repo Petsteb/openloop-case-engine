@@ -93,7 +93,9 @@ export function Login() {
             .catch((e: Error) => setError(e.message)).finally(() => setBusy(false))
         },
       })
-      window.google.accounts.id.renderButton(googleRef.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', width: 280 })
+      // Google draws its own button at a fixed pixel width: match the form (Google allows 200-400 px)
+      const width = Math.max(200, Math.min(400, Math.floor(googleRef.current.getBoundingClientRect().width)))
+      window.google.accounts.id.renderButton(googleRef.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', width, logo_alignment: 'center' })
     }
     if (window.google) { render(); return }
     const s = document.createElement('script')
@@ -214,11 +216,11 @@ export function Login() {
               onChange={(e) => setPassword(e.target.value)} required aria-describedby={error ? 'lg-err' : undefined} />
             {error ? <p id="lg-err" className="lg-error" role="alert">{error}</p> : null}
             <div className="lg-row">
-              <button type="submit" className="btn primary" disabled={busy || !email || !password}>Continue</button>
+              <button type="submit" className="btn primary lg-wide" disabled={busy || !email || !password}>Continue</button>
             </div>
             {me?.google_client_id || me?.microsoft_client_id ? (
               <div className="lg-alt">
-                <span className="lg-or">or</span>
+                <span className="lg-or" role="separator" aria-label="or">or</span>
                 {me.google_client_id ? <div ref={googleRef} className="lg-google" /> : null}
                 {me.microsoft_client_id ? (
                   <button type="button" className="btn lg-ms" onClick={() => void microsoftSignIn()} disabled={busy}>
