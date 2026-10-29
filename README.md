@@ -14,7 +14,7 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a client email that arrives at the wrong moment.
 
 ## Status (29 Oct 2026)
-- **Live:** https://openloop-production.up.railway.app (sign-in with a password and a 2FA code; to try every role without an account, run it locally, below).
+- **Live:** https://openloop-production.up.railway.app (the login page's **demo authenticator** signs you in as any synthetic account: pick one, password `demo`, then its live code).
 - **Bank app** (`/`): the work queue (needs-you first, filters, New case) and a **Learned checks** tab; the case screen with timeline, checklist, decision cards, agent reasoning, ledger, messages, documents (View / Open the original) and notifications.
 - **Client portal** (`/client/`): **My cases**, "Start a new application", uploads, confirmations, chat with the bank and **Ask AI**. It updates live next to the bank app and works on a phone (tabs Pending / Documents / Chat / Ask AI).
 - **8 synthetic companies**, each built to show one rule, with documents modelled on the real Romanian forms (`research/09-document-templates.md`); **2 templates** (SME loan and KYB check, Annual business review); a SQLite event store.
@@ -28,7 +28,7 @@ cd web && npm ci && npm run build && cd ..   # React UI; without it the older st
 python -m uvicorn app.main:app --app-dir backend --port 8000
 # bank app: http://localhost:8000    client portal: http://localhost:8000/client/    sign-in: /login/
 # sign in with the "Demo authenticator" on the login page (password demo + the live code); OPENLOOP_AUTH=off skips login
-# every demo account and what its case shows: docs/auth.md (the deployed site hides the demo authenticator)
+# every demo account and what its case shows: docs/auth.md
 # reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
@@ -99,7 +99,7 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 - **Login and access control are real but demo-seeded** (`docs/auth.md`):
   - users sign in with a password plus a TOTP code, or with Google plus the code;
   - one fail-closed policy covers every `/api` route: clients reach only their own company, staff act within their role, and identity comes from the session;
-  - with `DEMO_LOGINS=1` the login page shows the synthetic accounts' live codes, so anyone can sign in as any demo account. The deployed site already runs with `DEMO_LOGINS=0`; production would also connect the bank's SSO through the same OIDC check.
+  - with `DEMO_LOGINS=1` the login page shows the synthetic accounts' live codes, so anyone can sign in as any demo account. The deployed site keeps it on for the judges; production sets `DEMO_LOGINS=0` and connects the bank's SSO through the same OIDC check.
 - **Credit-bureau consent is recorded, not enforced.** An SME loan file can reach "complete" before the client consents, so that a presenter who skips the click doesn't break the demo. Production would gate the bureau check on it.
 - **Rate limits are per process.** Login lockouts, the chat limit and the model-call budget (`llm.Budget`) live in memory. More than one process would need a shared store.
 - **Time skip timing.** Follow-ups run once at the end of a skip. Expiry itself is applied when it happens, but the re-request is stamped with the skip's end date. That is fine for the demo's 1/3/7-day buttons; a real deployment runs on real time.

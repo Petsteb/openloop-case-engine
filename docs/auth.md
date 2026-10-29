@@ -45,8 +45,7 @@
 
 ## Demo accounts (synthetic)
 The password for every demo account is `demo`. The second factor is the code from an authenticator app: on `/login/#/users`, "New 2FA" shows an account's QR code.
-- **Deployed site (Railway):** `DEMO_LOGINS=0`, so the login page has no demo authenticator. Sign in with the authenticator app.
-- **Local runs and the E2E tests:** `DEMO_LOGINS=1` (the default). The login page's **demo authenticator** shows each account's live code, standing in for the bank's mobile app on a projector. Set `DEMO_LOGINS=1` on Railway to bring it back there.
+- **Deployed site (Railway), local runs and the E2E tests:** `DEMO_LOGINS=1`. The login page's **demo authenticator** shows each account's live code, standing in for the bank's mobile app on a projector. Production sets `DEMO_LOGINS=0`.
 
 **Bank staff**
 
