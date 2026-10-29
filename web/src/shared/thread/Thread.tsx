@@ -23,6 +23,9 @@ export interface ThreadProps {
 
 const POLL_MS = 2500
 const FALLBACK_MS = 5000
+/** A case /version 404 while the server's own /api/version answers, this many ticks in a row: the case is gone (one
+ *  404 can be a poll landing inside "Reset all demo cases", which wipes and reseeds the cases). */
+const GONE_STRIKES = 2
 const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
 const maxSeq = (items: ThreadItem[]) => items.reduce((m, i) => (Number(i.seq) > m ? Number(i.seq) : m), 0)
 
@@ -39,7 +42,7 @@ export function Thread(p: ThreadProps) {
 
 function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = true, onPosted, className = '' }: ThreadProps) {
   const [items, setItems] = useState<ThreadItem[] | null>(null)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable' | 'error' | 'gone'>('loading')
   const [sending, setSending] = useState(false)
   const [ments, setMents] = useState<Mentionables | null>(null)
   const [mentsLoading, setMentsLoading] = useState(false)
@@ -57,17 +60,20 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
   const forceBottom = useRef(false)
   const prevMax = useRef<number | null>(null)
 
-  const load = useCallback(async () => {
+  /** True when this answer is now on screen; false on a failure or a dropped (stale) answer, so the poll asks again. */
+  const load = useCallback(async (): Promise<boolean> => {
     const g = ++gen.current
     try {
       const list = await api.getMessages(caseId, role)
-      if (!alive.current || g !== gen.current) return
+      if (!alive.current || g !== gen.current) return false
       setItems(arr(list))
       setStatus('ready')
+      return true
     } catch (e) {
-      if (!alive.current || g !== gen.current) return
+      if (!alive.current || g !== gen.current) return false
       if (isUnavailable(e)) setStatus('unavailable')
       else setStatus((s) => (s === 'ready' ? s : 'error'))
+      return false
     }
   }, [caseId, role])
 
@@ -95,16 +101,24 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
     alive.current = true
     let timer: ReturnType<typeof setTimeout> | undefined
     let stopped = false
+    let strikes = 0
     const tick = async () => {
       let delay = POLL_MS
       if (document.visibilityState === 'visible' && !sendingRef.current) {
         try {
           const v = await api.getVersion(caseId)
+          strikes = 0
           const len = typeof v?.length === 'number' ? v.length : null
-          if (len !== lastLen.current) { lastLen.current = len; await load() }
+          // remembered only after a good load: one failed GET /messages is asked for again on the next tick
+          if (len !== lastLen.current && await load()) lastLen.current = len
         } catch (e) {
           delay = FALLBACK_MS
-          if (isUnavailable(e)) await load()
+          // a 404 on a server that has /api/version: the case is gone, not the endpoint
+          const gone = e instanceof api.ThreadApiError && e.status === 404
+            && await api.getGlobalVersion().then(() => true, () => false)
+          if (gone) {
+            if (++strikes >= GONE_STRIKES && alive.current) { stopped = true; setStatus('gone'); return }
+          } else if (isUnavailable(e)) await load()
           else setStatus((s) => (s === 'loading' ? 'error' : s))
         }
         markSeenRef.current()
@@ -200,6 +214,9 @@ function ThreadView({ caseId, role, author, onOpenDoc, onOpenEvent, active = tru
   }, [caseId, role, author, onPosted])
 
   const client = role === 'client'
+  if (status === 'gone') {
+    return <div className={`thr is-${role} ${className}`.trim()}><p className="thr-empty" role="status">{client ? 'This file is no longer available.' : 'This case no longer exists, so its messages are gone too.'}</p></div>
+  }
   if (status === 'unavailable') {
     return <div className={`thr is-${role} ${className}`.trim()}><p className="thr-empty" role="status">Messages are not available on this server yet.</p></div>
   }

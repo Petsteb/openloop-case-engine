@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { PortalBoundary } from './Boundary'
 import { DemoStrip, TopBar } from './Chrome'
-import { safe, templateTitle } from './derive'
+import { decisionFor, safe, templateTitle } from './derive'
 import { Home } from './Home'
 import { Portal } from './Portal'
 import { caseHref, go, HOME_HREF, useRoute } from './route'
@@ -17,6 +17,7 @@ export function App() {
   const data = usePortalData(companyId)
   const company = data.companies?.find((c) => c.id === companyId)
   const caseId = route.name === 'case' ? route.id : null
+  const file = caseId ? data.rows?.find((r) => r.id === caseId) : undefined
 
   // a stored company the server does not know (another seed): back to the demo case's company
   useEffect(() => {
@@ -68,7 +69,7 @@ export function App() {
         <Home data={data} company={company} onOpenCase={openCase} />
       ) : (
         <PortalBoundary key={route.id} inner>
-          <Portal key={route.id} caseId={route.id} file={data.rows?.find((r) => r.id === route.id)} onCompanyName={adopt} />
+          <Portal key={route.id} caseId={route.id} file={file} onCompanyName={adopt} decision={decisionFor(data.templates, file?.template)} />
         </PortalBoundary>
       )}
     </div>

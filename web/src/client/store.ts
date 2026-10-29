@@ -23,15 +23,17 @@ export const COMPANY_KEY = 'openloop-client-company'
 export const DEFAULT_COMPANY = DEMO_COMPANY_ID
 const companyStore = store((k) => k === COMPANY_KEY)
 
-function readCompany(): string {
+/** The company chosen earlier in this browser, or null when none (or an unreadable value) is stored. */
+export function storedCompany(): string | null {
   try {
     const raw = window.localStorage.getItem(COMPANY_KEY)
-    if (!raw) return DEFAULT_COMPANY
+    if (!raw) return null
     let v: unknown = raw
     if (raw.startsWith('"')) { try { v = JSON.parse(raw) } catch { /* plain string */ } }
-    return typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : DEFAULT_COMPANY
-  } catch { return DEFAULT_COMPANY }
+    return typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null
+  } catch { return null }
 }
+const readCompany = (): string => storedCompany() ?? DEFAULT_COMPANY
 // kept in memory too, so the choice holds for this page when storage is unavailable; the module-level listener runs
 // before the components' ones (registered later), so they read the new value
 let company = readCompany()

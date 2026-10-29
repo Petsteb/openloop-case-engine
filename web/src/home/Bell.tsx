@@ -17,8 +17,9 @@ function BellIcon() {
 }
 
 /** Notification bell, in both bank headers. Unread = a seq above the case's last-seen seq in localStorage.
- *  The case on screen (`currentCaseId`) never counts as unread: the analyst is looking at it. */
-export function Bell({ currentCaseId = null }: { currentCaseId?: string | null }) {
+ *  The case on screen (`currentCaseId`): its actions never count (the analyst is looking at them), its client messages
+ *  do until the Messages tab was on screen; picking one opens that tab (`onOpenMessages`). */
+export function Bell({ currentCaseId = null, onOpenMessages }: { currentCaseId?: string | null; onOpenMessages?: () => void }) {
   const { notes, rows, seenRev } = useQueue()
   const [open, setOpen] = useState(false)
   const unread = useMemo(() => (notes ? unreadNotes(notes, getSeen, currentCaseId) : []), [notes, currentCaseId, seenRev]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,7 +61,11 @@ export function Bell({ currentCaseId = null }: { currentCaseId?: string | null }
                   return (
                     <li key={`${x.case_id}:${x.seq}`}>
                       <button type="button" className={`bell-item${isNew ? ' is-new' : ''}`}
-                        onClick={() => { setOpen(false); go(caseHref(x.case_id)) }}>
+                        onClick={() => {
+                          setOpen(false)
+                          if (x.case_id !== currentCaseId) go(caseHref(x.case_id))
+                          else if (x.kind === 'message') onOpenMessages?.()
+                        }}>
                         <span className="bell-dot" aria-hidden="true" />
                         <span className="bell-co">{x.company || x.case_id}</span>
                         <span className="bell-day">{Number.isFinite(Number(x.day)) ? `Day ${x.day}` : ''}</span>

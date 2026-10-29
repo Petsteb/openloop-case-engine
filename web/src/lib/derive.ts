@@ -114,17 +114,23 @@ export const openExceptions = (b: Bundle): Exception_[] => arr(b.exceptions).fil
     || String(p.id).localeCompare(String(q.id), undefined, { numeric: true }))
 export const reqById = (b: Bundle, id: string | undefined) => arr(b.requirements).find((r) => r.id === id)
 export const isOnHold = (b: Bundle) => b.case?.status === 'ON_HOLD'
-/** READY_FOR_DECISION is trusted only while every check is verified (a certificate can expire afterwards). */
+/** The server's status decides (it reopens a file itself when a certificate expires); the UI does not second-guess it. */
 export const isComplete = (b: Bundle) => b.case?.status === 'READY_FOR_DECISION'
-  && arr(b.requirements).length > 0 && arr(b.requirements).every((r) => r.status === 'SATISFIED')
 
-/** What the file is for, in the bank's words, by template (the backend's `template.TEMPLATES[id]["decision"]`).
- *  An unknown or missing template reads as a loan file, the only kind older servers have. */
+/** What the file is for, in the bank's words. `decision` comes from the server (`bundle.case.decision`, the backend's
+ *  `template.TEMPLATES[id]["decision"]`); this map is only the fallback for older servers. The server has no word for
+ *  the starting documents, so `pack` stays here: a known template has its own, any other one says "documents".
+ *  No template at all (an older server) reads as a loan file, the only kind those servers have. */
 const TEMPLATE_WORDS: Record<string, { decision: string; pack: string }> = {
   sme_loan: { decision: 'credit decision', pack: 'application pack' },
   kyb_review: { decision: 'annual review sign-off', pack: 'review documents' },
 }
-export const templateWords = (b: Bundle) => TEMPLATE_WORDS[String(b.case?.template ?? '')] ?? TEMPLATE_WORDS.sme_loan
+export function templateWords(b: Bundle): { decision: string; pack: string } {
+  const t = String(b.case?.template ?? '')
+  const known = TEMPLATE_WORDS[t] ?? (t ? undefined : TEMPLATE_WORDS.sme_loan)
+  const server = typeof b.case?.decision === 'string' ? b.case.decision.trim() : ''
+  return { decision: server || known?.decision || 'decision', pack: known?.pack ?? 'documents' }
+}
 
 export type Tone = 'need' | 'done' | 'wait' | 'hold'
 export function statusLine(b: Bundle): { tone: Tone; text: string } {

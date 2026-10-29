@@ -177,6 +177,7 @@
 
 .pt-loading { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 72px 0; font-size: 15px; color: var(--muted); }
 p.pt-loading { flex-direction: row; align-items: center; gap: 10px; }
+.pt-gone .pt-company { color: var(--ink); margin-top: 0; }
 
 /* ---------- document sheet ---------- */
 .pt-overlay { position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, #000 45%, transparent); }
@@ -349,14 +350,14 @@ a.btn.pt-next-btn .icon { width: 14px; height: 14px; }
   .pt-bell-btn { width: 44px; height: 44px; }
   .pt-demo-link { min-height: 44px; min-width: 44px; justify-content: center; }
   .pt-demo-in { min-height: 52px; }
-  .pt-picker select { min-height: 44px; }
+  .pt-picker select { min-height: 44px; font-size: 16px; }   /* 16 px: iOS zooms into smaller fields on focus */
   .pt-back { min-height: 44px; }
   /* small text links keep their size; the hit area grows with padding */
   .pt-link { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 0; }
   .pt-doc-hist { min-height: 44px; padding-inline: 10px 4px; }
   .pt-suggest button { min-height: 44px; padding-block: 8px; }
   .pt-ask { padding-block: 0; padding-right: 0; }
-  .pt-ask input { min-height: 44px; }
+  .pt-ask input { min-height: 44px; font-size: 16px; }
   /* inline citation chips stay in the text flow; a transparent overlay makes them 44 px tall */
   .pt-cite { position: relative; }
   .pt-cite::after { content: ""; position: absolute; left: -4px; right: -4px; top: 50%; height: 44px; transform: translateY(-50%); }

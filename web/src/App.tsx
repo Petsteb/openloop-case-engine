@@ -19,7 +19,7 @@ import { Timeline } from './components/Timeline'
 import { Icon } from './components/Icon'
 import { DEMO_COMPLIANCE_ID } from './shared/demo'
 import { resetAllDemo } from './home/queue'
-import { setSeen } from './home/seen'
+import { SEEN_EVENT, getSeen, setSeen } from './home/seen'
 import type { CaseExtra } from './home/types'
 import { HOME_HREF, STARTED_CLEAN, go, useHashRoute } from './home/useHashRoute'
 import { WorkQueue } from './home/WorkQueue'
@@ -47,7 +47,13 @@ export default function App() {
     if (screen === 'home') document.title = 'Work queue | OpenLoop'
   }, [screen])
 
-  if (route.name === 'home') return <WorkQueue theme={theme} onTheme={onTheme} />
+  if (route.name === 'home') {
+    return (
+      <Boundary name="work queue" fallback={<main className="page"><p className="muted" role="alert">The work queue could not be shown. Reload the page to try again.</p></main>}>
+        <WorkQueue theme={theme} onTheme={onTheme} />
+      </Boundary>
+    )
+  }
   // key: a different case remounts the whole screen, so selection, the open sheet, the chat draft and the timeline view
   // never carry over from the previous case.
   return <CaseView key={route.id} caseId={route.id} theme={theme} onTheme={onTheme} dock={dock} setDock={setDock} />
@@ -92,12 +98,49 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
 
   const eventCount = arr(bundle?.events).length
   const seq = lastSeq(bundle?.events)
-  // Seen: the analyst has this case on screen, so everything up to the newest event is read (the bell and the queue's
-  // unread dot use it). Written again on leaving, in case another writer lowered it meanwhile.
-  useEffect(() => { if (seq) setSeen(caseId, seq) }, [caseId, seq])
-  // (not after "Reset all demo cases": the reseed cleared every seen value and the old seq means nothing any more)
+  // Seen (openloop-seen:employee:<id>, read by the bell, the queue's unread dot and the thread): the analyst has the case
+  // on screen, so everything up to the newest event is read, EXCEPT client messages while the Messages tab is not on
+  // screen. Those stay unread (the seen seq stops just before the first one) until the analyst opens the tab.
+  const clientSeqs = useMemo(() => arr(bundle?.events)
+    .filter((e) => e.type === 'MESSAGE_POSTED' && e.actor?.type === 'client').map((e) => Number(e.seq) || 0), [bundle])
+  const [docVisible, setDocVisible] = useState(() => document.visibilityState !== 'hidden')
+  const [seenRev, setSeenRev] = useState(0)
+  useEffect(() => {
+    const onVis = () => setDocVisible(document.visibilityState !== 'hidden')
+    const onSeen = () => setSeenRev((r) => r + 1)
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener(SEEN_EVENT, onSeen)   // this tab: setSeen, the thread and the bell's "Mark all read"
+    window.addEventListener('storage', onSeen)    // another tab
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener(SEEN_EVENT, onSeen)
+      window.removeEventListener('storage', onSeen)
+    }
+  }, [])
+  const msgsOnScreen = right && tab === 'outbox' && docVisible
+  const writeSeen = useCallback(() => {
+    // a gone case writes nothing: a reset may have cleared every seen value and reseeded this id with fewer events
+    if (!seq || missing) return
+    if (msgsOnScreen) { setSeen(caseId, seq); return }
+    const s = getSeen(caseId)
+    const first = clientSeqs.reduce((m, x) => (x > s && (m === 0 || x < m) ? x : m), 0)
+    // a stored value past the ledger's end (a demo reset) has no client seq above it, so it collapses to `seq`
+    setSeen(caseId, first ? Math.min(seq, first - 1) : seq)
+  }, [caseId, seq, msgsOnScreen, clientSeqs, missing])
+  useEffect(() => { writeSeen() }, [writeSeen])
+  // Written again on leaving, in case another writer lowered it meanwhile (not after "Reset all demo cases": the reseed
+  // cleared every seen value and the old seq means nothing any more).
   const leavingAfterReset = useRef(false)
-  useEffect(() => () => { if (seq && !leavingAfterReset.current) setSeen(caseId, seq) }, [caseId, seq])
+  const writeSeenRef = useRef(writeSeen)
+  useEffect(() => { writeSeenRef.current = writeSeen }, [writeSeen])
+  useEffect(() => () => { if (!leavingAfterReset.current) writeSeenRef.current() }, [])
+  // client messages the analyst has not seen in the Messages tab: a dot on the tab (and on the collapsed rail)
+  const unreadMsgs = useMemo(() => {
+    if (msgsOnScreen) return 0
+    const s = getSeen(caseId)
+    return clientSeqs.filter((x) => x > s).length
+  }, [msgsOnScreen, caseId, clientSeqs, seenRev]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openMessages = useCallback(() => { setRight(true); setTab('outbox') }, [])
   const company = bundle ? String((bundle.case as typeof bundle.case & CaseExtra)?.company || '') : ''
   useEffect(() => { document.title = `${company || caseId} | OpenLoop` }, [company, caseId])
   // a new bundle makes an earlier integrity check stale
@@ -163,7 +206,9 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
     }
   }, [openLedger])
 
-  if (!bundle) {
+  // missing: the case is gone (a demo reset or a restart removed it). The polling has stopped; this page replaces the
+  // stale case, and the thread and the dock unmount with it.
+  if (!bundle || missing) {
     return (
       <main className="page">
         <div className="casehead">
@@ -172,12 +217,17 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
             <a className="case-back" href={HOME_HREF}><Icon name="chevronL" size={14} />Work queue</a>
           </div>
         </div>
-        {error ? (
+        {missing ? (
+          <div className="stack" role="alert">
+            <h1 className="case-name">This case no longer exists</h1>
+            <p className="muted">A demo reset or a server restart may have removed it. The other files are in the work queue.</p>
+            <div className="actions"><a className="btn" href={HOME_HREF}>Open the work queue</a></div>
+          </div>
+        ) : error ? (
           <div className="stack" role="alert">
             <p>{error}</p>
             <div className="actions">
-              {missing ? <a className="btn" href={HOME_HREF}>Open the work queue</a>
-                : <button type="button" className="btn" onClick={() => void load()}>Try again</button>}
+              <button type="button" className="btn" onClick={() => void load()}>Try again</button>
             </div>
           </div>
         ) : <p className="muted" role="status">Loading the case…</p>}
@@ -194,7 +244,8 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
       <main className={'page case-page' + (dock ? ' has-dock' : '')}>
         <Boundary name="header">
           <CaseHeader bundle={bundle} caseId={caseId} verify={verify} verifying={verifying} onVerify={doVerify} theme={theme}
-            onTheme={onTheme} learningCount={learningCount} onLearning={() => { setLearningOpen(true); void loadLearning() }} />
+            onTheme={onTheme} learningCount={learningCount} onLearning={() => { setLearningOpen(true); void loadLearning() }}
+            onOpenMessages={openMessages} />
         </Boundary>
         <section className="panel" aria-label="Timeline">
           <Boundary name="timeline"><Timeline bundle={bundle} /></Boundary>
@@ -219,9 +270,9 @@ function CaseView({ caseId: routeId, theme, onTheme, dock, setDock }: CaseViewPr
           <section className="panel side-panel right-col" aria-label="Ask and activity" hidden={!right}>
             <RightPanel bundle={bundle} caseId={caseId} tab={tab} onTab={setTab} onHide={() => setRight(false)} highlight={highlight}
               onCite={onCite} onAnswered={() => void refresh()} verifyText={v?.text ?? null} verifyOk={!!v?.ok} verifying={verifying} onVerify={doVerify}
-              docs={docs} onOpenDoc={setDocOpen} />
+              docs={docs} onOpenDoc={setDocOpen} unreadMessages={unreadMsgs} />
           </section>
-          {!right ? <RightRail latest={latest} onOpen={(t) => { if (t) setTab(t); setRight(true) }} /> : null}
+          {!right ? <RightRail latest={latest} unreadMessages={unreadMsgs} onOpen={(t) => { if (t) setTab(t); setRight(true) }} /> : null}
         </div>
       </main>
       {dock ? <DemoDock bundle={bundle} caseId={caseId} busy={busy} onInbound={onInbound} onAdvance={onAdvance}

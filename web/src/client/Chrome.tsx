@@ -89,10 +89,23 @@ function Bell({ notes, titles, lengths, currentCaseId, onOpenCase }: Omit<BarPro
     setOpen(false)
     if (focusBell) requestAnimationFrame(() => btn.current?.focus())
   }
+  // Modal while open (a full-width sheet on a phone): focus moves in, Tab stays inside, Esc closes, focus returns to the bell.
   useEffect(() => {
     if (!open) return
-    requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('button, a')?.focus() ?? panel.current?.focus())
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close() } }
+    requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('button:not([disabled]), a[href]')?.focus() ?? panel.current?.focus())
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); close(); return }
+      const el = panel.current
+      if (e.key !== 'Tab' || !el) return
+      const items = [...el.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+      if (!items.length) { e.preventDefault(); el.focus(); return }
+      const first = items[0]
+      const last = items[items.length - 1]
+      const at = document.activeElement
+      const inside = !!at && el.contains(at)
+      if (e.shiftKey && (!inside || at === first || at === el)) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (!inside || at === last)) { e.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
@@ -117,8 +130,8 @@ function Bell({ notes, titles, lengths, currentCaseId, onOpenCase }: Omit<BarPro
       </button>
       {open ? (
         <>
-          <div className="pt-bell-scrim" onClick={() => close(false)} aria-hidden="true" />
-          <div ref={panel} id={panelId} className="pt-bell-pop" role="dialog" aria-label="Notifications" tabIndex={-1}>
+          <div className="pt-bell-scrim" onClick={() => close()} aria-hidden="true" />
+          <div ref={panel} id={panelId} className="pt-bell-pop" role="dialog" aria-modal="true" aria-label="Notifications" tabIndex={-1}>
             <div className="pt-bell-head">
               <h2 className="pt-bell-title">Notifications</h2>
               <button type="button" className="pt-link pt-bell-all" onClick={markAll} disabled={!unread.length}>Mark all read</button>

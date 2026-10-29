@@ -118,9 +118,10 @@ Keep the custom tokens above as well.
   - Each side panel header has a hide button (‹ on the left panel, › on the right). Keyboard shortcuts: `[` toggles left, `]` toggles right, ignored while typing in an input.
   - A collapsed panel becomes a **44px rail**: a pill-shaped vertical button with a chevron and a vertical label.
     - **Checklist rail:** 6 status dots in attention order (hollow for waiting) and an `--attn` count badge of problems.
-    - **Right rail:** the time of the latest event, plus a blue dot if a chat answer arrived while it was collapsed.
+    - **Right rail:** the time of the latest event, plus a blue dot if a chat answer arrived while it was collapsed, and an `--attn` count of client messages not yet seen in Messages (it opens that tab).
   - Clicking the rail reopens the panel. The open/closed state persists in `localStorage` with try/catch.
 - **Below 1180px:** the right panel moves below. **Below 820px:** single column, and rails turn horizontal.
+- **Touch and phones** (`(pointer: coarse), (max-width: 640px)`, the `html.bank` block at the end of `index.css`): every bank control is at least 44 px tall (icon buttons 44 px wide too), by min-height and padding, never bigger type. Six 44 px tabs do not fit one phone row, so the right-panel tabs are a 3 × 2 grid on phones and wrap on touch tablets (the desktop row is unchanged). The demo dock grows to 58 px, so the case box reserves 86 px for it. Fields are 16 px there (iOS zooms into smaller ones on focus). Desktop with a mouse keeps its density. The timeline's SVG markers keep their 26 px hit circles: neighbours sit about 14 px apart, so bigger ones would steal each other's taps.
 - **Tall desktop screens** (≥1181 px wide and ≥1000 px high, e.g. 1920×1080, 2560×1440): the case page is one screen with no page scroll. The header and timeline stay put; the three columns fill the rest and each scrolls on its own (thin scrollbars). Ask and Messages grow to the full column height with their input at the bottom.
 - **Timeline height:** 38 px lanes up to a 1100 px-high window, growing to 52 px at 1440 high (about 220 px to 280 px in all).
 - **Wide screens:** past 1920 px the bank's root font size grows from 16 px to 18 px at 2560 (`html.bank`; every UI size is in rem, the timeline's SVG text stays in px). Side panels may grow to 500 / 600 px. Nothing changes at 1920 px or below.
@@ -198,7 +199,7 @@ Keep the custom tokens above as well.
   - While on hold, the checklist's empty line reads "On hold with compliance…", never "Nothing needs attention".
   - **Otherwise:** the selected requirement's detail (reason, evidence quotes, rule), or a waiting summary.
   - **When `READY_FOR_DECISION`:** "File complete" in display 36px, plus the summary list.
-  - **Template words** (`templateWords` in `lib/derive.ts`): `sme_loan` says "credit decision" and "application pack"; `kyb_review` says "annual review sign-off" and "review documents". The status line always starts with "File complete." when the file is ready.
+  - **Template words** (`templateWords` in `lib/derive.ts`): the decision comes from the server (`bundle.case.decision`: "credit decision", "annual review sign-off"), with a fallback map for older servers. The starting-documents word has no server field, so it stays in the map ("application pack", "review documents", any other template "documents"). The status line always starts with "File complete." when the file is ready; READY_FOR_DECISION is trusted as the server sends it. The portal reads the same words from `GET /api/templates` (`decision`).
 - **Right panel tabs:** Ask (default), Activity, Reasoning, Ledger, Email, Docs. Counts are in mono superscript, except on Ask and Docs.
   - All six must fit on one line in the default 340px panel, at 1333 and 1440 px, with no horizontal scrolling. Labels are 12px, never smaller.
   - The list is start-aligned with `space-between` and a 4px minimum gap. Shadcn's centring clips the first tab on overflow.
@@ -288,6 +289,8 @@ Keep the custom tokens above as well.
   - It pauses while this tab is hidden or has any request in flight. A counter in `lib/api.ts` covers actions, chat, learning and documents.
   - A generation counter drops a poll answer that lands after a newer bundle from an action.
   - **Fallback:** when `/version` answers 404/405/501, refetch the bundle every 5 s instead, and ask for `/version` again every 30 s. A refetched bundle replaces the state only if events, status or sim time changed.
+  - **A case that is gone** (a reset or a restart removed it): the bundle answers 404 on two ticks in a row (one 404 can land inside "Reset all demo cases"). Polling stops and the page becomes "This case no longer exists" with a link to the work queue. The thread (a 404 while `/api/version` answers) and the portal ("This file no longer exists", a link to My files) do the same.
+  - **Unread client messages:** a blue dot on the Messages tab until that tab is on screen. The case's seen seq (`openloop-seen:employee:<id>`) stops just below the first unseen client message, so the bell (which counts the open case's messages, not its actions) and the queue's unread dot agree with the tab.
   - **No fighting the UI:** components keep their own state across a new bundle (chat draft and message-list scroll, selection, timeline view, open sheet). The chat scrolls only its own message list; the Ledger scrolls only when a `#seq` is opened.
 - Toasts confirm human actions: "Discrepancy confirmed. The client was asked for a corrected declaration."
 - **Dev server:** Vite proxies `/api` to `http://localhost:8000`.

@@ -79,8 +79,10 @@ export function PanelHead({ title, count, side, onHide, children }: { title?: st
   )
 }
 
-/** Collapsed right panel: ‹ (last tab), AI pill (Ask), Activity, and the time of the last activity. */
-export function RightRail({ latest, onOpen }: { latest: { time: string; text: string } | null; onOpen: (tab?: 'ask' | 'activity') => void }) {
+/** Collapsed right panel: ‹ (last tab), AI pill (Ask), Activity, unread client messages, and the time of the last activity. */
+export function RightRail({ latest, unreadMessages = 0, onOpen }: {
+  latest: { time: string; text: string } | null; unreadMessages?: number; onOpen: (tab?: 'ask' | 'activity' | 'outbox') => void
+}) {
   return (
     <div className="rail rail-right rail-split" role="group" aria-label="AI and activity, hidden">
       <button type="button" className="rail-btn" onClick={() => onOpen()} aria-label="Show AI and activity" aria-expanded="false" title="Show AI and activity (])">
@@ -88,6 +90,12 @@ export function RightRail({ latest, onOpen }: { latest: { time: string; text: st
       </button>
       <button type="button" className="rail-btn rail-ai" onClick={() => onOpen('ask')} title="Open the AI chat">AI</button>
       <button type="button" className="rail-btn rail-label" onClick={() => onOpen('activity')} title="Open activity">Activity</button>
+      {unreadMessages ? (
+        <button type="button" className="rail-btn" onClick={() => onOpen('outbox')} title={`${plural(unreadMessages, 'new message')} from the client`}
+          aria-label={`Open messages, ${plural(unreadMessages, 'new message')} from the client`}>
+          <span className="rail-count">{unreadMessages}</span>
+        </button>
+      ) : null}
       {latest ? (
         <button type="button" className="rail-btn rail-time mono" onClick={() => onOpen('activity')} title={`Last activity: ${latest.text}`}>{latest.time}</button>
       ) : null}

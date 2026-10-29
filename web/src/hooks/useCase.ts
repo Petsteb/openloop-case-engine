@@ -11,6 +11,9 @@ const POLL_MS = 2500
 const FALLBACK_MS = 5000
 /** How long to wait before asking a server without `/version` again (it may be upgraded while the page is open). */
 const VERSION_RETRY_MS = 30000
+/** The bundle must 404 on this many ticks in a row before the case counts as gone: "Reset all demo cases" wipes and
+ *  reseeds the cases, and a poll that lands in between sees a 404 for a case that is back a moment later. */
+const GONE_STRIKES = 2
 
 const lastSeq = (b: Bundle | null) => { const ev = b?.events; return Array.isArray(ev) && ev.length ? ev[ev.length - 1].seq : 0 }
 const evLen = (b: Bundle | null) => (Array.isArray(b?.events) ? b.events.length : 0)
@@ -40,7 +43,8 @@ export function useCase(caseId: string) {
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  /** The server does not know this case id (only demo-1 is created on demand). */
+  /** The server does not know this case id (only demo-1 is created on demand), or the case went away while it was open
+   *  (a demo reset, a restart with an empty database). Polling stops; the page says so. */
   const [missing, setMissing] = useState(false)
   const lock = useRef(false)
   // Every bundle that lands bumps `gen`, so a slower poll answer can never overwrite a newer bundle.
@@ -84,7 +88,7 @@ export function useCase(caseId: string) {
       if (e instanceof ApiError && e.status === 404 && caseId === DEMO_CASE_ID) {
         try { setB(await api.reset()); setError(null); return } catch (e2) { setError(failureText(e2)); return }
       }
-      if (e instanceof ApiError && e.status === 404) { setMissing(true); setError('This case does not exist on this server. It may have been removed by a demo reset.'); return }
+      if (e instanceof ApiError && e.status === 404) { setMissing(true); setError('This case no longer exists.'); return }
       setError(failureText(e))
     }
   }, [caseId, setB])
@@ -105,9 +109,11 @@ export function useCase(caseId: string) {
   // flight or is hidden. A refetch only replaces the bundle when something changed, so nothing re-renders for nothing;
   // components keep their own state (chat draft and scroll, selection, timeline view) across a new bundle.
   useEffect(() => {
+    if (missing) return   // the case is gone: nothing to poll
     let stopped = false
     let timer: number | undefined
     let versionDownUntil = 0
+    let strikes = 0       // ticks in a row on which the bundle answered 404
     const tick = async () => {
       let delay = POLL_MS
       try {
@@ -121,12 +127,25 @@ export function useCase(caseId: string) {
             refetch = Number(v?.length) !== evLen(current.current)
           } catch (e) {
             if (!isUnavailable(e)) return // server unreachable: just try again on the next tick
+            // 404 is either an older server without /version or a case that is gone: the bundle request below decides
             versionDownUntil = Date.now() + VERSION_RETRY_MS
           }
         }
         if (Date.now() < versionDownUntil) { delay = FALLBACK_MS; refetch = true }
         if (!refetch || stopped || lock.current || api.requestsInFlight() > 0) return
-        const b = await api.pollBundle(caseId)
+        let b: Bundle
+        try {
+          b = await api.pollBundle(caseId)
+          strikes = 0
+        } catch (e) {
+          if (stopped || !(e instanceof ApiError && e.status === 404)) return
+          if (++strikes < GONE_STRIKES) return
+          // the case itself is gone (never re-created from here: demo-1 is only re-created by an explicit load)
+          stopped = true
+          setMissing(true)
+          setError('This case no longer exists.')
+          return
+        }
         if (stopped || g !== gen.current || lock.current || sameBundle(current.current, b)) return
         setB(b)
         setError(null)
@@ -136,7 +155,7 @@ export function useCase(caseId: string) {
     }
     timer = window.setTimeout(() => void tick(), POLL_MS)
     return () => { stopped = true; window.clearTimeout(timer) }
-  }, [caseId, setB])
+  }, [caseId, setB, missing])
 
   return { bundle, busy, error, missing, act, load, refresh, caseId }
 }

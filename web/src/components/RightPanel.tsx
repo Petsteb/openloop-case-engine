@@ -35,6 +35,8 @@ interface Props {
   onOpenEvent?: (seq: number) => void
   /** optional: the analyst name on messages the bank sends */
   messageAuthor?: string
+  /** client messages the analyst has not seen in the Messages tab yet (App.tsx): a dot on the tab */
+  unreadMessages?: number
 }
 
 export function RightPanel(p: Props) {
@@ -73,13 +75,17 @@ export function RightPanel(p: Props) {
     if (el && el.scrollWidth > el.clientWidth && drop < DROP_ORDER.length) setFit({ sig, width, drop: drop + 1 })
   }, [sig, width, drop])
   const dropped = new Set(DROP_ORDER.slice(0, drop))
+  const unread = p.unreadMessages ?? 0
   return (
     <Tabs value={p.tab} onValueChange={(v) => p.onTab(v as RightTab)} className="right-tabs" style={{ gap: 0 }}>
       <PanelHead side="right" title="Ask and activity" onHide={p.onHide}>
         <TabsList ref={listRef} className="rtabs" aria-label="Right panel">
           {(Object.keys(labels) as RightTab[]).map((t) => (
-            <TabsTrigger key={t} value={t} className="rtab" title={dropped.has(t) ? titles[t] : undefined}>
+            <TabsTrigger key={t} value={t} className="rtab"
+              title={t === 'outbox' && unread ? `${unread} new from the client` : dropped.has(t) ? titles[t] : undefined}>
               {labels[t]}{counts[t] !== null && !dropped.has(t) ? <sup>{counts[t]}</sup> : null}
+              {/* outside the <sup>: the Messages count is the first one dropped when the row is tight */}
+              {t === 'outbox' && unread ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, {unread} new from the client</span></> : null}
             </TabsTrigger>
           ))}
         </TabsList>

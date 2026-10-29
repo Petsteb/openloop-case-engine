@@ -1,6 +1,6 @@
 /* Pure helpers for the portal: the client copy filter, state and progress derivation, and request/document matching. */
 import type {
-  CaseRow, ClientDocument, ClientView, Confirmation, MissingDocument, PortalNotification, PortalState, TimelineItem,
+  CaseRow, ClientDocument, ClientView, Confirmation, MissingDocument, PortalNotification, PortalState, Template, TimelineItem,
 } from './types'
 
 export const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
@@ -186,37 +186,39 @@ export function needsText(state: PortalState, missing: number, confirmations: nu
   if (confirmations) return confirmations === 1 ? 'Please answer one question from the bank.' : `Please answer ${confirmations} questions from the bank.`
   return null
 }
-/** A finished file, in the words of its template (the server's: "waiting for the bank's annual review sign-off").
- *  An unknown template keeps the loan wording of STATE_PILL / IDLE_TEXT. */
-const COMPLETE_TEXT: Record<string, { pill: string; idle: string }> = {
-  kyb_review: {
-    pill: 'Complete: waiting for the bank’s annual review sign-off',
-    idle: 'Nothing to do. The bank finishes your annual review and tells you if it needs anything else.',
-  },
+/* ---------- the file's decision, in its template's words ----------
+   The server sends the words with the template list (`GET /api/templates`: "credit decision", "annual review sign-off")
+   and writes them into its own client status line. This map is only the fallback for an older server's list. */
+const DECISION_FALLBACK: Record<string, string> = { sme_loan: 'credit decision', kyb_review: 'annual review sign-off' }
+/** "credit decision" / "annual review sign-off" for a template id, or '' when nothing is known (generic wording). */
+export function decisionFor(templates: Template[] | null | undefined, id: string | undefined): string {
+  if (!id) return ''
+  const server = safe(arr(templates ?? undefined).find((t) => t.id === id)?.decision, '')
+  return server || DECISION_FALLBACK[id] || ''
 }
-export const pillText = (state: PortalState, template?: string) =>
-  (state === 'complete' && template ? COMPLETE_TEXT[template]?.pill : undefined) ?? STATE_PILL[state]
-/** A My files row: the server's line, except a finished file whose template has its own words (the server's client
- *  line for a finished annual review still reads "credit decision"). */
-export const rowStatusText = (r: CaseRow, tone: PortalState) =>
-  (tone === 'complete' && r.template && COMPLETE_TEXT[r.template] ? COMPLETE_TEXT[r.template].pill : safe(r.status_text, pillText(tone, r.template)))
-export const nextText = (state: PortalState, missing: number, confirmations: number, template?: string) =>
-  needsText(state, missing, confirmations) ?? (state === 'complete' && template ? COMPLETE_TEXT[template]?.idle : undefined) ?? IDLE_TEXT[state]
+/** The pill's words for a state (used when the server's own line can't be: an override, or no line). */
+export const pillText = (state: PortalState, decision?: string) =>
+  state === 'complete' && decision ? `Complete: waiting for the bank’s ${decision}` : STATE_PILL[state]
+/** A My files row: the server's line (it already names the template's decision), else the pill's words. */
+export const rowStatusText = (r: CaseRow, tone: PortalState, decision?: string) => safe(r.status_text, pillText(tone, decision))
+export const nextText = (state: PortalState, missing: number, confirmations: number, decision?: string) =>
+  needsText(state, missing, confirmations)
+    ?? (state === 'complete' && decision ? `Nothing to do. The bank will contact you after its ${decision}.` : IDLE_TEXT[state])
 
 /* ---------- files (multi-case) ---------- */
-/** The client's name for a kind of file. The server's titles are written for staff ("SME loan and KYB check"). */
-const CLIENT_TEMPLATES: Record<string, { title: string; eyebrow: string; about: string; decides: string }> = {
+/** The client's name for a kind of file. The server's titles and descriptions are written for staff ("SME loan and KYB
+ *  check") and it sends no client-worded ones, so the two known templates keep theirs here; any other template shows
+ *  the server's title and description (through the copy filter). */
+const CLIENT_TEMPLATES: Record<string, { title: string; eyebrow: string; about: string }> = {
   sme_loan: {
     title: 'Working-capital loan',
     eyebrow: 'Your financing file',
     about: 'Financing for your day-to-day business. We ask for your documents, check them, and a bank officer decides.',
-    decides: 'A bank officer makes the credit decision.',
   },
   kyb_review: {
     title: 'Annual business review',
     eyebrow: 'Your annual business review',
     about: 'Your yearly check-in with the bank: we confirm that your company, its owners and its taxes are up to date.',
-    decides: 'A bank officer completes the review.',
   },
 }
 export function templateTitle(id: string | undefined, serverTitle?: string): string {
@@ -226,12 +228,14 @@ export function templateTitle(id: string | undefined, serverTitle?: string): str
 /** The line above the company name on a file page. */
 export const fileEyebrow = (id: string | undefined, serverTitle?: string) =>
   (id ? CLIENT_TEMPLATES[id]?.eyebrow : undefined) ?? templateTitle(id, serverTitle)
-export function templateAbout(id: string | undefined, serverText?: string): string {
+/** What a kind of file is about: the client-worded text for a known template, else the server's description or goal. */
+export function templateAbout(id: string | undefined, serverText?: string, goal?: string): string {
   const known = id ? CLIENT_TEMPLATES[id] : undefined
-  return known ? known.about : safe(serverText, 'A new file with the bank.')
+  return known ? known.about : safe(serverText, safe(goal, 'A new file with the bank.'))
 }
-export const decidesLine = (id: string | undefined) =>
-  (id ? CLIENT_TEMPLATES[id]?.decides : undefined) ?? 'A bank officer makes the final decision.'
+/** The footer's line on who decides, in the template's words when the decision is known. */
+export const decidesLine = (decision?: string) =>
+  decision ? `The ${decision} is made by a bank officer.` : 'A bank officer makes the final decision.'
 /** The loan amount line ("Working-capital loan, 500,000 RON") only belongs to a loan file: the server sends the
  *  company's product on every file, an annual review included. */
 export const productFor = (template: string | undefined, product: string | undefined) =>

@@ -16,6 +16,8 @@ interface Props {
   onTheme: () => void
   learningCount: number | null
   onLearning: () => void
+  /** the bell's unread client message on this case opens the Messages tab */
+  onOpenMessages?: () => void
 }
 
 export function verifyLabel(v: VerifyResult | null) {
@@ -23,7 +25,7 @@ export function verifyLabel(v: VerifyResult | null) {
   return v.ok ? { ok: true, text: `Chain intact, ${v.length} events` } : { ok: false, text: `Chain broken at event #${v.broken_at}` }
 }
 
-export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme, onTheme, learningCount, onLearning }: Props) {
+export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme, onTheme, learningCount, onLearning, onOpenMessages }: Props) {
   const c = (bundle.case || {}) as Bundle['case'] & CaseExtra
   const split = splitTitle(bundle)
   // contract v3: the case names its company and template; older servers only have "<template> — <company>" in the title
@@ -76,7 +78,7 @@ export function CaseHeader({ bundle, caseId, verify, verifying, onVerify, theme,
           <a className="btn quiet sm" href={`/client/#/case/${encodeURIComponent(caseId)}`} target="_blank" rel="noopener" title="Open what the client sees, in a new window">
             Preview client view<Icon name="external" size={13} />
           </a>
-          <Bell currentCaseId={caseId} />
+          <Bell currentCaseId={caseId} onOpenMessages={onOpenMessages} />
           <button type="button" className="btn quiet icon-only sm" onClick={onTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Theme">
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
           </button>

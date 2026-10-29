@@ -351,6 +351,8 @@ button { font: inherit; color: inherit; }
 .rtab[data-state="active"] { color: var(--ink); background: transparent; box-shadow: none; border-color: transparent; }
 .rtab[data-state="active"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; background: var(--ink); border-radius: 2px; opacity: 1; }
 .rtab sup { font-family: var(--mono); font-size: 0.625rem; color: var(--muted); margin-left: 2px; }
+/* a client message the analyst has not seen yet: the needs-you blue, like the queue's unread dot */
+.rtab-new { width: 6px; height: 6px; border-radius: 50%; background: var(--attn); display: block; flex: none; margin-left: 3px; align-self: center; position: relative; top: -0.4em; }
 .tabpane { min-width: 0; padding-top: 6px; }
 .feed { display: flex; flex-direction: column; min-width: 0; }
 .feed-day { font-size: 0.75rem; color: var(--muted); padding: 12px 0 4px; }
@@ -743,4 +745,45 @@ button.thr-ref:hover .thr-ref-code { color: inherit; }
   .case-page .chat .msgs { flex: 1 1 0; min-height: 96px; max-height: none; }
   .case-page .tabpane > .thr > .thr-listwrap { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .case-page .tabpane > .thr .thr-list { flex: 1 1 0; min-height: 96px; max-height: none; }
+}
+
+/* ---------- bank: phones and touch screens get 44 px targets (desktop keeps its density) ----------
+   The hit area grows with min-height and padding, never with bigger type. html.bank: the portal has its own block in
+   portal.css. max-width too: a phone frame inside a desktop browser does not match (pointer: coarse). */
+@media (pointer: coarse), (max-width: 640px) {
+  html.bank .btn, html.bank .btn.sm { min-height: 44px; }
+  html.bank .btn.sm { padding-inline: 14px; }
+  html.bank .btn.icon-only { min-width: 44px; padding-inline: 10px; }
+  html.bank .seg button { min-height: 44px; }
+  html.bank .case-back { min-height: 44px; margin-block: -10px -4px; padding-inline: 4px 10px; }
+  html.bank .collapse { width: 44px; height: 44px; }
+  html.bank .rail-btn { min-width: 44px; min-height: 44px; }
+  html.bank .l-three > .rail { min-height: 44px; }
+  /* six 44 px tabs plus the hide button need ~330 px: more than a phone's row (304 px at 390) or a touch tablet's side
+     panel (286 px). Touch: the row wraps when it must. Phones: a 3 x 2 grid, so every tab is a wide 44 px cell. */
+  html.bank .rtab { min-height: 44px; min-width: 44px; justify-content: center; }
+  html.bank .rtabs { flex-wrap: wrap; row-gap: 4px; }
+  html.bank .ask { padding-block: 0; padding-right: 0; }
+  html.bank .ask input { min-height: 44px; }
+  html.bank .linkish { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 6px; }
+  html.bank .switch, html.bank .fold, html.bank .doc-fold, html.bank .doc-use, html.bank .docrow, html.bank .mail-subj { min-height: 44px; }
+  html.bank .menu button { min-height: 44px; }
+  html.bank .suggest button { min-height: 44px; padding-block: 8px; }
+  html.bank .release-note, html.bank .promote input { min-height: 44px; }
+  /* the shadcn sheet's close X (NewCase, Learning, the document viewer) */
+  html.bank [data-slot="sheet-close"] { min-width: 44px; min-height: 44px; }
+  /* inline citation chips stay in the text flow; a transparent overlay makes them 44 px tall */
+  html.bank .cite { position: relative; }
+  html.bank .cite::after { content: ""; position: absolute; left: -4px; right: -4px; top: 50%; height: 44px; transform: translateY(-50%); }
+  /* the dock is 58 px tall with 44 px buttons: the case box ends 16 + 58 + 12 px above the bottom */
+  html.bank .case-page.has-dock { --dock-zone: 86px; }
+  /* iOS zooms into any field under 16 px on focus */
+  .ask input, .thr-input, .release-note, .promote input { font-size: 16px; }
+}
+@media (max-width: 640px) {
+  html.bank .rtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; overflow: visible; }
+}
+/* a touch tablet keeps the vertical rails: one px wider each side so a 44 px button fits inside the 1 px border */
+@media (pointer: coarse) and (min-width: 821px) {
+  html.bank .rail { width: 46px; }
 }

@@ -4,7 +4,7 @@ import * as api from './api'
 import { ApiError, isUnavailable } from './api'
 import { Icon } from './Icon'
 import {
-  nextText, productFor, rowNeeds, rowStatusText, rowTone, safe, sortRows, STATE_SHORT, templateAbout, templateTitle,
+  decisionFor, nextText, productFor, rowNeeds, rowStatusText, rowTone, safe, sortRows, STATE_SHORT, templateAbout, templateTitle,
 } from './derive'
 import { caseHref } from './route'
 import { readSeen, useSeenRev } from './store'
@@ -21,8 +21,8 @@ interface Props {
 }
 
 /** The file's one next action: exact when its client view is known, else from the row's count. */
-function nextLine(r: CaseRow, info: NextInfo | undefined): string {
-  if (info) return nextText(info.state, info.missing, info.confirmations, r.template)
+function nextLine(r: CaseRow, info: NextInfo | undefined, decision: string): string {
+  if (info) return nextText(info.state, info.missing, info.confirmations, decision)
   const n = rowNeeds(r)
   return n === 1 ? 'The bank needs one thing from you.' : `The bank needs ${n} things from you.`
 }
@@ -45,7 +45,7 @@ function Tone({ tone }: { tone: PortalState }) {
   return <span className={`pt-tone is-${tone}`}><i aria-hidden="true" />{STATE_SHORT[tone]}</span>
 }
 
-function FileRow({ r, info, unread }: { r: CaseRow; info: NextInfo | undefined; unread: boolean }) {
+function FileRow({ r, info, unread, decision }: { r: CaseRow; info: NextInfo | undefined; unread: boolean; decision: string }) {
   const tone = rowTone(r)
   const title = templateTitle(r.template, r.template_title)
   const needs = rowNeeds(r) > 0
@@ -58,8 +58,8 @@ function FileRow({ r, info, unread }: { r: CaseRow; info: NextInfo | undefined; 
           {unread ? <span className="pt-file-dot" title="New activity"><span className="sr-only">New activity</span></span> : null}
           <span className="pt-file-day">Day {Number(r.day) || 0}</span>
         </span>
-        <span className="pt-file-status">{rowStatusText(r, tone)}</span>
-        {needs ? <span className="pt-file-next">{nextLine(r, info)}</span> : null}
+        <span className="pt-file-status">{rowStatusText(r, tone, decision)}</span>
+        {needs ? <span className="pt-file-next">{nextLine(r, info, decision)}</span> : null}
         <span className="pt-file-foot">
           <Tone tone={tone} />
           {amount ? <span className="pt-file-amount">{amount}</span> : null}
@@ -106,7 +106,7 @@ function StartList({ company, templates, onOpenCase }: { company: Company; templ
           <li key={tid} className="pt-start">
             <div className="pt-start-main">
               <h3 className="pt-start-title">{title}</h3>
-              <p className="pt-start-about">{templateAbout(tid, t?.description)}</p>
+              <p className="pt-start-about">{templateAbout(tid, t?.description, t?.goal)}</p>
             </div>
             <button type="button" className="btn pt-start-btn" onClick={() => void start(tid)} disabled={busy !== null}
               aria-busy={busy === tid || undefined} aria-label={`Start: ${title}`}>
@@ -155,7 +155,7 @@ export function Home({ data, company, onOpenCase }: Props) {
                   <span className="pt-next-file">{templateTitle(top.template, top.template_title)}
                     {needing.length > 1 ? <span className="pt-next-more"> · {needing.length - 1} more {needing.length === 2 ? 'file needs' : 'files need'} you</span> : null}
                   </span>
-                  {nextLine(top, data.next[top.id])}
+                  {nextLine(top, data.next[top.id], decisionFor(data.templates, top.template))}
                 </>
               ) : rows.length ? 'Nothing to do right now. We’ll let you know here when the bank needs something.'
                 : 'You have no open files yet. Start an application when you’re ready.'}
@@ -170,7 +170,7 @@ export function Home({ data, company, onOpenCase }: Props) {
               <h2 id="h-files" className="pt-h2">My files{rows.length ? <span className="pt-count">{rows.length}</span> : null}</h2>
               {rows.length ? (
                 <ul className="pt-files">
-                  {rows.map((r) => <FileRow key={r.id} r={r} info={data.next[r.id]} unread={unread.has(r.id)} />)}
+                  {rows.map((r) => <FileRow key={r.id} r={r} info={data.next[r.id]} unread={unread.has(r.id)} decision={decisionFor(data.templates, r.template)} />)}
                 </ul>
               ) : <p className="pt-empty">No files yet.</p>}
             </section>

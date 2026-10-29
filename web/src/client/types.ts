@@ -110,7 +110,8 @@ export interface Company {
   templates?: string[]
 }
 
-export interface Template { id: string; title: string; description?: string; requirements?: string[] }
+/** `decision` ("credit decision", "annual review sign-off") and `goal` come from newer servers only. */
+export interface Template { id: string; title: string; description?: string; requirements?: string[]; goal?: string; decision?: string }
 
 /** GET /api/notifications?role=client&company_id=, newest first. */
 export interface PortalNotification {

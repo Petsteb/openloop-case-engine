@@ -88,10 +88,11 @@ export const listCompanies = () => call<Company[]>('GET', '/api/companies')
 export const listTemplates = () => call<Template[]>('GET', '/api/templates')
 export const notifications = (companyId: string) =>
   call<PortalNotification[]>('GET', `/api/notifications?role=client&company_id=${q(companyId)}`)
-/** Opens a new file. Answers with the bank's bundle: only `case.id` is read here. 422 for a pair the company has no
- *  documents for. */
+/** Opens a new file as the client: the server answers with `case` (id, template, company, product) and the client view,
+ *  never the bank's bundle. Only `case.id` is read here. 422 for a pair the company has no documents for. */
 export const createCase = (template: string, companyId: string) =>
-  call<{ case?: { id?: string } }>('POST', '/api/cases', { template, company_id: companyId })
+  call<{ case?: { id?: string; template?: string; template_title?: string; company_id?: string; company?: string; product?: string } }>(
+    'POST', '/api/cases', { template, company_id: companyId, role: 'client' })
 
 /** The server's limit (backend `_ingest_upload`: more than 1,000,000 bytes is refused). */
 export const MAX_UPLOAD_BYTES = 1_000_000

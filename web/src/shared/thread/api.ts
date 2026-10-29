@@ -56,6 +56,8 @@ export const getMentionables = (caseId: string, role: ThreadRole) =>
   call<Mentionables>('GET', `${c(caseId)}/mentionables?role=${role}`)
 
 export const getVersion = (caseId: string) => call<CaseVersion>('GET', `${c(caseId)}/version`)
+/** The server-wide change detector. When it answers but a case's /version is 404, the case is gone (not the endpoint). */
+export const getGlobalVersion = () => call<unknown>('GET', '/api/version')
 
 /** The bell's last-seen key for a case and role: the value is the newest seq the viewer has seen (a plain number). */
 export const seenKey = (role: ThreadRole, caseId: string) => `openloop-seen:${role}:${caseId}`

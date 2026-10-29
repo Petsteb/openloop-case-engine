@@ -16,6 +16,9 @@ export interface CaseInfo {
   id: string
   title: string
   goal?: string
+  /** the template's decision in the bank's words ("credit decision", "annual review sign-off"); newer servers only */
+  decision?: string
+  template?: string
   status: CaseStatus
   sim_now: string
   day: number

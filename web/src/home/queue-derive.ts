@@ -66,9 +66,10 @@ export const countWord = {
   waiting: () => 'waiting on client',
 }
 
-/** Unread items for the bell, newest first. The case on screen never counts: the analyst is looking at it. */
+/** Unread items for the bell, newest first. The case on screen: its actions are in front of the analyst, so they never
+ *  count; its client messages do until the Messages tab was on screen (App.tsx keeps the seen seq below them). */
 export const unreadNotes = (notes: Note[], seen: (id: string) => number, current?: string | null) =>
-  notes.filter((x) => x.case_id !== current && n(x.seq) > seen(x.case_id))
+  notes.filter((x) => (x.case_id !== current || x.kind === 'message') && n(x.seq) > seen(x.case_id))
 
 /** Older servers have no `/api/cases`: one row for demo-1, built from its bundle. */
 export function rowFromBundle(b: Bundle): CaseRow {

@@ -10,8 +10,9 @@ import { Messages } from './Messages'
 import { ConfirmCard, DisputeNotice, RequestCard, type CardState } from './Needs'
 import {
   arr, decidesLine, latestDispute, nextText as nextTextFor, pillState, pillText, portalState, productFor, progressSteps, safe, sameKey,
-  shortLabel, sortRequests, STATE_PILL, fileEyebrow, type Step,
+  shortLabel, sortRequests, fileEyebrow, type Step,
 } from './derive'
+import { HOME_HREF } from './route'
 import { markSeen } from './store'
 import type { CaseRow, Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
@@ -19,10 +20,11 @@ import { useClientView } from './useClientView'
 const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
 
 /* ---------- header pieces ---------- */
-/** The pill's words follow the file's template; until My files has named it, a finished file uses the server's line. */
-function StatusPill({ state, template, serverText }: { state: PortalState; template: string | undefined; serverText: string | undefined }) {
-  const text = template || state !== 'complete' ? pillText(state, template) : safe(serverText, STATE_PILL.complete)
-  return <span className={`pt-pill is-${state}`}><i aria-hidden="true" />{text}</span>
+/** The server's own line (it already names the template's decision). Only when the pill overrides the server's state
+ *  (a complete file with a question still open) do the words come from here. */
+function StatusPill({ pill, state, decision, serverText }: { pill: PortalState; state: PortalState; decision: string; serverText: string | undefined }) {
+  const text = pill === state ? safe(serverText, pillText(state, decision)) : pillText(pill, decision)
+  return <span className={`pt-pill is-${pill}`}><i aria-hidden="true" />{text}</span>
 }
 
 function Progress({ steps }: { steps: Step[] }) {
@@ -50,11 +52,13 @@ interface PortalProps {
   file?: CaseRow
   /** the file's company name, so the demo can view the portal as that company */
   onCompanyName?: (name: string) => void
+  /** the template's decision in its own words ("credit decision"), from the template list; '' while unknown */
+  decision?: string
 }
 
 /** One file. Rendered with key={caseId}: switching files remounts it, so no state carries over. */
-export function Portal({ caseId, file, onCompanyName }: PortalProps) {
-  const { view, docs, error, refresh, track, mutate, gen, ledger } = useClientView(caseId)
+export function Portal({ caseId, file, onCompanyName, decision = '' }: PortalProps) {
+  const { view, docs, error, refresh, track, mutate, gen, ledger, gone } = useClientView(caseId)
   const companyName = view?.overview?.company
   useEffect(() => { if (companyName && onCompanyName) onCompanyName(companyName) }, [companyName, onCompanyName])
   // opening the file marks it seen up to the newest ledger seq this page knows (the client timeline hides some)
@@ -63,6 +67,18 @@ export function Portal({ caseId, file, onCompanyName }: PortalProps) {
     const name = companyName ? safe(companyName, '') : ''
     document.title = name ? `${name} · Your file` : 'Your file'
   }, [companyName])
+  // the file was removed (or never existed): a calm page instead of a stale one; polling has stopped
+  if (gone) {
+    return (
+      <div className="pt-wrap">
+        <div className="pt-loading pt-gone" role="alert">
+          <h1 className="pt-company">This file no longer exists</h1>
+          <p>It may have been closed or removed. Your other files are in My files.</p>
+          <a className="btn" href={HOME_HREF}>Go to My files</a>
+        </div>
+      </div>
+    )
+  }
   if (!view) {
     return (
       <div className="pt-wrap">
@@ -78,7 +94,7 @@ export function Portal({ caseId, file, onCompanyName }: PortalProps) {
   // a demo reset (the ledger got shorter) remounts the page: no notes, chat or open rows from the previous run
   return (
     <PortalBoundary key={gen} inner>
-      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} file={file}
+      <FileView key={gen} view={view} docs={docs} error={error} caseId={caseId} file={file} decision={decision}
         track={track} mutate={mutate} refresh={refresh} />
     </PortalBoundary>
   )
@@ -90,6 +106,7 @@ interface FileProps {
   error: string | null
   caseId: string
   file?: CaseRow
+  decision: string
   track: <T>(p: Promise<T>) => Promise<T>
   mutate: ReturnType<typeof useClientView>['mutate']
   refresh: () => Promise<boolean>
@@ -98,7 +115,7 @@ interface FileProps {
 const toggleIn = (s: Set<string>, id: string) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }
 const docNo = (id: string) => Number(String(id ?? '').replace(/\D/g, '')) || 0
 
-function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: FileProps) {
+function FileView({ view, docs, error, caseId, file, decision, track, mutate, refresh }: FileProps) {
   const [cards, setCards] = useState<Record<string, CardState>>({})
   const [ghosts, setGhosts] = useState<Record<string, MissingDocument>>({})
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -278,7 +295,7 @@ function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: F
   const dispute = latestDispute(view)
   const showDispute = !!dispute && hiddenDispute !== dispute.seq
   // complete with a question still open (credit-bureau consent stays pending by design) never reads "Complete"
-  const nextText = nextTextFor(state, missing.length, confirmations.length, file?.template)
+  const nextText = nextTextFor(state, missing.length, confirmations.length, decision)
   const needsYou = missing.length + confirmations.length > 0
   const nextAction = () => {
     if (first) {
@@ -304,7 +321,7 @@ function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: F
             {product ? <p className="pt-product">{product}</p> : null}
           </div>
           <div className="pt-head-side">
-            <StatusPill state={pill} template={file?.template} serverText={view.overview?.status_text} />
+            <StatusPill pill={pill} state={state} decision={decision} serverText={view.overview?.status_text} />
             <span className="pt-day">Day {view.overview?.day ?? 0} of your file</span>
           </div>
         </header>
@@ -371,7 +388,7 @@ function FileView({ view, docs, error, caseId, file, track, mutate, refresh }: F
 
         <footer className="pt-foot">
           <Icon name="shield" size={16} />
-          <p>Internal reviews and staff notes are not shown here. {decidesLine(file?.template)}</p>
+          <p>Internal reviews and staff notes are not shown here. {decidesLine(decision)}</p>
         </footer>
       </div>
       <DocSheet doc={sheetDoc} detail={sheetDoc ? details[sheetDoc.id]?.d : undefined} onClose={() => setSheet(null)} />
