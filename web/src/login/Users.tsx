@@ -31,6 +31,7 @@ export function Users() {
   const [qr, setQr] = useState<string | null>(null)
   const [form, setForm] = useState({ email: '', name: '', role: 'analyst', company_id: '', password: '' })
   const [busy, setBusy] = useState(false)
+  const [moving, setMoving] = useState<{ id: string; role: string; company_id: string } | null>(null)
 
   const reload = useCallback(() => {
     api<User[]>('GET', '/api/users').then(setList).catch((e: Error) => setError(e.message))
@@ -53,7 +54,8 @@ export function Users() {
     e.preventDefault()
     setBusy(true); setError(null)
     try {
-      const body = { ...form, company_id: form.role === 'client' ? form.company_id : null }
+      // no password: the user signs in with Google or Microsoft (then the code)
+      const body = { ...form, company_id: form.role === 'client' ? form.company_id : null, password: form.password || null }
       setCreated(await api<Created>('POST', '/api/users', body))
       setForm({ email: '', name: '', role: form.role, company_id: '', password: '' })
       reload()
@@ -64,6 +66,17 @@ export function Users() {
     try {
       const r = await api<Partial<Created>>('POST', `/api/users/${encodeURIComponent(u.id)}/${action}`, {})
       if (action === 'reset-2fa' && r.otpauth_uri && r.user && r.totp_secret) setCreated(r as Created)
+      reload()
+    } catch (err) { setError((err as Error).message) }
+  }
+
+  const saveRole = async () => {
+    if (!moving) return
+    setError(null)
+    try {
+      await api('POST', `/api/users/${encodeURIComponent(moving.id)}/role`,
+        { role: moving.role, company_id: moving.role === 'client' ? moving.company_id : null })
+      setMoving(null)
       reload()
     } catch (err) { setError((err as Error).message) }
   }
@@ -103,9 +116,9 @@ export function Users() {
               </select>
             </>
           ) : null}
-          <label className="lg-label" htmlFor="u-pass">First password (8+ characters)</label>
+          <label className="lg-label" htmlFor="u-pass">First password (8+ characters; leave empty for Google / Microsoft sign-in only)</label>
           <input id="u-pass" className="lg-input" type="password" autoComplete="new-password" minLength={8} value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            onChange={(e) => setForm({ ...form, password: e.target.value })} />
           {error ? <p className="lg-error" role="alert">{error}</p> : null}
           <div className="lg-row"><button type="submit" className="btn primary" disabled={busy}>Add user</button></div>
         </form>
@@ -127,11 +140,35 @@ export function Users() {
               <li key={u.id} className={u.active ? '' : 'is-off'}>
                 <span className="lg-acct-who"><b>{u.name}</b><span>{u.email} · {u.role === 'client' ? u.company : `${u.role}, ${u.staff_id}`}{u.active ? '' : ' · disabled'}</span></span>
                 <span className="lg-user-tools">
+                  {u.id === me.staff?.id ? null : (
+                    <button type="button" className="btn quiet sm" aria-expanded={moving?.id === u.id}
+                      onClick={() => setMoving(moving?.id === u.id ? null : { id: u.id, role: u.role, company_id: u.company_id ?? '' })}>
+                      Change role
+                    </button>
+                  )}
                   <button type="button" className="btn quiet sm" onClick={() => void act(u, 'reset-2fa')}>New 2FA</button>
                   {u.id === me.staff?.id ? null : u.active
                     ? <button type="button" className="btn quiet sm" onClick={() => void act(u, 'disable')}>Disable</button>
                     : <button type="button" className="btn sm" onClick={() => void act(u, 'enable')}>Enable</button>}
                 </span>
+                {moving?.id === u.id ? (
+                  <span className="lg-move">
+                    <select className="lg-input" aria-label={`New role for ${u.name}`} value={moving.role}
+                      onChange={(e) => setMoving({ ...moving, role: e.target.value })}>
+                      {ROLES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                    </select>
+                    {moving.role === 'client' ? (
+                      <select className="lg-input" aria-label={`Company for ${u.name}`} value={moving.company_id}
+                        onChange={(e) => setMoving({ ...moving, company_id: e.target.value })}>
+                        <option value="" disabled>Choose a company</option>
+                        {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    ) : null}
+                    <button type="button" className="btn primary sm" onClick={() => void saveRole()}
+                      disabled={moving.role === 'client' && !moving.company_id}>Save</button>
+                    <span className="muted small">They are signed out, so the new role applies at once.</span>
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

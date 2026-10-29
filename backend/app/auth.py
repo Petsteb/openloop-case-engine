@@ -338,7 +338,7 @@ RULES = [
     ("GET", r"/api/demo/sample-files(/[^/]+)?", "demo_case_reader"),
     ("POST", r"/api/registry", "demo"),
     ("GET", r"/api/users", "users"),
-    ("POST", r"/api/users(/[^/]+/(disable|enable|reset-2fa))?", "users"),
+    ("POST", r"/api/users(/[^/]+/(disable|enable|reset-2fa|role))?", "users"),
 ]
 _COMPILED = [(m, re.compile(p + r"/?"), rule) for m, p, rule in RULES]
 
@@ -627,6 +627,11 @@ class LogoutIn(BaseModel):
     app: str = Field(default="all", pattern="^(staff|client|all)$")
 
 
+class RoleIn(BaseModel):
+    role: str = Field(pattern="^(client|analyst|supervisor|compliance|admin)$")
+    company_id: str | None = Field(default=None, max_length=40)
+
+
 class UserIn(BaseModel):
     email: str = Field(min_length=3, max_length=200)
     name: str = Field(min_length=1, max_length=80)
@@ -864,6 +869,30 @@ def create_user(body: UserIn, request: Request):
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     return {"user": public(user), "otpauth_uri": otpauth_uri(user), "totp_secret": user["totp_secret"]}
+
+
+@router.post("/api/users/{user_id}/role")
+def change_role(user_id: str, body: RoleIn, request: Request):
+    """Moves a user to another role (staff <-> client, or between staff roles). The user is signed out everywhere,
+    so the new permissions apply at once. Only an admin moves anyone into or out of the admin role."""
+    user = users().get(user_id)
+    if not user:
+        raise HTTPException(404, "user not found")
+    me_ = actor(request)
+    if me_ and me_["id"] == user_id:
+        raise HTTPException(409, "you cannot change your own role")
+    _guard_admin(request, user["role"])
+    _guard_admin(request, body.role)
+    if body.role == "client":
+        if body.company_id not in profiles.PROFILES:
+            raise HTTPException(422, "a client account needs a known company_id")
+        fields = {"role": "client", "company_id": body.company_id, "staff_id": None}
+    else:  # keeps a staff member's ledger identity; a client who joins the bank gets a new one
+        fields = {"role": body.role, "company_id": None,
+                  "staff_id": user["staff_id"] if user["role"] != "client" else f"{body.role}-{secrets.token_hex(2)}"}
+    users().update(user_id, **fields)
+    users().bump_session(user_id)
+    return {"user": public(users().get(user_id))}
 
 
 @router.post("/api/users/{user_id}/{action}")
