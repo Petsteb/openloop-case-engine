@@ -31,7 +31,7 @@ COPY --from=web /src/web/dist ./web/dist
 RUN chown -R app:app /app/backend/eval
 
 USER app
-VOLUME ["/data"]
+# /data is mounted by the platform (Railway volume, Fly volume, Render disk, docker run -v); Railway refuses VOLUME
 EXPOSE 8000
 
 # ONE worker on purpose: cases live in process memory behind a global write lock, and a single writer keeps
