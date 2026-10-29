@@ -386,7 +386,7 @@ a.btn.pt-next-btn .icon { width: 14px; height: 14px; }
 }
 
 /* ======================================================================================================
-   The case page on the bank case screen's layout: index.css's .l-three grid, .panel-head, .collapse, the 44 px rails
+   The case page on the bank case screen's layout: index.css's .l-three grid, .panel-head, .fold-btn, the 44 px rails
    and its breakpoints (three columns; under 1180 px the right panel drops under the other two; under 820 px one column).
    Left: Your documents. Centre: Pending. Right: Messages / Ask AI tabs. [ and ] fold the sides to rails.
    ====================================================================================================== */
@@ -419,7 +419,7 @@ a.btn.pt-next-btn .icon { width: 14px; height: 14px; }
 }
 /* touch: the bank's 44 px rule for these shared controls is scoped to html.bank, so the portal repeats it */
 @media (pointer: coarse), (max-width: 640px) {
-  .pt .collapse { width: 44px; height: 44px; }
+  .pt .fold-btn { width: 44px; height: 44px; }
   .pt .rail-btn { min-width: 44px; min-height: 44px; }
   .pt .l-three > .rail { min-height: 44px; }
   .pt .rtab { min-height: 44px; min-width: 44px; justify-content: center; }

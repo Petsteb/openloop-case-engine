@@ -318,8 +318,8 @@ button { font: inherit; color: inherit; }
 .l-three { display: grid; grid-template-columns: var(--lw, clamp(290px, 20vw, 400px)) minmax(0, 1fr) var(--rw, clamp(340px, 23.6vw, 500px)); gap: clamp(24px, 2.5vw, 56px); align-items: start; transition: grid-template-columns .35s cubic-bezier(.2, .7, .2, 1); min-width: 0; }
 .l-three > * { min-width: 0; }
 .side-panel { min-width: 0; }
-.collapse { border: 0; background: transparent; color: var(--muted); border-radius: 999px; width: 30px; height: 30px; display: grid; place-items: center; cursor: pointer; transition: color .2s ease, background .2s ease; flex: none; }
-.collapse:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.fold-btn { border: 0; background: transparent; color: var(--muted); border-radius: 999px; width: 30px; height: 30px; display: grid; place-items: center; cursor: pointer; transition: color .2s ease, background .2s ease; flex: none; }
+.fold-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
 .rail { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; width: 44px; padding: 14px 0; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; transition: color .2s ease, border-color .2s ease; }
 .rail:hover { color: var(--ink); border-color: var(--ink); }
 .rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.75rem; letter-spacing: .03em; }
@@ -757,7 +757,7 @@ button.thr-ref:hover .thr-ref-code { color: inherit; }
   html.bank .btn.icon-only { min-width: 44px; padding-inline: 10px; }
   html.bank .seg button { min-height: 44px; }
   html.bank .case-back { min-height: 44px; margin-block: -10px -4px; padding-inline: 4px 10px; }
-  html.bank .collapse { width: 44px; height: 44px; }
+  html.bank .fold-btn { width: 44px; height: 44px; }
   html.bank .rail-btn { min-width: 44px; min-height: 44px; }
   html.bank .l-three > .rail { min-height: 44px; }
   /* six 44 px tabs plus the hide button need ~330 px: more than a phone's row (304 px at 390) or a touch tablet's side

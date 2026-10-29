@@ -62,13 +62,13 @@ function Progress({ steps }: { steps: Step[] }) {
   )
 }
 
-/** The bank's PanelHead (.panel-head, .collapse): a title or the tab row, and the hide button ([ or ]). */
+/** The bank's PanelHead (.panel-head, .fold-btn): a title or the tab row, and the hide button ([ or ]). */
 function PaneHead({ side, label, onHide, children }: { side: 'left' | 'right'; label: string; onHide: () => void; children: ReactNode }) {
   const key = side === 'left' ? '[' : ']'
   return (
     <div className="panel-head pt-pane-head">
       {children}
-      <button type="button" className="collapse" onClick={onHide} aria-label={`Hide ${label}`} aria-expanded="true" title={`Hide ${label} (${key})`}>
+      <button type="button" className="fold-btn" onClick={onHide} aria-label={`Hide ${label}`} aria-expanded="true" title={`Hide ${label} (${key})`}>
         <Icon name={side === 'left' ? 'chevronL' : 'chevron'} size={15} />
       </button>
     </div>

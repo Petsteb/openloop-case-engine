@@ -72,7 +72,7 @@ export function PanelHead({ title, count, side, onHide, children }: { title?: st
   return (
     <div className="panel-head">
       {children ?? <h3>{title}{count != null ? <span className="mono">{count}</span> : null}</h3>}
-      <button type="button" className="collapse" onClick={onHide} aria-label={`Hide ${name}`} aria-expanded="true" title={`Hide ${name} (${key})`}>
+      <button type="button" className="fold-btn" onClick={onHide} aria-label={`Hide ${name}`} aria-expanded="true" title={`Hide ${name} (${key})`}>
         <Icon name={side === 'left' ? 'chevronL' : 'chevron'} size={15} />
       </button>
     </div>
