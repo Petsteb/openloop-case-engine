@@ -2,7 +2,8 @@
 
 A route that returns a plain dict pays for `jsonable_encoder` visiting every value (isinstance checks against
 models, dataclasses, enums, paths...) before `json.dumps`. A full case bundle is ~80 KB of plain JSON values,
-so that walk costs about 8x the dump itself (measured: docs/pitch/performance.md). Content made only of JSON
+so that walk costs several times the dump itself (~9 ms vs ~1.3 ms of CPU for the demo bundle on our laptop;
+docs/pitch/performance.md). Content made only of JSON
 types (dict, list, tuple, str, int, float, bool, None) is dumped directly, with the exact settings of FastAPI's
 JSONResponse; anything else (a datetime, a set, a model) falls back to the normal FastAPI path.
 """
