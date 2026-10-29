@@ -59,3 +59,4 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .lg-userlist li.is-off { opacity: .55; }
 .lg-user-tools { display: flex; gap: 6px; flex: none; }
 @media (max-width: 640px) { .lg-userlist li { flex-wrap: wrap; } }
+.lg-ms { min-height: 40px; width: 280px; max-width: 100%; justify-content: center; gap: 10px; }
