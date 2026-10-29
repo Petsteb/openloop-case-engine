@@ -328,7 +328,7 @@ RULES = [
     ("POST", CASE + r"/release-hold", "release_hold"),
     ("POST", CASE + r"/chat", "chat"),
     ("GET", CASE + r"/(version|client-view|sample-files|sample-files/[^/]+)", "case_reader"),
-    ("GET", CASE + r"/(documents|documents/[^/]+|messages|mentionables)", "by_role"),
+    ("GET", CASE + r"/(documents|documents/[^/]+|documents/[^/]+/file|messages|mentionables)", "by_role"),
     ("POST", CASE + r"/messages", "post_message"),
     ("POST", CASE + r"/(upload|upload-sample|client-confirm)", "case_client"),
     ("GET", r"/api/learning(/overview)?", "staff"),

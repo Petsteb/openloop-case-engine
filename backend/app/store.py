@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS cases (
     case_id    TEXT PRIMARY KEY,
     created    INTEGER NOT NULL      -- insertion order, for stable listing
 );
+CREATE TABLE IF NOT EXISTS blobs (
+    sha256     TEXT PRIMARY KEY,     -- the hash the ledger records, so a stored file can be checked against it
+    data       BLOB NOT NULL         -- an uploaded original (a PDF); text documents live in the ledger itself
+);
 """
 
 
@@ -63,7 +67,17 @@ class Store:
         with self.lock, self.db:
             self.db.execute("DELETE FROM events WHERE case_id = ?", (case_id,))
 
+    def put_blob(self, sha256: str, data: bytes) -> None:
+        with self.lock, self.db:
+            self.db.execute("INSERT OR IGNORE INTO blobs VALUES (?, ?)", (sha256, data))
+
+    def blob(self, sha256: str) -> bytes | None:
+        with self.lock:
+            row = self.db.execute("SELECT data FROM blobs WHERE sha256 = ?", (sha256,)).fetchone()
+            return bytes(row[0]) if row else None
+
     def wipe(self) -> None:
         with self.lock, self.db:
             self.db.execute("DELETE FROM events")
             self.db.execute("DELETE FROM cases")
+            self.db.execute("DELETE FROM blobs")

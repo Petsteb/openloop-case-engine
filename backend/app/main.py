@@ -8,6 +8,7 @@ import json
 import os
 import threading
 from pathlib import Path
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request  # noqa: E402
-from fastapi.responses import PlainTextResponse  # noqa: E402
+from fastapi.responses import PlainTextResponse, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from typing import Literal  # noqa: E402
 
@@ -438,6 +439,28 @@ def get_document(case_id: str, doc_id: str, role: Literal["client", "employee"] 
         raise HTTPException(404, "document not found")
 
 
+@app.get("/api/cases/{case_id}/documents/{doc_id}/file")
+def open_document(case_id: str, doc_id: str, role: Literal["client", "employee"] = "client",
+                  x_staff_token: str | None = Header(default=None)):
+    """The original file, to open in a new tab: an uploaded PDF as it was received (checked against the hash in the
+    ledger), any other document as the text the bank received. Same readers as the document viewer."""
+    if role == "employee":
+        _require_staff(x_staff_token)
+    d = _case(case_id).state()["docs"].get(doc_id)
+    if d is None or (role == "client" and d["type"] == "email"):
+        raise HTTPException(404, "document not found")
+    name = d.get("filename") or f"{d['name']}.txt"
+    ascii_name = "".join(ch if ch.isascii() and (ch.isalnum() or ch in " ._-") else "_" for ch in name)
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    if d.get("pdf"):
+        data = STORE.blob(d["sha256"])
+        if data is None or hashlib.sha256(data).hexdigest() != d["sha256"]:
+            raise HTTPException(404, "the original PDF is not stored for this document")
+        return Response(data, media_type="application/pdf", headers={"Content-Disposition": disposition})
+    return Response(d.get("text", ""), media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": disposition})
+
+
 @app.get("/api/cases/{case_id}/client-view")
 def client_view(case_id: str):
     """Everything the applicant may see, for a customer-facing page (same allow-list as the client chat)."""
@@ -484,8 +507,9 @@ def _ingest_upload(case: Case, key: str, filename: str, raw: bytes) -> dict:
         if not _pending(case.state(), key):
             raise HTTPException(422, "this document was not requested (or was already received)")
         if ext == ".pdf":
-            event = case.receive_upload(key, filename, "", pdf={"pdf": True, "bytes": len(raw),
-                                                                "sha256": hashlib.sha256(raw).hexdigest()})
+            digest = hashlib.sha256(raw).hexdigest()
+            STORE.put_blob(digest, raw)  # the original, so it can be opened; the ledger keeps its hash
+            event = case.receive_upload(key, filename, "", pdf={"pdf": True, "bytes": len(raw), "sha256": digest})
         else:
             try:
                 text = raw.decode("utf-8")

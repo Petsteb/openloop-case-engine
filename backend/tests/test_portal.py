@@ -79,6 +79,21 @@ def test_pdf_upload_waits_for_manual_reading():
     assert CASES["demo-1"].state()["reqs"]["R6"]["status"] == "OPEN_WAITING"
 
 
+def test_open_returns_the_original_file():
+    start()
+    raw = b"%PDF-1.4 fake \xe2\x9c\x93"
+    v = c.post("/api/cases/demo-1/upload", json={"key": "fiscal_certificate", "filename": "fiscal.pdf",
+                                                 "content_b64": base64.b64encode(raw).decode()}).json()
+    pdf = next(d for d in v["documents"] if d["status_word"] == "Received, waiting for manual reading")
+    r = c.get(f"/api/cases/demo-1/documents/{pdf['id']}/file")
+    assert r.status_code == 200 and r.content == raw and r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"].startswith('inline; filename="fiscal.pdf"')
+    text_doc = next(d for d in CASES["demo-1"].state()["docs"].values() if not d.get("pdf") and d["type"] != "email")
+    r = c.get(f"/api/cases/demo-1/documents/{text_doc['id']}/file", params={"role": "employee"})
+    assert r.status_code == 200 and r.text == text_doc["text"] and r.headers["content-type"].startswith("text/plain")
+    assert c.get("/api/cases/demo-1/documents/doc-999/file").status_code == 404
+
+
 def test_contact_change_confirmation_prevents_the_insider_card():
     c.post("/api/demo/reset")
     post("staff-phone-change")

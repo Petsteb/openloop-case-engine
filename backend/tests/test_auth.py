@@ -125,6 +125,7 @@ def test_client_sees_only_its_own_company(fresh):
     mine = own_case("verde")
     assert c.get(f"/api/cases/{mine}/client-view").status_code == 200
     assert c.get("/api/cases/demo-1/client-view").status_code == 404  # another company's file "does not exist"
+    assert c.get("/api/cases/demo-1/documents/doc-1/file").status_code == 404  # nor can its originals be opened
     assert c.get(f"/api/cases/{mine}/bundle").status_code == 401  # the bank's bundle is staff-only
     assert c.get(f"/api/cases/{mine}/messages?role=employee").status_code == 401
     assert c.get(f"/api/cases/{mine}/documents?role=employee").status_code == 401
