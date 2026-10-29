@@ -55,6 +55,9 @@ export function Login() {
   const [left, setLeft] = useState(30)
   const codeRef = useRef<HTMLInputElement>(null)
   const googleRef = useRef<HTMLDivElement>(null)
+  // a full 6-digit code submits itself: never twice for the same value, never while a check is running
+  const autoSent = useRef('')
+  const inFlight = useRef(false)
 
   useEffect(() => { void loadMe().then((m) => setMe(m)) }, [])
 
@@ -136,7 +139,8 @@ export function Login() {
 
   const submitCode = async (e?: React.FormEvent, override?: string) => {
     e?.preventDefault()
-    if (!step) return
+    if (!step || inFlight.current) return
+    inFlight.current = true
     setBusy(true); setError(null)
     try {
       const r = await post<{ app: 'staff' | 'client' }>('/api/auth/mfa', { challenge: step.challenge, code: override ?? code })
@@ -145,6 +149,10 @@ export function Login() {
       setError((err as Error).message)
       if (/expired/.test((err as Error).message)) setStep(null)
       setBusy(false)
+      inFlight.current = false
+      // select the wrong code, so the next six digits replace it and submit again
+      autoSent.current = ''
+      requestAnimationFrame(() => codeRef.current?.select())
       refreshDemo()
     }
   }
@@ -170,7 +178,7 @@ export function Login() {
   const current = wantsClient ? me?.client : me?.staff
 
   return (
-    <main className="lg-page">
+    <main className={`lg-page${me?.demo_logins && demo ? ' has-demo' : ''}`}>
       <section className="lg-card" aria-labelledby="lg-title">
         <Brand />
         {current && !step ? (
@@ -191,7 +199,17 @@ export function Login() {
             </p>
             <label className="lg-label" htmlFor="lg-code">6-digit code</label>
             <input id="lg-code" ref={codeRef} className="lg-input lg-code" inputMode="numeric" autoComplete="one-time-code"
-              pattern="\d{6}" maxLength={7} value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ''))}
+              pattern="\d{6}" maxLength={7} value={code}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^\d ]/g, '')
+                setCode(v)
+                const digits = v.replace(/\D/g, '')
+                // typed or pasted ("123 456" too): Verify stays as the fallback
+                if (digits.length === 6 && !busy && !inFlight.current && autoSent.current !== digits) {
+                  autoSent.current = digits
+                  void submitCode(undefined, digits)
+                }
+              }}
               aria-describedby={error ? 'lg-err' : undefined} />
             {error ? <p id="lg-err" className="lg-error" role="alert">{error}</p> : null}
             <div className="lg-row">

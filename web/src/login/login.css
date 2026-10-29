@@ -2,7 +2,8 @@
 body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin: 0; }
 .lg-page { min-height: 100dvh; box-sizing: border-box; display: grid; gap: 28px; align-content: center; justify-content: center;
   grid-template-columns: minmax(0, 420px); padding: 40px 16px; }
-@media (min-width: 980px) { .lg-page { grid-template-columns: minmax(0, 420px) minmax(0, 460px); align-items: start; gap: 56px; } }
+/* two columns only when the demo authenticator is shown (DEMO_LOGINS=1); otherwise the card stays centred */
+@media (min-width: 980px) { .lg-page.has-demo { grid-template-columns: minmax(0, 420px) minmax(0, 460px); align-items: start; gap: 56px; } }
 
 .lg-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: 28px 28px 30px; }
 .lg-brand { padding-top: 0; margin-bottom: 26px; }
