@@ -95,7 +95,7 @@ export function Login() {
       })
       // Google draws its own button at a fixed pixel width: match the form (Google allows 200-400 px)
       const width = Math.max(200, Math.min(400, Math.floor(googleRef.current.getBoundingClientRect().width)))
-      window.google.accounts.id.renderButton(googleRef.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', width, logo_alignment: 'center' })
+      window.google.accounts.id.renderButton(googleRef.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', width, logo_alignment: 'center', locale: 'en' })  // the page is English
     }
     if (window.google) { render(); return }
     const s = document.createElement('script')
