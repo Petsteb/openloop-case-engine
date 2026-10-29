@@ -11,9 +11,12 @@
 .pt-demo-in > p, .pt-demo-who { min-width: 0; overflow-wrap: anywhere; }
 .pt-demo-in b { font-weight: 600; color: var(--ink-2); }
 .pt-demo-tools { display: flex; align-items: center; gap: 6px; flex: none; }
-/* phones: the signed-in name is shown in full, so the strip may wrap; the tools then take their own row, right-aligned */
+/* Without the "viewing as" picker (a signed-in client, or any phone) the strip is just the tools, right-aligned. */
+.pt-demo-in.is-tools-only { justify-content: flex-end; }
+/* phones: no "viewing as" line, even for staff previewing; the signed-in name is shown in full, so the tools may wrap */
 @media (max-width: 640px) {
-  .pt-demo-in { flex-wrap: wrap; }
+  .pt-demo-who { display: none; }
+  .pt-demo-in { flex-wrap: wrap; justify-content: flex-end; }
   .pt-demo-tools { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; }
 }
 .pt-demo-link { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 10px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 12.5px; }

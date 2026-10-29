@@ -21,10 +21,13 @@ export function DemoStrip({ theme, onTheme, companies, companyId, onCompany }: S
   const list = companies && companies.length ? companies : null
   const current = list?.find((c) => c.id === companyId)
   const me = useMe()
+  // A signed-in client's company comes from the session (the server ignores company_id for clients), so the "viewing as"
+  // picker would mislead: it is only for staff previewing the portal, and not on a phone (portal.css hides it there).
+  const picker = !(me?.auth && me.client)
   return (
     <div className="pt-demo">
-      <div className="pt-demo-in">
-        <label className="pt-demo-who">
+      <div className={`pt-demo-in${picker ? '' : ' is-tools-only'}`}>
+        {picker ? <label className="pt-demo-who">
           <span><b>Demo:</b> viewing as</span>
           {list ? (
             <span className="pt-picker">
@@ -35,7 +38,7 @@ export function DemoStrip({ theme, onTheme, companies, companyId, onCompany }: S
               <Icon name="chevron" size={13} className="pt-picker-chev" />
             </span>
           ) : <span className="pt-picker-wait">…</span>}
-        </label>
+        </label> : null}
         <div className="pt-demo-tools">
           <SessionChip app="client" />
           {me?.auth && me.client && !me.staff ? null : (
