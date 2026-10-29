@@ -307,6 +307,7 @@ Keep the custom tokens above as well.
   - **Unread:** a dot on the Messages tab (and on the folded rail) for a bank message or email the tab has not shown (`openloop-seen:client-msgs:<caseId>`), and on Ask AI for an answer that arrived while the tab was hidden.
   - **Bell:** on a case page it lists that case first. Its bank messages stay unread until the Messages tab shows them, and picking one opens that tab.
   - **Breakpoints:** the bank's. Under 1180 px the right panel drops under the other two. Under 820 px it is one column in the order Pending, Your documents, Messages / Ask, with the rails as horizontal 44 px pills.
+  - **Phones (≤ 640 px):** the stacked sections and rails give way to one sticky tab bar, "Pending" | "Documents" | "Chat" | "Ask AI", where the Pending heading was (under the progress steps). It has four equal 44 px tabs in the right panel's look, a count on Pending and Documents, and the same unread dots on Chat and Ask AI. Only the picked tab shows, and Chat and Ask stay mounted. The tab is remembered as `phoneTab` in the same `ol:client:panels:{caseId}` record (default "pending"). The bell's message opens Chat, a chip in an answer opens Documents or Pending and flashes the row, and the next action opens Pending.
 - **Top of page:** it answers "what do I do now?":
   - the company name in display type;
   - one status pill: amber `--review` for "We need something from you", neutral for "Under review by the bank", an ink dot for "Complete";

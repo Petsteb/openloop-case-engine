@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { Tabs } from 'radix-ui'
 import { toast } from 'sonner'
 import * as api from './api'
@@ -20,6 +21,7 @@ import type { ThreadItem } from '@/shared/thread/types'
 import type { CaseRow, Citation, ClientDocument, ClientView, ConfirmKind, MissingDocument, PortalState, SampleFile } from './types'
 import { useClientView } from './useClientView'
 import { usePanels } from '@/shared/panels'
+import { PHONE_TABS, useIsPhone, usePhoneTab, type PhoneTab } from './phone'
 
 /* ---------- panels: the bank case screen's layout (.l-three), remembered per case (ol:client:panels:{caseId}) ---------- */
 type PaneTab = 'messages' | 'ask'
@@ -66,6 +68,42 @@ function PaneHead({ side, label, onHide, children }: { side: 'left' | 'right'; l
       <button type="button" className="fold-btn" onClick={onHide} aria-label={`Hide ${label}`} aria-expanded="true" title={`Hide ${label} (${key})`}>
         <Icon name={side === 'left' ? 'chevronL' : 'chevron'} size={15} />
       </button>
+    </div>
+  )
+}
+
+/* ---------- phones (≤ 640 px): one tab bar in place of the stacked sections (client/phone.ts) ---------- */
+const PHONE_LABEL: Record<PhoneTab, string> = { pending: 'Pending', docs: 'Documents', chat: 'Chat', ask: 'Ask AI' }
+const phoneTabId = (t: PhoneTab) => `pt-ptab-${t}`
+const phonePanel = (t: PhoneTab) => ({ role: 'tabpanel', id: `pt-ppanel-${t}`, 'aria-labelledby': phoneTabId(t) })
+
+/** The right panel's tab look (underline on the active one), four equal tabs; ← → Home End move along it. */
+function PhoneTabs({ tab, onPick, count, dot }: {
+  tab: PhoneTab; onPick: (t: PhoneTab) => void; count: Partial<Record<PhoneTab, number>>; dot: Partial<Record<PhoneTab, string>>
+}) {
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const n = PHONE_TABS.length
+    const i = PHONE_TABS.indexOf(tab)
+    const j = ({ ArrowRight: i + 1, ArrowLeft: i - 1 + n, Home: 0, End: n - 1 } as Record<string, number>)[e.key]
+    if (j === undefined) return
+    e.preventDefault()
+    const next = PHONE_TABS[j % n]
+    onPick(next)
+    document.getElementById(phoneTabId(next))?.focus()
+  }
+  return (
+    <div className="rtabs pt-ptabs" role="tablist" aria-label="Your case" onKeyDown={onKey}>
+      {PHONE_TABS.map((t) => {
+        const on = t === tab
+        return (
+          <button key={t} type="button" role="tab" id={phoneTabId(t)} className="rtab pt-ptab" data-state={on ? 'active' : 'inactive'}
+            aria-selected={on} aria-controls={phonePanel(t).id} tabIndex={on ? 0 : -1} onClick={() => onPick(t)}>
+            <span className="pt-ptab-label">{PHONE_LABEL[t]}</span>
+            {count[t] ? <sup>{count[t]}</sup> : null}
+            {dot[t] ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, {dot[t]}</span></> : null}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -160,6 +198,17 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
   /* ---------- panels: documents on the left, messages and questions on the right; [ and ] fold them like the bank's.
      Folded to rails the first time a case is opened; remembered per case (shared/panels.ts). ---------- */
   const { left, right, tab, setLeft, setRight, showTab } = usePanels<PaneTab>('client', caseId, PANE_TABS, 'messages')
+  // phones: one tab bar instead; its tab lives in the same record (after usePanels: see client/phone.ts)
+  const isPhone = useIsPhone()
+  const [phoneTab, setPhoneTab] = usePhoneTab(caseId)
+  const panelsRef = useRef<HTMLDivElement>(null)
+  /** A phone tab picked on the bar: if the bar is stuck at the top (the page is scrolled into the panels), the new tab
+   *  starts at its top, just under the bar. */
+  const pickPhoneTab = (t: PhoneTab) => {
+    setPhoneTab(t)
+    const el = panelsRef.current
+    if (el && el.getBoundingClientRect().top < 45) requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }))
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return
@@ -179,25 +228,28 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
     if (t) showTab(t)
     else setRight(true)
   }
-  // the bell (in the top bar) picked a message of this case: show the Messages tab (unfolding the right side)
+  // the bell (in the top bar) picked a message of this case: show the Messages tab (unfolding the right side; on a
+  // phone, the Chat tab)
   useEffect(() => {
     const on = (e: Event) => {
       if ((e as CustomEvent<{ caseId?: string }>).detail?.caseId !== caseId) return
-      showTab('messages')
-      requestAnimationFrame(() => document.querySelector('.pt-three > .right-col')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
+      if (isPhone) setPhoneTab('chat')
+      else showTab('messages')
+      requestAnimationFrame(() => document.querySelector(isPhone ? '.pt-three' : '.pt-three > .right-col')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     }
     window.addEventListener(OPEN_MESSAGES_EVENT, on)
     return () => window.removeEventListener(OPEN_MESSAGES_EVENT, on)
-  }, [caseId, showTab])
+  }, [caseId, showTab, isPhone, setPhoneTab])
 
   /* ---------- unread dots: a bank message the Messages tab has not shown, an answer the Ask tab has not shown ---------- */
   useSeenRev()   // re-render when the bell's "Mark all read" or another tab moves the messages mark
   const [bankTop, setBankTop] = useState(0)
   const onThreadItems = useCallback((items: ThreadItem[]) => setBankTop(bankTopOf(items)), [])
-  const msgsOnScreen = right && tab === 'messages' && docVisible
+  // on screen: the right panel open on that tab, or on a phone, that phone tab
+  const msgsOnScreen = (isPhone ? phoneTab === 'chat' : right && tab === 'messages') && docVisible
   useEffect(() => { if (msgsOnScreen && bankTop) markMsgsSeen(caseId, bankTop, ledger) }, [msgsOnScreen, bankTop, caseId, ledger])
   const msgsDot = !msgsOnScreen && bankTop > readMsgsSeen(caseId, ledger)
-  const askOnScreen = right && tab === 'ask' && docVisible
+  const askOnScreen = (isPhone ? phoneTab === 'ask' : right && tab === 'ask') && docVisible
   const askOnScreenRef = useRef(askOnScreen)
   useEffect(() => { askOnScreenRef.current = askOnScreen }, [askOnScreen])
   const [askNew, setAskNew] = useState(false)
@@ -339,24 +391,28 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
 
   /* ---------- citations from the chat ---------- */
   const openDoc = (id: string) => { forgetFailed(id); setSheet(id) }
+  // on a phone the row or card lives in one tab: pick it (it shows on this commit, before flashTo's scroll)
+  const toPhoneTab = (t: PhoneTab) => { if (isPhone) setPhoneTab(t) }
   const onCite = (c: Citation) => {
     const ref = String(c.ref).replace(/^#/, '')
     if (c.kind === 'doc' || /^doc-\d+$/.test(ref)) {
-      if (docList.some((d) => d.id === ref)) openDoc(ref)
-      else toast('This document is not part of your case.')
+      if (!docList.some((d) => d.id === ref)) toast('This document is not part of your case.')
+      else if (isPhone) { setPhoneTab('docs'); flashTo(ref, `[data-doc="${CSS.escape(ref)}"]`) }   // a phone: the row, under Documents
+      else openDoc(ref)
       return
     }
     const seq = Number(ref)
     const req = missing.find((m) => m.seq === seq)
-    if (req) return flashTo(`req:${req.key}`, `[data-key="${CSS.escape(req.key)}"]`)
+    if (req) { toPhoneTab('pending'); return flashTo(`req:${req.key}`, `[data-key="${CSS.escape(req.key)}"]`) }
     const conf = confirmations.find((x) => x.ref_seq === seq)
-    if (conf) return flashTo(`conf:${conf.kind}`, `[data-confirm="${CSS.escape(String(conf.kind))}"]`)
+    if (conf) { toPhoneTab('pending'); return flashTo(`conf:${conf.kind}`, `[data-confirm="${CSS.escape(String(conf.kind))}"]`) }
     const ev = arr(view.timeline).find((e) => e.seq === seq)
     if (ev?.type === 'DOCUMENT_RECEIVED') {
       const name = ev.what.replace(/^[^:]*:\s*/, '').trim()
       const d = docList.find((x) => x.name === name)
       if (d) {
-        setLeft(true)   // the row lives in the documents panel
+        if (isPhone) setPhoneTab('docs')
+        else setLeft(true)   // the row lives in the documents panel
         setOpenDocs((s) => new Set(s).add(d.id))
         return flashTo(d.id, `[data-doc="${CSS.escape(d.id)}"]`)
       }
@@ -375,6 +431,8 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
   const nextText = nextTextFor(state, missing.length, confirmations.length, decision)
   const needsYou = missing.length + confirmations.length > 0
   const nextAction = () => {
+    // a phone: show Pending now (flushSync), so the card can scroll into view and its file input opens in this click
+    if (isPhone && phoneTab !== 'pending') flushSync(() => setPhoneTab('pending'))
     if (first) {
       const el = inputs.current.get(first.key)
       document.querySelector(`[data-key="${CSS.escape(first.key)}"]`)?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
@@ -418,13 +476,21 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
           <Progress steps={steps} />
         </section>
 
+        {/* phones: one tab bar where the Pending heading was; only the picked tab's panel shows below it */}
+        {isPhone ? (
+          <PhoneTabs tab={phoneTab} onPick={pickPhoneTab} count={{ pending: needCount, docs: docList.length }}
+            dot={{ chat: msgsDot ? 'new message from the bank' : '', ask: askDot ? 'new answer' : '' }} />
+        ) : null}
+
         {/* the bank case screen's three columns: documents | pending | messages and questions; [ and ] fold the sides */}
-        <div className="l-three pt-three" style={{ ['--lw' as string]: left ? undefined : '44px', ['--rw' as string]: right ? undefined : '44px' }}>
-          {left ? (
-            <section className="panel side-panel left-col" aria-labelledby="h-docs">
-              <PaneHead side="left" onHide={() => setLeft(false)} label="your documents">
-                <h2 id="h-docs" className="pt-pane-title">Your documents{docList.length ? <span className="pt-count">{docList.length}</span> : null}</h2>
-              </PaneHead>
+        <div ref={panelsRef} className={`l-three pt-three${isPhone ? ' is-phone' : ''}`} style={{ ['--lw' as string]: left ? undefined : '44px', ['--rw' as string]: right ? undefined : '44px' }}>
+          {left || isPhone ? (
+            <section className="panel side-panel left-col" {...(isPhone ? phonePanel('docs') : { 'aria-labelledby': 'h-docs' })} hidden={isPhone && phoneTab !== 'docs'}>
+              {isPhone ? null : (
+                <PaneHead side="left" onHide={() => setLeft(false)} label="your documents">
+                  <h2 id="h-docs" className="pt-pane-title">Your documents{docList.length ? <span className="pt-count">{docList.length}</span> : null}</h2>
+                </PaneHead>
+              )}
               <div className="panel-body">
                 {docList.length ? (
                   <Documents caseId={caseId} docs={docList} open={openDocs} details={Object.fromEntries(Object.entries(details).map(([k, v]) => [k, v.d]))}
@@ -440,8 +506,8 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
             </button>
           )}
 
-          <section className="center-col pt-center" aria-labelledby="h-need">
-            <h2 id="h-need" className="pt-h2">Pending{needCount ? <span className="pt-count">{needCount}</span> : null}</h2>
+          <section className="center-col pt-center" {...(isPhone ? phonePanel('pending') : { 'aria-labelledby': 'h-need' })} hidden={isPhone && phoneTab !== 'pending'}>
+            {isPhone ? null : <h2 id="h-need" className="pt-h2">Pending{needCount ? <span className="pt-count">{needCount}</span> : null}</h2>}
             {requests.length || confirmations.length || showDispute ? (
               <div className="pt-cards">
                 {requests.map((r) => (
@@ -463,32 +529,38 @@ function FileView({ view, docs, error, caseId, file, decision, ledger, track, mu
             )}
           </section>
 
-          {/* kept mounted while folded (like the bank's): the thread keeps polling and the chat keeps its answers */}
-          <section className="panel side-panel right-col" aria-label="Messages and questions" hidden={!right}>
-            <Tabs.Root value={tab} onValueChange={(v) => showTab(v as PaneTab)} className="right-tabs pt-tabs">
-              <PaneHead side="right" onHide={() => setRight(false)} label="messages and questions">
-                <Tabs.List className="rtabs pt-rtabs" aria-label="Messages and questions">
-                  <Tabs.Trigger value="messages" className="rtab" title={msgsDot ? 'New message from the bank' : undefined}>
-                    Messages{msgsDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new message from the bank</span></> : null}
-                  </Tabs.Trigger>
-                  <Tabs.Trigger value="ask" className="rtab" title={askDot ? 'New answer' : undefined}>
-                    Ask AI{askDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new answer</span></> : null}
-                  </Tabs.Trigger>
-                </Tabs.List>
-              </PaneHead>
-              <Tabs.Content value="messages" forceMount hidden={tab !== 'messages'} className="tabpane">
+          {/* kept mounted while folded (like the bank's), and on a phone while another tab shows: the thread keeps
+              polling and the chat keeps its answers. A phone shows the two tabs as Chat and Ask AI on its own bar. */}
+          <section className="panel side-panel right-col" aria-label="Messages and questions"
+            hidden={isPhone ? phoneTab !== 'chat' && phoneTab !== 'ask' : !right}>
+            <Tabs.Root value={isPhone ? (phoneTab === 'ask' ? 'ask' : 'messages') : tab} onValueChange={(v) => showTab(v as PaneTab)} className="right-tabs pt-tabs">
+              {isPhone ? null : (
+                <PaneHead side="right" onHide={() => setRight(false)} label="messages and questions">
+                  <Tabs.List className="rtabs pt-rtabs" aria-label="Messages and questions">
+                    <Tabs.Trigger value="messages" className="rtab" title={msgsDot ? 'New message from the bank' : undefined}>
+                      Messages{msgsDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new message from the bank</span></> : null}
+                    </Tabs.Trigger>
+                    <Tabs.Trigger value="ask" className="rtab" title={askDot ? 'New answer' : undefined}>
+                      Ask AI{askDot ? <><i className="rtab-new" aria-hidden="true" /><span className="sr-only">, new answer</span></> : null}
+                    </Tabs.Trigger>
+                  </Tabs.List>
+                </PaneHead>
+              )}
+              <Tabs.Content value="messages" forceMount hidden={isPhone ? phoneTab !== 'chat' : tab !== 'messages'} className="tabpane"
+                {...(isPhone ? phonePanel('chat') : {})}>
                 <h3 className="pt-pane-sub">Messages with the bank</h3>
                 <SectionBoundary fallback="Messages can’t be shown right now. Please reload the page.">
                   <Messages caseId={caseId} role="client" onItems={onThreadItems} />
                 </SectionBoundary>
               </Tabs.Content>
-              <Tabs.Content value="ask" forceMount hidden={tab !== 'ask'} className="tabpane">
+              <Tabs.Content value="ask" forceMount hidden={isPhone ? phoneTab !== 'ask' : tab !== 'ask'} className="tabpane"
+                {...(isPhone ? phonePanel('ask') : {})}>
                 <h3 className="pt-pane-sub">Ask about your case</h3>
                 <Ask caseId={caseId} known={known} track={track} onCite={onCite} onAnswer={onAskAnswer} />
               </Tabs.Content>
             </Tabs.Root>
           </section>
-          {!right ? (
+          {!right && !isPhone ? (
             <div className="rail rail-right rail-split pt-rail" role="group" aria-label="Messages and questions, hidden">
               <button type="button" className="rail-btn" onClick={() => openPane()} aria-label="Show messages and questions" aria-expanded="false" title="Show messages and questions (])">
                 <Icon name="chevronL" size={14} />

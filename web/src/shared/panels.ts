@@ -23,8 +23,13 @@ function readPanels<T extends string>(key: string, tabs: readonly T[], fallback:
   }
 }
 
+/** Keeps fields this hook does not own (e.g. the portal's `phoneTab`, client/phone.ts) in the same record. */
 function writePanels<T extends string>(key: string, p: Panels<T>) {
-  try { window.localStorage.setItem(key, JSON.stringify({ left: p.left, right: p.right, tab: p.tab })) } catch { /* this page only */ }
+  try {
+    let rest: Record<string, unknown> = {}
+    try { const o: unknown = JSON.parse(window.localStorage.getItem(key) ?? 'null'); if (o && typeof o === 'object' && !Array.isArray(o)) rest = o as Record<string, unknown> } catch { /* start fresh */ }
+    window.localStorage.setItem(key, JSON.stringify({ ...rest, left: p.left, right: p.right, tab: p.tab }))
+  } catch { /* this page only */ }
 }
 
 function apply<V>(a: SetStateAction<V>, prev: V): V {

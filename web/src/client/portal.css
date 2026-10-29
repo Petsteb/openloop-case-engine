@@ -425,6 +425,21 @@ a.btn.pt-next-btn .icon { width: 14px; height: 14px; }
   .pt-three > .center-col { order: -1; }
   .pt-three { margin-top: 24px; }
 }
+/* phones (≤ 640 px, Portal.tsx's useIsPhone): one tab bar, Pending | Documents | Chat | Ask AI, where the Pending heading
+   was, in place of the stacked sections; only the picked tab's panel shows. Four equal 44 px tabs with the right
+   panel's look (.rtab, underline on the active one, .rtab-new dots), sticky under the top of the viewport. */
+@media (max-width: 640px) {
+  .pt .pt-ptabs { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow: visible; margin-top: 24px; padding: 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .pt .pt-ptab { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 0 2px; font-size: 13px; }
+  .pt .pt-ptab[data-state="active"]::after { bottom: -1px; }
+  .pt-ptab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pt .pt-ptab sup { position: relative; top: -0.35em; margin-left: 3px; font-size: 10.5px; line-height: 1; }
+  .pt-three.is-phone { margin-top: 0; scroll-margin-top: 45px; }
+  .pt-three.is-phone > .panel, .pt-three.is-phone > .pt-center { border-top: 0; }
+  .pt-three.is-phone > .pt-center { padding-top: 18px; }
+  .pt-three.is-phone > .left-col > .panel-body { padding-top: 8px; }
+  .pt-three.is-phone .tabpane { padding-top: 10px; }
+}
 /* touch: the bank's 44 px rule for these shared controls is scoped to html.bank, so the portal repeats it */
 @media (pointer: coarse), (max-width: 640px) {
   .pt .fold-btn { width: 44px; height: 44px; }
