@@ -167,3 +167,81 @@ def test_pages_are_revalidated_so_a_rebuilt_ui_is_never_stale():
         r = c.get(path)
         if r.status_code == 200 and r.headers["content-type"].startswith("text/html"):
             assert r.headers["cache-control"] == "no-cache", path
+
+
+# ----------------------------------------------------------------------------- review findings (02:15)
+def _hold_demo():
+    c.post("/api/demo/reset")
+    for item in ("day0-pack", "staff-phone-change", "staff-credit-check"):
+        b = c.post("/api/cases/demo-1/inbound", json={"item_id": item}).json()
+    ex = next(x for x in b["exceptions"] if x["kind"] == "sequence_insider")
+    b = c.post(f"/api/cases/demo-1/exceptions/{ex['id']}/resolve", json={"action_id": "escalate_compliance"}).json()
+    return next(e for e in reversed(b["events"]) if e["type"] == "CASE_STATUS")
+
+
+def test_client_sees_staff_references_in_its_own_words_and_never_the_hold():
+    hold = _hold_demo()
+    c.post("/api/cases/demo-1/messages", json={"role": "employee", "author": "Ana Pop (analyst)", "text": f"See #{hold['seq']}"})
+    msg = [m for m in c.get("/api/cases/demo-1/messages").json() if m["kind"] == "message"][-1]
+    assert msg["refs"][0]["label"] == "Under review by the bank"
+    row = next(r for r in c.get("/api/cases", params={"role": "client"}).json() if r["id"] == "demo-1")
+    assert row["status"] == "OPEN" and "compliance" not in json.dumps(msg).lower()
+
+
+def test_a_reset_detaches_the_old_case_so_the_store_stays_one_chain():
+    old = CASES["demo-1"]
+    c.post("/api/demo/reset")
+    assert old.ledger.store is None
+    old.emit("NOTE", {"type": "system", "id": "test"}, {}, "stray write from a request that waited")
+    from app.main import STORE
+    stored = STORE.events("demo-1")
+    reloaded = Case("demo-1", STORE, events=stored)
+    assert [e["seq"] for e in stored] == list(range(1, len(stored) + 1)) and reloaded.ledger.verify()["ok"]
+
+
+def test_medica_mandate_completes_the_file():
+    case, agent = _run("medica", "sme_loan"), ScriptedAgent()
+    card = next(x for x in case.state()["exceptions"].values() if x["kind"] == "signatory_uncertain")
+    agent.handle_batch(case, [case.resolve(card["id"], "different_person")])
+    assert any(r["key"] == "signatory_mandate" for r in case.state()["requests"].values())
+    agent.handle_batch(case, case.deliver("mandate"))
+    st = case.state()
+    assert st["reqs"]["R5"]["status"] == "SATISFIED" and st["status"] == "READY_FOR_DECISION"
+    assert sum(1 for e in case.ledger.events if e["type"] == "DOCUMENT_REQUESTED"
+               and e["payload"]["key"] == "signatory_mandate") == 1
+
+
+def test_annual_review_never_talks_about_a_loan():
+    case = _run("verde", "kyb_review")
+    from app import notifier
+    notifier.flush(case, mode="outbox")
+    text = json.dumps([e["payload"] for e in case.ledger.events if e["type"] == "EMAIL_SENT"], ensure_ascii=False)
+    from app import case_views
+    text += json.dumps(case_views.overview(case, "client"), ensure_ascii=False)
+    assert "finanțare" not in text and "creditare" not in text and "credit decision" not in text
+
+
+def test_client_cannot_post_as_staff_and_failed_emails_show_for_the_bank():
+    c.post("/api/demo/reset")
+    c.post("/api/cases/demo-1/messages", json={"role": "client", "author": "Ana Pop (analyst)", "text": "hello"})
+    msg = [m for m in c.get("/api/cases/demo-1/messages").json() if m["kind"] == "message"][-1]
+    assert msg["author"]["name"] == "Brutăria Aurora SRL"
+    from app import notifier
+    c.post("/api/cases/demo-1/inbound", json={"item_id": "day0-pack"})
+    case = CASES["demo-1"]
+    # an outage: one more client-notifiable event, then a send that fails (no Gmail credentials in tests)
+    case.emit("REMINDER_SENT", {"type": "agent", "id": "test"}, {"key": "fiscal_certificate"}, "Reminder")
+    notifier.flush(case, mode="gmail")
+    staff = [m for m in c.get("/api/cases/demo-1/messages", params={"role": "employee"}).json() if m["kind"] == "email"]
+    assert staff[-1]["status"] == "failed" and staff[-1]["error"]
+    client = [m for m in c.get("/api/cases/demo-1/messages").json() if m["kind"] == "email"]
+    assert all(m["status"] == "sent" for m in client)
+
+
+def test_consent_notification_stays_anchored_to_the_opening():
+    cid = next(i for i, k in CASES.items() if k.profile["id"] == "carpatic")
+    seqs = lambda: [n["seq"] for n in c.get("/api/notifications", params={"role": "client", "company_id": "carpatic"}).json()
+                    if n["case_id"] == cid and "question" in n["text"]]
+    before = seqs()
+    c.post(f"/api/cases/{cid}/advance", json={"days": 2})
+    assert before == seqs() == [1]

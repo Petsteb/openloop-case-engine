@@ -173,11 +173,22 @@ def _load() -> None:
     """Reload every stored case on startup; seed a fresh database."""
     for case_id in STORE.case_ids():
         events = STORE.events(case_id)
-        if events:
-            CASES[case_id] = Case(case_id, STORE, events=events)
+        if not events:
+            continue
+        try:
+            case = Case(case_id, STORE, events=events)
+        except Exception as exc:  # a damaged ledger must not stop the server
+            print(f"[openloop] skipped stored case {case_id}: cannot replay its ledger ({type(exc).__name__}: {exc})")
+            continue
+        if not case.ledger.verify()["ok"]:
+            print(f"[openloop] skipped stored case {case_id}: its hash chain does not verify")
+            continue
+        CASES[case_id] = case
     if not CASES:
+        STORE.wipe()  # nothing usable was stored: start clean
         _seed()
     elif "demo-1" not in CASES:
+        STORE.clear_events("demo-1")
         CASES["demo-1"] = Case("demo-1", STORE)
 
 
@@ -186,6 +197,9 @@ def reset_demo(all_cases: bool = Query(False, alias="all")):
     """Reset demo-1 to its start; ?all=true wipes the database and reseeds every synthetic file."""
     with LOCK:
         registry.state["down"] = False
+        for old in ([*CASES.values()] if all_cases else [CASES.get("demo-1")]):
+            if old is not None:  # detach: a request still holding the old object can no longer write to the store
+                old.ledger.store = None
         if all_cases:
             STORE.wipe()
             CASES.clear()
@@ -268,6 +282,7 @@ def inbound(case_id: str, body: Inbound):
     if body.item_id not in {i["id"] for i in case.scenario}:
         raise HTTPException(422, "unknown scenario item")
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         if body.item_id in case.state()["delivered"]:
             raise HTTPException(409, "scenario item already delivered")
         AGENT.handle_batch(case, case.deliver(body.item_id))  # pipeline per document, one planning step per click
@@ -281,6 +296,7 @@ def advance(case_id: str, body: Advance):
     if not 0 < body.days <= 60:
         raise HTTPException(422, "days must be in (0, 60]")
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         _advance(case, AGENT, body.days)
         notifier.flush(case)
         return bundle(case)
@@ -292,6 +308,7 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
     if exception_id not in case.state()["exceptions"]:
         raise HTTPException(404, "exception not found")
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.resolve(exception_id, body.action_id, body.note)
         except ValueError as exc:
@@ -312,6 +329,7 @@ def release_hold(case_id: str, body: Release, x_staff_token: str | None = Header
     _require_staff(x_staff_token)
     case = _case(case_id)
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.release_hold(body.by, body.note)
         except ValueError as exc:
@@ -336,6 +354,7 @@ def chat_endpoint(case_id: str, body: ChatIn, x_staff_token: str | None = Header
     case = _case(case_id)
     result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         if CASES.get(case_id) is case:  # a reset during the answer replaced the case: don't log into the new ledger
             chat.log_turn(case, body.role, body.message, result)
     return result
@@ -409,6 +428,7 @@ def _ingest_upload(case: Case, key: str, filename: str, raw: bytes) -> dict:
     if len(raw) > 1_000_000:
         raise HTTPException(422, "file is larger than 1 MB")
     with LOCK:
+        case = _case(case.id)  # look it up again under the lock: a reset may have replaced it
         if not _pending(case.state(), key):
             raise HTTPException(422, "this document was not requested (or was already received)")
         if ext == ".pdf":
@@ -517,6 +537,7 @@ def post_message(case_id: str, body: MessageIn, x_staff_token: str | None = Head
         _require_staff(x_staff_token)
     case = _case(case_id)
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = messages.post(case, body.role, body.text, body.author, body.refs)
         except ValueError as exc:
@@ -539,6 +560,7 @@ def get_mentionables(case_id: str, role: Literal["client", "employee"] = "client
 def client_confirm(case_id: str, body: Confirm):
     case = _case(case_id)
     with LOCK:
+        case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.client_confirm(body.kind, body.answer)
         except ValueError as exc:

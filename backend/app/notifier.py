@@ -10,7 +10,8 @@ import os
 import smtplib
 from email.message import EmailMessage
 
-from .profiles import profile_of
+from .profiles import profile_of, template_of
+from .template import TEMPLATES
 
 ENGINE = {"type": "system", "id": "notifier"}
 NOTIFIABLE = {"DOCUMENT_REQUESTED", "REMINDER_SENT", "CASE_STATUS", "DOCUMENT_RECEIVED", "CLIENT_DISPUTE"}
@@ -60,6 +61,7 @@ def compose(events: list[dict]) -> dict | None:
     disputed = any(e["type"] == "CLIENT_DISPUTE" for e in todo)
     if not (asks or reminders or ready or rejected or disputed):
         return None
+    t = TEMPLATES[template_of(events)]  # the wording follows the kind of file (loan vs annual review)
     lines = ["Bună ziua,", ""]
     if disputed:
         lines += ["Am înregistrat că nu ați solicitat modificarea recentă a datelor de contact din dosarul dumneavoastră.",
@@ -68,11 +70,11 @@ def compose(events: list[dict]) -> dict | None:
         lines += ["Nu am putut accepta documentul încărcat, deoarece pare să aparțină altei firme sau altei persoane:"]
         lines += [f"  • {r}" for r in rejected] + ["Vă rugăm să încărcați documentul corect.", ""]
     if asks:
-        lines += ["Pentru a continua analiza dosarului de finanțare, vă rugăm să ne trimiteți:"] + [f"  • {a}" for a in asks] + [""]
+        lines += [f"Pentru a continua analiza {t['file_ro_gen']}, vă rugăm să ne trimiteți:"] + [f"  • {a}" for a in asks] + [""]
     if reminders:
         lines += ["Vă reamintim că așteptăm încă:"] + [f"  • {r}" for r in reminders] + [""]
     if ready:
-        lines += ["Dosarul dumneavoastră este complet. Un consultant al băncii vă va contacta cu decizia de creditare.", ""]
+        lines += [f"Dosarul dumneavoastră este complet. {t['decision_ro']}", ""]
     lines += ["Puteți răspunde la acest email sau încărca documentele în aplicația Smart Business.", "",
               "Echipa IMM", "(mesaj generat automat; demo OpenLoop, date fictive)"]
     subject = ("Am înregistrat răspunsul dumneavoastră: vă vom contacta" if disputed and not (asks or reminders or ready
@@ -80,7 +82,7 @@ def compose(events: list[dict]) -> dict | None:
                else "Document neacceptat: vă rugăm să încărcați documentul corect" if rejected and not (asks or reminders or ready)
                else "Dosar complet: decizia urmează" if ready and not (asks or reminders)
                else "Reamintire: documente necesare" if reminders and not asks
-               else "Documente necesare pentru dosarul de finanțare")
+               else f"Documente necesare pentru {t['file_ro']}")
     client = profile_of(events)
     return {"subject": f"{subject} · {client['name'].replace(' SRL', ' S.R.L.')}", "body": "\n".join(lines),
             "covers": [e["seq"] for e in todo], "ready": ready}

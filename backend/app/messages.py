@@ -48,7 +48,8 @@ def post(case: Case, role: str, text: str, author: str | None = None, refs: list
     text = (text or "").strip()
     if not text:
         raise ValueError("message is empty")
-    name = (author or "").strip() or (case.profile["name"] if role == "client" else "Bank team")
+    # a client always posts as the company (the author field is ignored): nobody can write under a staff name
+    name = case.profile["name"] if role == "client" else ((author or "").strip() or "Bank team")
     actor = case.client if role == "client" else {"type": "employee", "id": name}
     payload = {"role": role, "author": name, "text": text[:2000], "refs": _resolve_refs(case, role, text, refs or [])}
     who = "Client" if role == "client" else name
@@ -58,20 +59,24 @@ def post(case: Case, role: str, text: str, author: str | None = None, refs: list
 def thread(case: Case, role: str) -> list[dict]:
     """Oldest first: people's messages and the bank's automatic emails, with references this reader may open."""
     role = case_views._role(role)
-    visible_docs = {d["id"] for d in case_views.documents(case, role)}
-    visible_events = set(case_views.visible_events(case, role))
+    doc_names = {d["id"]: d["name"] for d in case_views.documents(case, role)}
+    event_labels = case_views.visible_events(case, role)  # labels in the reader's own words, never the author's
     out = []
     for e in case.ledger.events:
         base = {"seq": e["seq"], "day": case_views._day(e["sim_time"]), "sim_time": e["sim_time"]}
         if e["type"] == "MESSAGE_POSTED":
             p = e["payload"]
-            refs = [r for r in p.get("refs", []) if r["kind"] == "person"
-                    or (r["kind"] == "doc" and r["id"] in visible_docs)
-                    or (r["kind"] == "event" and r["id"] in visible_events)]
+            refs = [r if r["kind"] == "person" else
+                    {**r, "label": (doc_names if r["kind"] == "doc" else event_labels)[r["id"]]}
+                    for r in p.get("refs", []) if r["kind"] == "person"
+                    or (r["kind"] == "doc" and r["id"] in doc_names)
+                    or (r["kind"] == "event" and r["id"] in event_labels)]
             out.append({**base, "kind": "message", "author": {"role": p["role"], "name": p["author"]},
                         "text": p["text"], "subject": None, "body": None, "refs": refs})
-        elif e["type"] == "EMAIL_SENT":
+        elif e["type"] in ("EMAIL_SENT", "EMAIL_FAILED") and (role == "employee" or e["type"] == "EMAIL_SENT"):
+            failed = e["type"] == "EMAIL_FAILED"  # the bank sees failed sends; the client only what reached them
             out.append({**base, "kind": "email", "author": {"role": "bank", "name": "Bank (automatic email)"},
                         "text": None, "subject": e["payload"].get("subject"), "body": e["payload"].get("body"),
-                        "refs": []})
+                        "refs": [], "status": "failed" if failed else "sent",
+                        "error": e["payload"].get("error") if failed else None})
     return out
