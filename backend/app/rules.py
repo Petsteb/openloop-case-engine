@@ -29,11 +29,15 @@ def same_name_exact(a: str, b: str) -> bool:
 
 
 def doc_expires_at(issued_at: datetime) -> datetime:
-    return issued_at + timedelta(days=DOC_VALIDITY_DAYS)
+    try:
+        return issued_at + timedelta(days=DOC_VALIDITY_DAYS)
+    except OverflowError:  # SEC-05: an impossible date (31.12.9999) buys no validity and never crashes the case
+        return issued_at
 
 
 def doc_is_valid(issued_at: datetime, now: datetime) -> bool:
-    return now < doc_expires_at(issued_at)
+    """Valid from the issue day for DOC_VALIDITY_DAYS. A document dated after today is not valid (SEC-04)."""
+    return issued_at.date() <= now.date() and now < doc_expires_at(issued_at)
 
 
 def ubo_check(register_owners: list[dict], declared_owners: list[dict]) -> dict:

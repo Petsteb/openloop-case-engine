@@ -27,6 +27,15 @@ RO_LABELS = {
 }
 
 
+# Why an upload was not accepted (quarantine_kind on the DOCUMENT_RECEIVED event), in client-safe Romanian.
+REJECT_RO = {
+    "wrong_owner": "pare să aparțină altei firme sau altei persoane",
+    "bad_date": "data emiterii lipsește, nu este o dată validă sau este în viitor",
+    "incomplete": "lipsesc informații obligatorii din document",
+    "expired_id": "actul de identitate este expirat",
+}
+
+
 def ro_label(key: str) -> str:
     doc_type, _, person = key.partition(":")
     return RO_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else "")
@@ -56,7 +65,8 @@ def compose(events: list[dict]) -> dict | None:
              and any(e["type"] == "CASE_STATUS" and e["payload"]["status"] == "READY_FOR_DECISION" for e in todo))
     if ready and _client_already_told_complete(events):
         ready = False  # e.g. a compliance hold was released: the client never saw the file leave "complete"
-    rejected = [ro_label(e["payload"]["type"] + (f":{e['payload']['person']}" if e["payload"].get("person") else ""))
+    rejected = [(e["payload"].get("quarantine_kind") if e["payload"].get("quarantine_kind") in REJECT_RO else "wrong_owner",
+                 ro_label(e["payload"]["type"] + (f":{e['payload']['person']}" if e["payload"].get("person") else "")))
                 for e in todo if e["type"] == "DOCUMENT_RECEIVED" and e["payload"].get("quarantined")]
     disputed = any(e["type"] == "CLIENT_DISPUTE" for e in todo)
     if not (asks or reminders or ready or rejected or disputed):
@@ -67,8 +77,11 @@ def compose(events: list[dict]) -> dict | None:
         lines += ["Am înregistrat că nu ați solicitat modificarea recentă a datelor de contact din dosarul dumneavoastră.",
                   "Un coleg al băncii vă va contacta în cel mai scurt timp.", ""]
     if rejected:
-        lines += ["Nu am putut accepta documentul încărcat, deoarece pare să aparțină altei firme sau altei persoane:"]
-        lines += [f"  • {r}" for r in rejected] + ["Vă rugăm să încărcați documentul corect.", ""]
+        for kind, why in REJECT_RO.items():
+            docs = [label for k, label in rejected if k == kind]
+            if docs:
+                lines += [f"Nu am putut accepta documentul încărcat, deoarece {why}:"] + [f"  • {r}" for r in docs]
+        lines += ["Vă rugăm să încărcați documentul corect.", ""]
     if asks:
         lines += [f"Pentru a continua analiza {t['file_ro_gen']}, vă rugăm să ne trimiteți:"] + [f"  • {a}" for a in asks] + [""]
     if reminders:

@@ -94,24 +94,60 @@ def test_sec03_expired_id_card_is_not_valid_evidence():
 
 
 # ----------------------------------------------------------------------------- SEC-04 / SEC-05 issue dates from the text
-@xfail("SEC-04", "a future 'Data eliberării' makes a certificate valid for years (HR-03 bypass)")
+# Fixed (theo/logic-fixes): engine._date_problem quarantines the upload; rules.doc_is_valid is total.
 def test_sec04_future_dated_certificate_still_expires():
     start_demo()
     r = upload("fiscal_certificate", FISCAL.replace("{issued}", "01.01.2030"))
     if r.status_code == 200:
+        assert "fiscal_certificate" in {m["key"] for m in r.json()["missing_documents"]}   # not accepted: still needed
+        assert "data emiterii" in r.json()["emails"][-1]["body"]                           # the client is told why
         c.post("/api/cases/demo-1/advance", json={"days": 45})
     assert CASES["demo-1"].state()["reqs"]["R6"]["status"] != "SATISFIED"
 
 
-@xfail("SEC-05", "'Data eliberării: 31.12.9999' overflows expiry maths: 500 now, and the case stays broken")
 def test_sec05_poison_issue_date_is_rejected_and_case_keeps_working():
     start_demo()
     try:
         r = upload("fiscal_certificate", FISCAL.replace("{issued}", "31.12.9999"), client=c_noraise)
         view = c_noraise.get("/api/cases/demo-1/client-view")
-        assert r.status_code == 422 and view.status_code == 200, (r.status_code, view.status_code)
+        # Rejected: either refused (422) or kept as "Not accepted" (quarantined, like another company's file).
+        assert r.status_code in (200, 422) and view.status_code == 200, (r.status_code, view.status_code)
+        assert "fiscal_certificate" in {m["key"] for m in view.json()["missing_documents"]}
+        assert c_noraise.get("/api/cases/demo-1/documents?role=employee").status_code == 200
+        bad_day = upload("fiscal_certificate", FISCAL.replace("{issued}", "31.02.2026"), client=c_noraise)
+        assert bad_day.status_code in (200, 422)                  # an impossible day is not a 500 either
     finally:
-        c.post("/api/demo/reset")                                 # the poisoned ledger cannot be repaired in-app
+        c.post("/api/demo/reset")
+
+
+def test_sec05_poison_date_already_in_the_ledger_fails_closed():
+    """Defence in depth: a poison issue date that bypassed ingestion (older ledger) neither crashes nor passes."""
+    from app import case_views as V
+    case, agent = Case("sec-poison"), ScriptedAgent()
+    agent.handle(case, case.ledger.events[0])
+    ev = case.emit("DOCUMENT_RECEIVED", case.client, {
+        "id": "doc-1", "type": "fiscal_certificate", "name": "Fiscal certificate", "source": "upload",
+        "text": FISCAL.replace("{issued}", "31.12.9999"), "issued_at": "9999-12-31T09:00:00+00:00"}, "legacy upload")
+    agent.handle(case, ev)
+    assert case.state()["reqs"]["R6"]["status"] != "SATISFIED"
+    assert V.documents(case, "client") and V.documents(case, "employee")
+
+
+def test_sec05_a_crashing_rule_check_fails_closed(monkeypatch):
+    """Any exception in a pipeline tool is a logged failed step; the requirement needs a human, never SATISFIED."""
+    from app import engine as E
+    case, agent = Case("sec-crash"), ScriptedAgent()
+    agent.handle(case, case.ledger.events[0])
+
+    def boom(st, req_id):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(E, "_evaluate", boom)
+    out = case.run_tool("check_requirement", {"req_id": "R6"}, "probe")
+    assert "RuntimeError" in out["output"]["error"]
+    assert case.state()["reqs"]["R6"]["status"] == "NEEDS_REVIEW"
+    monkeypatch.undo()
+    agent.follow_up(case)
+    assert any(x["requirement_id"] == "R6" for x in case.state()["exceptions"].values())   # a card for the analyst
 
 
 # ----------------------------------------------------------------------------- SEC-06 DSCR on missing / negative amounts

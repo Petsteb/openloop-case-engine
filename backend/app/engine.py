@@ -97,12 +97,34 @@ CUI_RE = re.compile(r"(?:CUI|Cod unic de înregistrare)\s*:\s*(?:RO)?\s*(\d{2,10
 DATE_RE = re.compile(r"Data(?: eliberării| declarației| cererii)?\s*:\s*(\d{2})\.(\d{2})\.(\d{4})")
 
 
+EARLIEST_DOC_YEAR = 1990  # older "issue dates" on a KYB document are typos or forgeries
+
+
+def _date_of(m: re.Match) -> datetime | None:
+    day, month, year = (int(g) for g in m.groups())
+    try:
+        return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
+    except ValueError:  # 31.02.2026, 00.13.2026
+        return None
+
+
 def _issued_from_text(text: str) -> datetime | None:
+    m = DATE_RE.search(text or "")
+    return _date_of(m) if m else None
+
+
+def _date_problem(text: str, now: datetime) -> str | None:
+    """SEC-04/05: the issue date comes from client-supplied text. It must be a real date, not later than the case's
+    clock (a future date would keep a certificate valid for years), and not absurd (it would overflow expiry maths)."""
     m = DATE_RE.search(text or "")
     if not m:
         return None
-    day, month, year = (int(g) for g in m.groups())
-    return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
+    issued = _date_of(m)
+    if issued is None or not EARLIEST_DOC_YEAR <= issued.year <= now.year + 1:
+        return "its issue date is not a valid date"
+    if issued.date() > now.date():
+        return "its issue date is in the future"
+    return None
 
 
 def _quarantine_reason(doc_type: str, person: str, text: str, cui: str) -> str | None:
@@ -308,12 +330,16 @@ class Case:
         A PDF is stored as received-but-unreadable until it is read (no extraction in the demo)."""
         doc_type, _, person = key.partition(":")
         name = T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else "")
-        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
-                   "issued_at": (_issued_from_text(text) or self.now).isoformat(), "source": "upload",
-                   "filename": filename, **({"person": person} if person else {})}
         reason = _quarantine_reason(doc_type, person, text, self.profile["cui"])
+        kind = "wrong_owner" if reason else None
+        if not reason and not pdf and (reason := _date_problem(text, self.now)):
+            kind = "bad_date"
+        issued = None if reason else _issued_from_text(text)  # a rejected date is never stored as the issue date
+        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
+                   "issued_at": (issued or self.now).isoformat(), "source": "upload",
+                   "filename": filename, **({"person": person} if person else {})}
         if reason:
-            payload.update(quarantined=True, quarantine_reason=reason)
+            payload.update(quarantined=True, quarantine_reason=reason, quarantine_kind=kind)
             if (m := CUI_RE.search(text or "")) and m.group(1) != self.profile["cui"]:
                 payload["quarantine_cui"] = m.group(1)  # for the bank's viewer only
         elif pdf:
@@ -375,7 +401,10 @@ class Case:
                                                       "req_id": t.get("req_id"), "label": t["label"], "cui": t.get("cui")},
                               f"Timer fired: {t['label']}")
             if t["kind"] == "doc_expiry" and t.get("req_id"):  # expiry is enforced by code, whatever the agent does
-                apply_result(self, t["req_id"], _evaluate(self.state(), t["req_id"]))
+                try:
+                    apply_result(self, t["req_id"], _evaluate(self.state(), t["req_id"]))
+                except Exception as exc:
+                    self.fail_closed(t["req_id"], exc)
             yield fired
         self.now = target
         self.emit("CLOCK_ADVANCED", ENGINE, {"days": days, "to": target.isoformat()}, f"Clock advanced {days:g} day(s)")
@@ -410,13 +439,26 @@ class Case:
                 output = TOOLS[tool](self, **params)
             except registry.RegistryUnavailable as exc:
                 output = {"error": str(exc)}
-            except (KeyError, TypeError, ValueError) as exc:  # bad tool input: logged as a failed step, never crashes
-                output = {"error": f"{type(exc).__name__}: {exc}"}
+            except Exception as exc:  # bad input or a poison document: a logged failed step, never a crash (SEC-05)
+                output = {"error": f"{type(exc).__name__}: {exc}"[:300]}
+                if tool == "check_requirement":
+                    self.fail_closed(params.get("req_id"), exc)
         else:
             output = {"blocked": T.RULES[verdict.split(": ")[1]]}
         self.emit("AGENT_STEP", actor, {"reason": reason, "tool": tool, "input": params, "output": output, "gate": verdict},
                   f"{tool} → {verdict}")
         return {"ok": ok, "gate": verdict, "output": output}
+
+    def fail_closed(self, req_id, exc: Exception) -> None:
+        """A rule check that cannot run never leaves its requirement SATISFIED: it needs a human (SEC-05, SEC-23)."""
+        if req_id not in self.state()["reqs"]:
+            return
+        try:
+            apply_result(self, req_id, {"status": "NEEDS_REVIEW", "reason": f"The rule check could not run on the "
+                                        f"documents ({type(exc).__name__}); a person must review them",
+                                        "evidence": [], "details": {"kind": "check_failed"}})
+        except Exception:  # never let the safety path itself break the case
+            pass
 
 
 # ----------------------------------------------------------------------------- tools
@@ -698,7 +740,8 @@ def apply_result(case: Case, req_id: str, res: dict) -> None:
             t["kind"] == "doc_expiry" and t.get("doc_id") == doc_id for t in st["timers"].values()):
         _set_timer(case, "doc_expiry", res["details"]["expires_at"], f"{T.DOC_LABELS[st['docs'][doc_id]['type']]} expires",
                    doc_id=doc_id, req_id=req_id)
-    if req_id == "R2" and res["status"] != "CONTRADICTED" and res["details"].get("kind") != "awaiting_corrected_declaration":
+    if (req_id == "R2" and res["status"] != "CONTRADICTED"  # a failed check never cancels the legal clock
+            and res["details"].get("kind") not in ("awaiting_corrected_declaration", "check_failed")):
         why = (f"Analyst dismissed the discrepancy ({res['details']['analyst_override']})"
                if res["details"].get("analyst_override") else "Declaration corrected — register and bank data agree")
         for t in st["timers"].values():
