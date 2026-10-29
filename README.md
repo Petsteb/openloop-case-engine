@@ -21,14 +21,12 @@ A business-loan or annual KYB review file isn't one task. It stays open for week
 3. **Outcome or exception.** Clean documents pass in seconds. A wrong file is rejected with the reason. A conflict opens a **decision card** for a person (and, for an undeclared owner, the 14-day AMLR clock). Fuzzy matches need two judges to agree: a Featherless classifier and a similarity check.
 4. **Human review.** The analyst decides in a click. Rulings become precedents, then learned checks once a supervisor approves (maker-checker). When the file is complete, the reviewer checks the hash-chained ledger. The credit decision stays human: the agent has no tool that approves credit.
 
-## A 5-minute tour of the live site
-1. Sign in as **Ana Pop (Analyst)**. The work queue lists 8 synthetic files, the ones that need you first.
-2. Open **Brutăria Aurora** (demo-1). The demo toolbar at the bottom plays the story: **Next client event**, **3 days**, **A week**. Decide the cards (**Same address**, **Confirm discrepancy**), then open the right panel (`]`) → **Ledger** → **Check ledger**.
-3. **Preview client view** (case header) shows the same file as the client sees it; it works on a phone too.
-4. **Ask AI**, on either side, answers from the file and cites the ledger events and documents.
-5. Each other file shows one rule: Verde completes with no human; Carpatic has a tax debt; Delta is suspended; Nord's DSCR is 1.06; Medica's signatory isn't the administrator; Solaris's certificate is too old; Atelier is an annual review.
-
-The live site is shared, so other visitors may change the cases. **Reset demo** in the toolbar restores demo-1. Every demo account and what it shows: [`docs/auth.md`](docs/auth.md).
+## Demo script (5 minutes, live site)
+1. Sign in as **Ana Pop (Analyst)** with the demo authenticator (password `demo`; every account is in [`docs/auth.md`](docs/auth.md)): the work queue lists 8 synthetic files.
+2. Open **Brutăria Aurora** (demo-1) and play the story with the toolbar at the bottom: **Next client event**, **3 days**, **A week**. The site is shared, so **Reset demo** restores it.
+3. Decide the cards (**Same address**, **Confirm discrepancy**), then open the right panel (`]`) → **Ledger** → **Check ledger**.
+4. **Preview client view** shows the same file as the client sees it, on a phone too; **Ask AI** answers from the file with citations.
+5. Each other file shows one rule: Verde (no human needed), Carpatic (tax debt), Delta (suspended), Nord (DSCR 1.06), Medica (signatory ≠ administrator), Solaris (old certificate), Atelier (annual review).
 
 ## Where to look, by judging criterion
 | Criterion | Evidence |
@@ -59,45 +57,6 @@ python -m uvicorn app.main:app --app-dir backend --port 8000
 # reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
-
-## Demo script (≈3 min)
-Open the bank app at `http://localhost:8000/#/case/demo-1`. The demo toolbar at the bottom drives the case: **Next client event** (documents and emails), **Next internal event** (staff actions), **Skip 1 day / 3 days / A week**, **Reset demo**.
-
-1. **Next client event (day 0)**: 4 documents arrive.
-   - DSCR 1.4 auto-verifies.
-   - The agent requests the missing trade-register certificate, the fiscal certificate and the co-owner's ID.
-2. **3 days**: the reminder timers fire and the agent reminds the client.
-3. **Next client event → trade register certificate**:
-   - The registry API check passes.
-   - **Beneficial-owner discrepancy**: Radu Pop holds 25% but isn't declared. This starts the 14-day AMLR clock and opens a triage card.
-   - **Address**: "Str." vs "Calea". The judge is unsure (below the 0.9 threshold), so it opens a triage card.
-4. **Next client event → client email** ("shareholder changed"). The agent attaches it to the open card. It tries to ask the client for a new declaration, and the **gate denies it** (GATE-01: the analyst hasn't decided yet).
-5. **Decision cards**: rule "same address" (stored as a precedent), then "confirm discrepancy". The agent now asks for the corrected declaration.
-6. **Next client event → updated documents**: the beneficial owners match, the IDs are on file, and the legal clock is **cancelled**. Every check passes, so the file becomes **READY_FOR_DECISION**.
-7. **A week**: the certificate passes 30 days and becomes **EXPIRED**. The engine enforces this, not the agent. The file **reopens** and the agent re-requests the certificate.
-8. **Next client event → fresh certificate**: everything is SATISFIED again. The address is resolved by **reusing the analyst's precedent**, with no new card. The file is **READY_FOR_DECISION** again; the credit decision stays human.
-9. **Next internal event ×2** (SR-01, the pattern behind Raiffeisen Romania's 2024 ANSPDCP fine): employee E-0317 changes the client's phone, then runs a credit-bureau check for the same client. An insider-pattern card opens; "escalate to compliance" puts the file **ON_HOLD**.
-10. **Ask tab** (chat, two roles):
-    - **Employee:** type "When did we learn about Radu Pop and what did we do?" (the suggestion chips are generated from each case). The answer cites ledger events `[#seq]`.
-    - **Client:** "What do you still need from me?" The answer is plain-language. The client role never sees internal reviews.
-11. **Messages tab**: the client got one Romanian email per step (documents needed, reminders, file complete), never anything internal. Bank staff and the client can also write to each other there, referencing documents (`#doc-3`), events (`#12`) and people (`@Radu Pop`).
-12. **Check ledger**: the hash chain is intact, including every chat turn and email.
-
-**Two-screen moments.** Open the customer portal (`/client/`) beside the bank screen; both update live.
-- **After step 2:** on the portal, click "I consent" on the credit-check question. Then use "Try a wrong file (demo)": the upload shows "Not accepted", the client gets a Romanian email, and the bank's document viewer shows why (another company's tax ID).
-- **At step 9:** on the portal, answer "No, I didn't" to the contact-change question. This opens a second card for the bank (SR-02), and the client sees "Our team will contact you".
-
-**Many files (the work queue).** Open `http://localhost:8000/#/` for the queue of 8 synthetic files, each built to show one rule.
-- **Verde Logistic:** the agent completed it with no human involved.
-- **Carpatic Lemn:** tax debt on the ANAF certificate.
-- **Delta Pescăria:** the company is suspended in the trade register.
-- **Nord Construct:** debt service coverage of 1.06.
-- **Medica Plus:** the application was signed by someone other than the administrator.
-  - **Decide:** "Different person, ask for a mandate".
-  - **Then:** Next client event → the mandate arrives and the file completes.
-- **Solaris Agro:** the certificate was already 45 days old, so a fresh one is requested.
-- **Atelier Croitorie:** an annual business review, a second template.
-**New case** opens a file for any company and template, and the agent immediately asks the client for the starting documents. On the portal (`/client/`), pick a company in "viewing as". Then "Start a new application" and "Use sample file" on each request complete a file from the client side.
 
 ## Modes
 | Env | Values | Notes |
