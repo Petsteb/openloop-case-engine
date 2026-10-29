@@ -186,6 +186,11 @@ def _load() -> None:
             print(f"[openloop] skipped stored case {case_id}: its hash chain does not verify")
             continue
         CASES[case_id] = case
+    for case in CASES.values():
+        for e in case.ledger.events:
+            if e["type"] == "CHECK_PROMOTED" and not any(c["id"] == e["payload"]["id"] for c in learner.PROMOTED):
+                learner.PROMOTED.append({**e["payload"], "promoted_at": e["wall_time"],
+                                         "backtest": learner.backtest(e["payload"]["proposal_id"])})
     if not CASES:
         STORE.wipe()  # nothing usable was stored: start clean
         _seed()
@@ -255,7 +260,8 @@ def create_case(body: NewCase):
     if body.template not in company["templates"]:
         raise HTTPException(422, f"{company['name']} has no synthetic documents for {body.template}")
     with LOCK:
-        n = 1 + max((int(cid.split("-")[1]) for cid in CASES if cid.split("-")[-1].isdigit()), default=1)
+        used = set(CASES) | set(STORE.case_ids())  # a skipped damaged ledger still owns its id
+        n = 1 + max((int(cid.split("-")[1]) for cid in used if cid.split("-")[-1].isdigit()), default=1)
         case = CASES[f"case-{n}"] = Case(f"case-{n}", STORE, template=body.template, profile_id=body.company_id)
         AGENT.handle_batch(case, [case.ledger.events[0]])
         notifier.flush(case)
@@ -478,8 +484,13 @@ def _sample(case: Case, key: str, variant: str = "ok") -> tuple[str, str] | None
 def _sample_list(case: Case) -> list[dict]:
     """Keys are spelled like the case's pending requests (e.g. 'id_card:Pop Radu'), so the portal can match exactly."""
     pending = [r["key"] for r in case.state()["requests"].values() if r["status"] == "PENDING"]
+    active = case.state()["reqs"]
+    wanted = set(T.template_docs(case.template)) | {"id_card"} | {
+        d for d, reqs in T.FOLLOW_UP_DOCS.items() if any(r in active for r in reqs)}
     items = []
     for k, (f, _) in profiles.samples_for(case.profile["id"]).items():
+        if k.partition(":")[0] not in wanted:
+            continue
         key = next((p for p in pending if keys_match(p, k)), k)
         doc_type, _, person = key.partition(":")
         items.append({"key": key, "label": T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else ""),

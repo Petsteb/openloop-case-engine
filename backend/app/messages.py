@@ -11,20 +11,38 @@ from . import case_views
 from .engine import Case
 
 DOC_TOKEN = re.compile(r"#(doc-\d+)\b")
+INTERNAL_WORDS = re.compile(r"analyst|complian|officer|supervisor|risk|aml|kyc|insider|staff|internal", re.I)
 EVENT_TOKEN = re.compile(r"(?<![\w-])#(\d+)\b")
 ROLES = ("client", "employee")
 
 
 def client_facing_name(author: str) -> str:
     """How a staff author is shown to a client: the person's name only, without internal roles or staff IDs."""
-    name = re.sub(r"\s*\([^)]*\)|\bE-\d+\b", "", author or "").strip(" ·-,")
-    return name or "Bank team"
+    name = re.sub(r"\s*\([^)]*\)|\bE-\d+\b", "", author or "")
+    name = re.split(r"\s+[-–—|·]\s+|,", name)[0].strip(" ·-,")  # "Ana Pop - Compliance" -> "Ana Pop"
+    plain = re.fullmatch(r"[^\W\d_]+(?:[ .'-][^\W\d_]+){0,3}", name)
+    return name if plain and not INTERNAL_WORDS.search(name) else "Bank team"
+
+
+def people_on_file(case: Case) -> list[str]:
+    """Everyone the case's documents name: declared and registered owners, the administrator, ID card holders."""
+    from .rules import same_name_exact
+    st, names = case.state(), []
+    for ext in st["extractions"].values():
+        names += [o["name"] for k in ("declared_owners", "register_owners") for o in ext.get(k, [])]
+        names += [f["value"] for f in ext.get("fields", []) if f["field"] in ("administrator", "signatory")]
+    names += [d["person"] for d in st["docs"].values() if d.get("person") and not d.get("quarantined")]
+    out = []
+    for n in names:  # "POP RADU" (register) and "Radu Pop" (ID card) are one person: keep the first readable spelling
+        if not any(same_name_exact(n, m) for m in out):
+            out.append(n if not n.isupper() else " ".join(reversed(n.title().split())) if len(n.split()) == 2 else n.title())
+    return out
 
 
 def mentionables(case: Case, role: str) -> dict:
     """What this role may reference: people on the file, its documents, and the events it can see."""
     role = case_views._role(role)
-    people = [{"id": p, "label": p} for p in dict.fromkeys(case.profile.get("people", []))]
+    people = [{"id": p, "label": p} for p in people_on_file(case)]
     docs = [{"id": d["id"], "label": d["name"]} for d in case_views.documents(case, role)]
     events = [{"seq": e["seq"], "label": e["what"], "day": e["day"]}
               for e in case_views.timeline(case, role, limit=200) if e["type"] != "MESSAGE_POSTED"]

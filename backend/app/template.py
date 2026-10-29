@@ -95,7 +95,8 @@ TEMPLATES = {
                  "requirements": ["R1", "R2", "R3", "R4", "R5", "R6"],
                  # words the client and the bank see for this kind of file (emails are in Romanian)
                  "decision": "credit decision", "file_ro": "dosarul de finanțare", "file_ro_gen": "dosarului de finanțare",
-                 "decision_ro": "Un consultant al băncii vă va contacta cu decizia de creditare."},
+                 "decision_ro": "Un consultant al băncii vă va contacta cu decizia de creditare.",
+                 "ready_subject_ro": "decizia urmează"},
     "kyb_review": {"id": "kyb_review", "title": "Annual business review",
                    "goal": "File ready for the yearly compliance sign-off (the sign-off itself stays human)",
                    "description": "Yearly know-your-business refresh of an existing client: the company is active, the "
@@ -103,7 +104,8 @@ TEMPLATES = {
                    "requirements": ["R1", "R2", "R6"],
                    "decision": "annual review sign-off", "file_ro": "dosarul de revizuire anuală",
                    "file_ro_gen": "dosarului de revizuire anuală",
-                   "decision_ro": "Banca finalizează revizuirea anuală și vă anunță dacă mai este nevoie de ceva."},
+                   "decision_ro": "Banca finalizează revizuirea anuală și vă anunță dacă mai este nevoie de ceva.",
+                   "ready_subject_ro": "revizuirea anuală se finalizează"},
 }
 # Starting documents, in the order they are requested.
 BASE_DOCS = ["application", "financial_statement", "ubo_declaration", "onrc_certificate", "fiscal_certificate"]
