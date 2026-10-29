@@ -39,6 +39,20 @@ def _tokens(s: str) -> tuple[set[str], set[str]]:
     return {t for t in toks if t not in NOISE}, types
 
 
+def _number_tokens(s: str) -> tuple[list[str], set[str]]:
+    toks = [t.lstrip("0") or "0" for t in norm_text(s).split() if any(ch.isdigit() for ch in t)]
+    postal = {t for t in toks if len(t) == 6 and t.isdigit()}
+    return sorted(t for t in toks if t not in postal), postal
+
+
+def numbers_match(a: str, b: str) -> bool:
+    """Hard rule before any fuzzy score (SEC-07): every token with a digit (street number, block, staircase,
+    apartment, sector) must match exactly, so "nr. 10" vs "nr. 104" is never the same place. Postal codes
+    (6 digits) are compared when both strings carry one."""
+    (na, pa), (nb, pb) = _number_tokens(a), _number_tokens(b)
+    return na == nb and (not pa or not pb or pa == pb)
+
+
 def heuristic_probs(kind: str, a: str, b: str) -> dict:
     labels = list(QUESTIONS[kind][1])
     ta, types_a = _tokens(a)
@@ -171,7 +185,8 @@ def judge(kind: str, a: str, b: str) -> dict:
     same = SAME_LABEL[kind]
     heur_ok = heur[same] >= HEURISTIC_THRESHOLD
     primary_ok = top == same and probs[top] >= (JUDGE_THRESHOLD if source.startswith("featherless") else HEURISTIC_THRESHOLD)
+    nums_ok = numbers_match(a, b)  # code, not a score: different numbers are never auto-accepted, whatever the judges say
     return {"question": QUESTIONS[kind][0], "probs": probs, "top": top, "p_top": probs[top],
             "threshold": JUDGE_THRESHOLD if source.startswith("featherless") else HEURISTIC_THRESHOLD,
             "second_opinion": {"method": "string similarity", "p_same": heur[same], "threshold": HEURISTIC_THRESHOLD},
-            "auto_accept": primary_ok and heur_ok, "source": source, "a": a, "b": b}
+            "numbers_match": nums_ok, "auto_accept": nums_ok and primary_ok and heur_ok, "source": source, "a": a, "b": b}

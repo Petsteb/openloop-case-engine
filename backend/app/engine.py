@@ -97,12 +97,67 @@ CUI_RE = re.compile(r"(?:CUI|Cod unic de înregistrare)\s*:\s*(?:RO)?\s*(\d{2,10
 DATE_RE = re.compile(r"Data(?: eliberării| declarației| cererii)?\s*:\s*(\d{2})\.(\d{2})\.(\d{4})")
 
 
+EARLIEST_DOC_YEAR = 1990  # older "issue dates" on a KYB document are typos or forgeries
+
+
+def _date_of(m: re.Match) -> datetime | None:
+    day, month, year = (int(g) for g in m.groups())
+    try:
+        return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
+    except ValueError:  # 31.02.2026, 00.13.2026
+        return None
+
+
 def _issued_from_text(text: str) -> datetime | None:
+    m = DATE_RE.search(text or "")
+    return _date_of(m) if m else None
+
+
+# SEC-23: lines a rule needs. An upload without one is quarantined (still requested) instead of fulfilling the
+# request and leaving its requirement waiting forever. ID cards: _id_problem. UBO declarations: >= 1 owner line.
+REQUIRED_FIELDS = {
+    "application": ["cui", "address", "postal_code", "new_annual_debt_service", "signatory"],
+    "financial_statement": ["ebitda", "existing_annual_debt_service"],
+    "onrc_certificate": ["cui", "status", "address", "postal_code", "administrator", "issued"],
+    "fiscal_certificate": ["outstanding_obligations", "issued"],
+    "address_proof": ["address", "postal_code"],
+    "signatory_mandate": ["administrator", "authorized_person"],
+}
+
+
+def _missing_lines(doc_type: str, text: str) -> list[str]:
+    """Required lines missing from a client upload, named as printed on the form (e.g. 'Obligații fiscale restante').
+    Uses the same routed extractor and quote check as the pipeline, so what passes here is what the rules see."""
+    need = REQUIRED_FIELDS.get(doc_type, [])
+    if not need and doc_type != "ubo_declaration":
+        return []
+    try:
+        ex, _ = extractors.extract(doc_type, text)
+        bad = set(extract.verify_quotes(text, ex))
+    except Exception:  # an extractor that cannot read the file accepts nothing
+        return ["(document could not be read)"]
+    have = {f["field"] for f in ex.get("fields", []) if f["quote"] not in bad}
+    printed = {v: k for k, v in extract.FIELD_MAP.get(doc_type, {}).items()}
+    missing = [printed.get(f, f).capitalize() for f in need if f not in have]
+    if doc_type == "ubo_declaration" and not [o for o in ex.get("declared_owners", []) if o["quote"] not in bad]:
+        missing.append("Beneficiar real")
+    if doc_type in T.EXPIRING_DOCS and _issued_from_text(text) is None and "Data eliberării" not in missing:
+        missing.append("Data eliberării")  # HR-03 needs a readable issue date: never assume "issued today"
+    return missing
+
+
+def _date_problem(text: str, now: datetime) -> str | None:
+    """SEC-04/05: the issue date comes from client-supplied text. It must be a real date, not later than the case's
+    clock (a future date would keep a certificate valid for years), and not absurd (it would overflow expiry maths)."""
     m = DATE_RE.search(text or "")
     if not m:
         return None
-    day, month, year = (int(g) for g in m.groups())
-    return datetime(year, month, day, 9, 0, tzinfo=timezone.utc)
+    issued = _date_of(m)
+    if issued is None or not EARLIEST_DOC_YEAR <= issued.year <= now.year + 1:
+        return "its issue date is not a valid date"
+    if issued.date() > now.date():
+        return "its issue date is in the future"
+    return None
 
 
 def _quarantine_reason(doc_type: str, person: str, text: str, cui: str) -> str | None:
@@ -111,11 +166,48 @@ def _quarantine_reason(doc_type: str, person: str, text: str, cui: str) -> str |
     if m and m.group(1) != cui:
         return "it shows another company's tax ID"  # the other firm's number stays out of every summary
     if doc_type == "id_card" and person:
-        last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
-        first = re.search(r"^Prenume\s*:\s*(.+)$", text or "", re.M)
-        if last and first and not rules.same_name_exact(f"{first.group(1)} {last.group(1)}", person):
+        name = _id_name(text)
+        if name and not rules.same_name_exact(name, person):
             return "it is an identity card for another person"
     return None
+
+
+ID_VALID_RE = re.compile(r"^Valabil[ăa]\s+p[âa]n[ăa]\s+la\s*:\s*(\d{2})\.(\d{2})\.(\d{4})", re.M | re.I)
+
+
+def _id_name(text: str) -> str | None:
+    """The holder's name as printed on the card (Prenume + Nume), not the name in the request key."""
+    last = re.search(r"^Nume\s*:\s*(.+)$", text or "", re.M)
+    first = re.search(r"^Prenume\s*:\s*(.+)$", text or "", re.M)
+    return f"{first.group(1).strip()} {last.group(1).strip()}" if last and first else None
+
+
+def _id_valid_until(text: str) -> datetime | None:
+    m = ID_VALID_RE.search(text or "")
+    return _date_of(m) if m else None
+
+
+def _id_problem(text: str, now: datetime) -> tuple[str, str] | None:
+    """SEC-03: an ID card copy must show who it identifies and until when; an expired card identifies nobody."""
+    until = _id_valid_until(text)
+    if _id_name(text) is None or until is None:
+        return "incomplete", "the identity card copy does not show the holder's name and validity date"
+    if until.date() < now.date():
+        return "expired_id", "the identity card has expired"
+    return None
+
+
+def id_identifies(st: dict, d: dict) -> str | None:
+    """The person an ID card on file identifies (HR-05): the name printed on it, only if it matches the person
+    it was requested for and the card is still valid at the case's clock. Otherwise None (SEC-03)."""
+    if d["type"] != "id_card" or d.get("quarantined") or d.get("unreadable"):
+        return None
+    name, until = _id_name(d.get("text") or ""), _id_valid_until(d.get("text") or "")
+    if not name or until is None or until.date() < st["now"].date():
+        return None
+    if d.get("person") and not rules.same_name_exact(name, d["person"]):
+        return None
+    return name
 
 
 def pending_confirmations(events: list[dict]) -> list[dict]:
@@ -163,6 +255,9 @@ def latest_doc(st: dict, doc_type: str) -> dict | None:
 
 
 def doc_expired(st: dict, doc: dict) -> bool:
+    if doc["type"] == "id_card":  # an ID card is valid until the date printed on it (SEC-03)
+        until = _id_valid_until(doc.get("text") or "")
+        return until is None or until.date() < st["now"].date()
     return doc["type"] in T.EXPIRING_DOCS and not rules.doc_is_valid(_dt(doc["issued_at"]), st["now"])
 
 
@@ -181,6 +276,9 @@ def needed_doc_keys(st: dict) -> list[str]:
         keys.append("ubo_declaration")
     for name in r2["details"].get("owners_without_id", []):
         keys.append(f"id_card:{name.title()}")
+    if (st["reqs"].get("R1", none)["details"].get("kind") == "certificate_mismatch"  # SEC-02: ask for a genuine copy
+            and "onrc_certificate" not in keys):
+        keys.append("onrc_certificate")
     if st["reqs"].get("R3", none)["details"].get("kind") == "address_differs":
         keys.append("address_proof")
     if st["reqs"].get("R5", none)["details"].get("kind") == "signatory_differs":
@@ -325,12 +423,20 @@ class Case:
         A PDF is stored as received-but-unreadable until it is read (no extraction in the demo)."""
         doc_type, _, person = key.partition(":")
         name = T.DOC_LABELS.get(doc_type, doc_type) + (f" — {person}" if person else "")
-        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
-                   "issued_at": (_issued_from_text(text) or self.now).isoformat(), "source": "upload",
-                   "filename": filename, **({"person": person} if person else {})}
         reason = _quarantine_reason(doc_type, person, text, self.profile["cui"])
+        kind = "wrong_owner" if reason else None
+        if not reason and not pdf and (reason := _date_problem(text, self.now)):
+            kind = "bad_date"
+        if not reason and not pdf and doc_type == "id_card" and (problem := _id_problem(text, self.now)):
+            kind, reason = problem
+        if not reason and not pdf and (missing := _missing_lines(doc_type, text)):
+            kind, reason = "incomplete", f"a required line is missing: {', '.join(missing)}"
+        issued = None if reason else _issued_from_text(text)  # a rejected date is never stored as the issue date
+        payload = {"id": self._next_id("doc", "docs"), "type": doc_type, "name": name, "text": text,
+                   "issued_at": (issued or self.now).isoformat(), "source": "upload",
+                   "filename": filename, **({"person": person} if person else {})}
         if reason:
-            payload.update(quarantined=True, quarantine_reason=reason)
+            payload.update(quarantined=True, quarantine_reason=reason, quarantine_kind=kind)
             if (m := CUI_RE.search(text or "")) and m.group(1) != self.profile["cui"]:
                 payload["quarantine_cui"] = m.group(1)  # for the bank's viewer only
         elif pdf:
@@ -392,7 +498,10 @@ class Case:
                                                       "req_id": t.get("req_id"), "label": t["label"], "cui": t.get("cui")},
                               f"Timer fired: {t['label']}")
             if t["kind"] == "doc_expiry" and t.get("req_id"):  # expiry is enforced by code, whatever the agent does
-                apply_result(self, t["req_id"], _evaluate(self.state(), t["req_id"]))
+                try:
+                    apply_result(self, t["req_id"], _evaluate(self.state(), t["req_id"]))
+                except Exception as exc:
+                    self.fail_closed(t["req_id"], exc)
             yield fired
         self.now = target
         self.emit("CLOCK_ADVANCED", ENGINE, {"days": days, "to": target.isoformat()}, f"Clock advanced {days:g} day(s)")
@@ -427,13 +536,26 @@ class Case:
                 output = TOOLS[tool](self, **params)
             except registry.RegistryUnavailable as exc:
                 output = {"error": str(exc)}
-            except (KeyError, TypeError, ValueError) as exc:  # bad tool input: logged as a failed step, never crashes
-                output = {"error": f"{type(exc).__name__}: {exc}"}
+            except Exception as exc:  # bad input or a poison document: a logged failed step, never a crash (SEC-05)
+                output = {"error": f"{type(exc).__name__}: {exc}"[:300]}
+                if tool == "check_requirement":
+                    self.fail_closed(params.get("req_id"), exc)
         else:
             output = {"blocked": T.RULES[verdict.split(": ")[1]]}
         self.emit("AGENT_STEP", actor, {"reason": reason, "tool": tool, "input": params, "output": output, "gate": verdict},
                   f"{tool} → {verdict}")
         return {"ok": ok, "gate": verdict, "output": output}
+
+    def fail_closed(self, req_id, exc: Exception) -> None:
+        """A rule check that cannot run never leaves its requirement SATISFIED: it needs a human (SEC-05, SEC-23)."""
+        if req_id not in self.state()["reqs"]:
+            return
+        try:
+            apply_result(self, req_id, {"status": "NEEDS_REVIEW", "reason": f"The rule check could not run on the "
+                                        f"documents ({type(exc).__name__}); a person must review them",
+                                        "evidence": [], "details": {"kind": "check_failed"}})
+        except Exception:  # never let the safety path itself break the case
+            pass
 
 
 # ----------------------------------------------------------------------------- tools
@@ -504,6 +626,51 @@ def _same_seat(a: str, b: str) -> bool:
     return rules.norm_text(a.split(",")[0]) == rules.norm_text(b.split(",")[0]) != ""
 
 
+def _registry_result(st: dict, cui: str | None) -> dict | None:
+    reg = st.get("registry")
+    return reg["result"] if reg and "result" in reg and reg.get("cui") == cui else None
+
+
+def _owner_set(owners: list[dict]) -> set[tuple[str, float]]:
+    return {(" ".join(sorted(rules.norm_text(o["name"]).split())), round(float(o["pct"]), 2)) for o in owners}
+
+
+def _register_owners(st: dict, onrc: dict) -> list[dict]:
+    """SEC-02: the owners HR-04 compares against come from the trade register API, the trusted source. A client-sent
+    certificate only supplies the verbatim quote for an owner it agrees on. Without a registry answer that lists
+    owners (an older ledger), the certificate's owners are used."""
+    ext = st["extractions"][onrc["id"]]
+    claimed = ext.get("register_owners", [])
+    trusted = (_registry_result(st, (extract.field(ext, "cui") or {}).get("value")) or {}).get("owners")
+    if not trusted:
+        return claimed
+    return [next((o for o in claimed if _owner_set([o]) == _owner_set([t])), None)
+            or {"name": t["name"], "pct": float(t["pct"]), "quote": f"Trade register API: {t['name']} — {t['pct']:g}%",
+                "source": "registry"} for t in trusted]
+
+
+def _register_snippets(onrc: dict, register: list[dict]) -> list[dict]:
+    """The certificate's own lines, plus (only when it hides someone) what the registry says instead."""
+    out = [{"doc_id": onrc["id"], "label": onrc["name"],
+            "quote": "\n".join(o["quote"] for o in register if o.get("source") != "registry")}]
+    api = [o["quote"] for o in register if o.get("source") == "registry"]
+    return out + ([{"doc_id": None, "label": "Trade register API", "quote": "\n".join(api)}] if api else [])
+
+
+def _certificate_mismatch(ext: dict, result: dict) -> list[str]:
+    """SEC-02: what a client-sent trade register certificate claims that the registry does not confirm."""
+    out = []
+    if result.get("owners") is not None and _owner_set(ext.get("register_owners", [])) != _owner_set(result["owners"]):
+        out.append("associates and shares")
+    adm = (extract.field(ext, "administrator") or {}).get("value")
+    if result.get("administrator") and not (adm and rules.same_name_exact(adm, result["administrator"])):
+        out.append("administrator")
+    pc = (extract.field(ext, "postal_code") or {}).get("value")
+    if result.get("postal_code") and not (pc and rules.postal_match(pc, result["postal_code"])):
+        out.append("postal code")
+    return out
+
+
 def _id_quote(d: dict) -> str:
     m = re.search(r"^Nume\s*:.*$", d.get("text") or "", re.M)
     return m.group(0) if m else d["name"]
@@ -537,20 +704,34 @@ def _evaluate(st: dict, req_id: str) -> dict:
         if rules.norm_text(reg["result"]["status"]) != "activa":
             return {"status": "CONTRADICTED", "reason": f"Registry status {reg['result']['status']} (HR-02)", "evidence": ev,
                     "details": {"kind": "inactive"}}
+        mismatch = _certificate_mismatch(e, reg["result"])
+        if mismatch:  # SEC-02: a client-sent certificate is a claim; the registry API is the source of truth
+            r = reg["result"]
+            api = {"doc_id": None, "label": "Trade register API", "quote": "\n".join(
+                [f"Asociat: {o['name']} — {o['pct']:g}%" for o in r.get("owners") or []]
+                + [f"Administrator: {r['administrator']}"] * bool(r.get("administrator"))
+                + [f"Cod poștal: {r['postal_code']}"] * bool(r.get("postal_code")))}
+            cert = ev + _ev(onrc, e, "administrator") + _ev(onrc, e, "postal_code") + [
+                {"doc_id": onrc["id"], "label": onrc["name"], "field": "register_owners",
+                 "quote": "\n".join(o["quote"] for o in e.get("register_owners", []))}]
+            return {"status": "CONTRADICTED", "reason": f"The trade register certificate disagrees with the trade register "
+                    f"API on: {', '.join(mismatch)} (HR-09)", "evidence": cert,
+                    "details": {"kind": "certificate_mismatch", "snippets": cert + [api], "fields": mismatch}}
         return {"status": "SATISFIED", "reason": f"CUI {cui} checksum valid; registry ACTIVE; certificate valid until "
                 f"{rules.doc_expires_at(_dt(onrc['issued_at'])).date()}", "evidence": ev,
                 "details": {"doc_id": onrc["id"], "expires_at": rules.doc_expires_at(_dt(onrc['issued_at'])).isoformat()}}
 
     if req_id == "R2":
-        id_docs = [d for d in st["docs"].values()  # a quarantined or unread ID card identifies nobody
-                   if d["type"] == "id_card" and not d.get("quarantined") and not d.get("unreadable")]
-        ids = [d["person"] for d in id_docs]
+        # HR-05 (SEC-03): a person is identified by the name printed on a valid, accepted ID card, never by the
+        # request key; a quarantined, unread, nameless or expired card identifies nobody
+        id_docs = [d for d in st["docs"].values() if id_identifies(st, d)]
+        ids = [id_identifies(st, d) for d in id_docs]
         if not have(ubo):
             return wait(T.DOC_LABELS["ubo_declaration"])
         declared = X[ubo["id"]].get("declared_owners", [])
         ruling = _ruling(st, "R2", max(ubo["seq"], onrc["seq"] if onrc else 0))
         if ruling and ruling["resolution"]["action_id"] == "dismiss":  # dismissing waives the discrepancy, not the IDs
-            reg_ubos = ([o for o in X[onrc["id"]].get("register_owners", []) if o["pct"] >= T.UBO_THRESHOLD_PCT]
+            reg_ubos = ([o for o in _register_owners(st, onrc) if o["pct"] >= T.UBO_THRESHOLD_PCT]
                         if have(onrc) else [])
             missing_ids = rules.owners_without_id(reg_ubos, ids)
             if missing_ids:
@@ -559,7 +740,7 @@ def _evaluate(st: dict, req_id: str) -> dict:
             return {"status": "SATISFIED", "reason": f"Analyst dismissed the discrepancy ({ruling['id']}); owners have IDs",
                     "evidence": [], "details": {"analyst_override": ruling["id"], "decided_by": "analyst"}}
         if ruling and ruling["resolution"]["action_id"] == "confirm_discrepancy":
-            missing = rules.owners_without_id([o for o in X[onrc['id']].get('register_owners', [])
+            missing = rules.owners_without_id([o for o in _register_owners(st, onrc)
                                                if o['pct'] >= T.UBO_THRESHOLD_PCT] if have(onrc) else [], ids)
             # the missing names are part of the reason, so an ID arriving first is recorded (no stale re-request)
             return {"status": "OPEN_WAITING", "reason": f"Discrepancy confirmed by analyst ({ruling['id']}); waiting for "
@@ -569,13 +750,13 @@ def _evaluate(st: dict, req_id: str) -> dict:
             missing_ids = rules.owners_without_id([o for o in declared if o["pct"] >= T.UBO_THRESHOLD_PCT], ids)
             labels = [T.DOC_LABELS["onrc_certificate"]] + [f"ID — {n}" for n in missing_ids]
             return {**wait(*labels), "details": {"owners_without_id": missing_ids}}
-        register = X[onrc["id"]].get("register_owners", [])
+        register = _register_owners(st, onrc)  # SEC-02: the registry's owners, quoted from the certificate if it agrees
         res = rules.ubo_check(register, declared)
         if not res["ok"]:
             parts = [f"{o['name']} ({o['pct']:g}%) in register but not declared" for o in res["missing"]]
             parts += [f"{m['name']}: register {m['register_pct']:g}% vs declared {m['declared_pct']:g}%" for m in res["pct_mismatch"]]
-            snippets = [{"doc_id": onrc["id"], "label": onrc["name"], "quote": "\n".join(o["quote"] for o in register)},
-                        {"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
+            snippets = _register_snippets(onrc, register) + [
+                {"doc_id": ubo["id"], "label": ubo["name"], "quote": "\n".join(o["quote"] for o in declared)}]
             return {"status": "CONTRADICTED", "reason": "; ".join(parts) + " (HR-04)", "evidence": snippets,
                     "details": {"kind": "ubo_discrepancy", "snippets": snippets, "missing": [o["name"] for o in res["missing"]]}}
         missing_ids = rules.owners_without_id(res["ubos"], ids)
@@ -639,8 +820,15 @@ def _evaluate(st: dict, req_id: str) -> dict:
         ea, ef = X[app["id"]], X[fin["id"]]
         ebitda, existing = extract.amount(ef, "ebitda"), extract.amount(ef, "existing_annual_debt_service")
         new = extract.amount(ea, "new_annual_debt_service")
-        value = rules.dscr(ebitda, existing, new)
         ev = _ev(fin, ef, "ebitda") + _ev(fin, ef, "existing_annual_debt_service") + _ev(app, ea, "new_annual_debt_service")
+        # SEC-06: a missing or unreadable amount is never 0, and debt service must be a positive amount
+        missing = [n for n, v in (("EBITDA", ebitda), ("existing annual debt service", existing),
+                                  ("new annual debt service", new)) if v is None]
+        if missing or existing < 0 or new < 0 or existing + new <= 0:
+            why = (f"{', '.join(missing)} missing or unreadable" if missing else "debt service must be a positive amount")
+            return {"status": "NEEDS_REVIEW", "reason": f"DSCR cannot be computed: {why} (HR-07)", "evidence": ev,
+                    "details": {"kind": "dscr_unreadable", "snippets": ev}}
+        value = rules.dscr(ebitda, existing, new)
         status = "SATISFIED" if rules.dscr_ok(value) else "CONTRADICTED"
         return {"status": status, "reason": f"DSCR = {ebitda:,.0f} / ({existing:,.0f} + {new:,.0f}) = {value} "
                 f"({'≥' if status == 'SATISFIED' else '<'} {T.DSCR_MIN})", "evidence": ev,
@@ -715,7 +903,8 @@ def apply_result(case: Case, req_id: str, res: dict) -> None:
             t["kind"] == "doc_expiry" and t.get("doc_id") == doc_id for t in st["timers"].values()):
         _set_timer(case, "doc_expiry", res["details"]["expires_at"], f"{T.DOC_LABELS[st['docs'][doc_id]['type']]} expires",
                    doc_id=doc_id, req_id=req_id)
-    if req_id == "R2" and res["status"] != "CONTRADICTED" and res["details"].get("kind") != "awaiting_corrected_declaration":
+    if (req_id == "R2" and res["status"] != "CONTRADICTED"  # a failed check never cancels the legal clock
+            and res["details"].get("kind") not in ("awaiting_corrected_declaration", "check_failed")):
         why = (f"Analyst dismissed the discrepancy ({res['details']['analyst_override']})"
                if res["details"].get("analyst_override") else "Declaration corrected — register and bank data agree")
         for t in st["timers"].values():
@@ -778,13 +967,15 @@ def t_escalate_to_analyst(case: Case, req_id: str, summary: str = "") -> dict:
     cards |= {  # hard-rule failures: the card names the problem, not the requirement it fails
         "tax_debt": ("high", "Outstanding tax debt on the ANAF certificate", noted),
         "inactive": ("high", "Company is not active in the trade register", noted),
+        "certificate_mismatch": ("high", "Trade register certificate disagrees with the trade register API", noted),
         "bad_cui": ("high", "Tax ID fails the official checksum", noted),
         "dscr": ("medium", f"Debt service coverage below {T.DSCR_MIN}", noted),
+        "dscr_unreadable": ("medium", "Debt service coverage cannot be computed from the documents", noted),
     }
     severity, title, actions = cards.get(kind, ("medium", f"Check failed: {req['title']}", noted))
     # the rule the card cites is the one that failed, not the first rule of the requirement
-    rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
-               "address_differs": "HR-06", "dscr": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
+    rule_id = {"bad_cui": "HR-01", "inactive": "HR-02", "certificate_mismatch": "HR-09", "ubo_discrepancy": "HR-04", "postal_mismatch": "HR-06",
+               "address_differs": "HR-06", "dscr": "HR-07", "dscr_unreadable": "HR-07", "tax_debt": "HR-08", "address_uncertain": "JQ-01",
                "signatory_uncertain": "JQ-02", "signatory_differs": "JQ-02"}.get(
         kind, next((r for r in req["rule_ids"] if r.startswith("HR")), req["rule_ids"][0]))
     ex_id = case._next_id("EX", "exceptions")

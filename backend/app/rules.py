@@ -29,11 +29,15 @@ def same_name_exact(a: str, b: str) -> bool:
 
 
 def doc_expires_at(issued_at: datetime) -> datetime:
-    return issued_at + timedelta(days=DOC_VALIDITY_DAYS)
+    try:
+        return issued_at + timedelta(days=DOC_VALIDITY_DAYS)
+    except OverflowError:  # SEC-05: an impossible date (31.12.9999) buys no validity and never crashes the case
+        return issued_at
 
 
 def doc_is_valid(issued_at: datetime, now: datetime) -> bool:
-    return now < doc_expires_at(issued_at)
+    """Valid from the issue day for DOC_VALIDITY_DAYS. A document dated after today is not valid (SEC-04)."""
+    return issued_at.date() <= now.date() and now < doc_expires_at(issued_at)
 
 
 def ubo_check(register_owners: list[dict], declared_owners: list[dict]) -> dict:
@@ -57,20 +61,35 @@ def postal_match(a: str, b: str) -> bool:
     return bool(a) and re.sub(r"\D", "", a) == re.sub(r"\D", "", b or "")
 
 
-def dscr(ebitda: float, existing_service: float, new_service: float) -> float:
+def dscr(ebitda: float, existing_service: float, new_service: float) -> float | None:
+    """EBITDA / total annual debt service, sign kept (a loss gives a negative DSCR). A zero or negative total
+    debt service cannot be divided by: None, which is never a pass (SEC-06)."""
     total = existing_service + new_service
-    return round(ebitda / total, 2) if total else float("inf")
+    return round(ebitda / total, 2) if total > 0 else None
 
 
-def dscr_ok(value: float) -> bool:
-    return value >= DSCR_MIN
+def dscr_ok(value: float | None) -> bool:
+    return value is not None and value >= DSCR_MIN
 
 
 def fiscal_clean(obligations: str) -> bool:
     return norm_text(obligations) == "nu"
 
 
-def parse_amount(s: str) -> float:
-    """'420.000 RON' -> 420000.0 (Romanian thousands separator)."""
-    digits = re.sub(r"[^\d,]", "", s or "").replace(",", ".")
-    return float(digits) if digits else 0.0
+def parse_amount(s: str) -> float | None:
+    """'420.000 RON' -> 420000.0 (Romanian thousands separator, decimal comma).
+
+    The sign is kept (SEC-06): '-420.000 RON', '− 420.000', 'minus 420.000' and the accounting '(420.000)' are
+    negative. No digits, or digits that do not form one number, give None: a missing amount is never 0."""
+    raw = s or ""
+    first = re.search(r"\d", raw)
+    if not first:
+        return None
+    prefix = raw[:first.start()].lower()
+    negative = bool(re.search(r"[-−–(]|minus", prefix))
+    digits = re.sub(r"[^\d,]", "", raw).replace(",", ".")
+    try:
+        value = float(digits)
+    except ValueError:  # '1,2,3'
+        return None
+    return -value if negative else value

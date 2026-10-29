@@ -27,7 +27,9 @@ FIELD_MAP = {
                           "împuternicit": "authorized_person"},
 }
 OWNER_KEYS = {"beneficiar real": "declared_owners", "asociat": "register_owners"}
-OWNER_RE = re.compile(r"^(?P<name>.+?)\s+—\s+(?P<pct>\d+(?:[.,]\d+)?)%$")
+# SEC-22: an owner's name is letters, spaces, dots, hyphens and apostrophes, at most 60 characters. A line that
+# carries a URL or instructions in the name is not an owner line (fails closed: the owner is missing, a card opens).
+OWNER_RE = re.compile(r"^(?P<name>[^\W\d_](?:[^\W\d_]|[ .'’-]){0,59}?)\s+—\s+(?P<pct>\d+(?:[.,]\d+)?)%$")
 INJECTION_RE = re.compile(r"(ignore (all |previous )?(rules|instructions)|ignoră regulile|system:|approve (the )?(file|loan))", re.I)
 
 
@@ -78,6 +80,7 @@ def field(extraction: dict, name: str) -> dict | None:
     return next((f for f in extraction.get("fields", []) if f["field"] == name), None)
 
 
-def amount(extraction: dict, name: str) -> float:
+def amount(extraction: dict, name: str) -> float | None:
+    """The field's amount, or None when the line is missing or unreadable (never 0: SEC-06)."""
     f = field(extraction, name)
-    return parse_amount(f["value"]) if f else 0.0
+    return parse_amount(f["value"]) if f else None
