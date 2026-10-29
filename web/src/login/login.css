@@ -18,9 +18,12 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .lg-error { color: var(--conflict); font-size: .875rem; margin: 12px 0 0; }
 .lg-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .lg-row .btn { min-height: 40px; padding-inline: 18px; }
-.lg-alt { display: grid; justify-items: start; gap: 12px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-.lg-or { color: var(--muted); font-size: .8125rem; }
-.lg-google { min-height: 44px; }
+.lg-row .btn.lg-wide { width: 100%; justify-content: center; min-height: 44px; }
+/* "—— or ——", then one full-width pill per identity provider, stacked and centred */
+.lg-alt { display: grid; justify-items: center; gap: 12px; margin-top: 20px; }
+.lg-or { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--muted); font-size: .8125rem; }
+.lg-or::before, .lg-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.lg-google { width: 100%; max-width: 400px; min-height: 44px; display: flex; justify-content: center; }
 
 .lg-demo { border: 1px dashed var(--line-2); border-radius: 18px; padding: 22px 22px 18px; }
 .lg-demo-head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
@@ -59,4 +62,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .lg-userlist li.is-off { opacity: .55; }
 .lg-user-tools { display: flex; gap: 6px; flex: none; }
 @media (max-width: 640px) { .lg-userlist li { flex-wrap: wrap; } }
-.lg-ms { min-height: 40px; width: 280px; max-width: 100%; justify-content: center; gap: 10px; }
+/* the Microsoft button mirrors Google's large outline pill (white, 40 px, grey hairline) so the two read as a pair */
+.btn.lg-ms { width: 100%; max-width: 400px; min-height: 40px; padding: 0 16px; justify-content: center; gap: 10px;
+  background: #fff; color: #3c4043; border: 1px solid #dadce0; font-family: 'Segoe UI', var(--ui); font-size: .875rem; font-weight: 500; }
+.btn.lg-ms::before { background: #f1f3f4; }
+.btn.lg-ms:hover:not(:disabled) { color: #202124; border-color: #d2e3fc; }
