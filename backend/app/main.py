@@ -1,6 +1,7 @@
 """OpenLoop API. Every POST returns the full case bundle (see docs/design.md)."""
 import base64
 import binascii
+import contextlib
 import hashlib
 import hmac
 import json
@@ -42,7 +43,17 @@ CASES: dict[str, Case] = {}
 # Login and the access policy for every /api route (backend/app/auth.py). OPENLOOP_AUTH=off restores the open demo.
 auth.install(app, case_company=lambda case_id: CASES[case_id].profile["id"] if case_id in CASES else None)
 AGENT = make_agent()
-LOCK = threading.Lock()  # one writer at a time keeps the hash chain linear (e.g. laptop + projector tabs)
+# One writer per case keeps each hash chain linear (e.g. laptop + projector tabs on the same file); writes to
+# different files run in parallel, so a slow model call on one file never holds up the others. LOCK guards the
+# set of cases itself (reset, new case ids, promotions across files): take it first, then case locks, never the
+# other way round.
+LOCK = threading.RLock()
+_CASE_LOCKS: dict[str, threading.Lock] = {}
+
+
+def case_lock(case_id: str) -> threading.Lock:
+    with LOCK:
+        return _CASE_LOCKS.setdefault(case_id, threading.Lock())
 # Every ledger lives in one SQLite table (production: PostgreSQL on the bank's own servers). OPENLOOP_DB=:memory: in tests.
 STORE = Store(os.environ.get("OPENLOOP_DB") or ROOT / "data" / "openloop.db")
 
@@ -213,7 +224,9 @@ def _load() -> None:
 @app.post("/api/demo/reset")
 def reset_demo(all_cases: bool = Query(False, alias="all")):
     """Reset demo-1 to its start; ?all=true wipes the database and reseeds every synthetic file."""
-    with LOCK:
+    with LOCK, contextlib.ExitStack() as held:
+        for cid in sorted(CASES if all_cases else ["demo-1"]):  # in-flight writes on these files finish first
+            held.enter_context(case_lock(cid))
         registry.state["down"] = False
         for old in ([*CASES.values()] if all_cases else [CASES.get("demo-1")]):
             if old is not None:  # detach: a request still holding the old object can no longer write to the store
@@ -284,7 +297,10 @@ def create_case(body: NewCase):
     with LOCK:
         used = set(CASES) | set(STORE.case_ids())  # a skipped damaged ledger still owns its id
         n = 1 + max((int(cid.split("-")[1]) for cid in used if cid.split("-")[-1].isdigit()), default=1)
+        lock = case_lock(f"case-{n}")
+        lock.acquire()  # held before the file is visible, so nobody writes to it before its first step
         case = CASES[f"case-{n}"] = Case(f"case-{n}", STORE, template=body.template, profile_id=body.company_id)
+    try:
         AGENT.handle_batch(case, [case.ledger.events[0]])
         notifier.flush(case)
         if body.role == "client":  # never the bank bundle (agent trace, internal events) to a client
@@ -292,6 +308,8 @@ def create_case(body: NewCase):
                              ("id", "template", "template_title", "company_id", "company", "product")},
                     **_client_view(case)}
         return bundle(case)
+    finally:
+        lock.release()
 
 
 @app.get("/api/notifications")
@@ -315,7 +333,7 @@ def inbound(case_id: str, body: Inbound):
     case = _case(case_id)
     if body.item_id not in {i["id"] for i in case.scenario}:
         raise HTTPException(422, "unknown scenario item")
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         if body.item_id in case.state()["delivered"]:
             raise HTTPException(409, "scenario item already delivered")
@@ -329,7 +347,7 @@ def advance(case_id: str, body: Advance):
     case = _case(case_id)
     if not 0 < body.days <= 60:
         raise HTTPException(422, "days must be in (0, 60]")
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         _advance(case, AGENT, body.days)
         notifier.flush(case)
@@ -341,7 +359,7 @@ def resolve(case_id: str, exception_id: str, body: Resolve):
     case = _case(case_id)
     if exception_id not in case.state()["exceptions"]:
         raise HTTPException(404, "exception not found")
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.resolve(exception_id, body.action_id, body.note, by=body.by)
@@ -362,7 +380,7 @@ def release_hold(case_id: str, body: Release, x_staff_token: str | None = Header
     """Compliance lifts an ON_HOLD (e.g. the insider pattern turned out legitimate)."""
     _require_staff(x_staff_token)
     case = _case(case_id)
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.release_hold(body.by, body.note)
@@ -387,7 +405,7 @@ def chat_endpoint(case_id: str, body: ChatIn, x_staff_token: str | None = Header
         _require_staff(x_staff_token)
     case = _case(case_id)
     result = chat.answer(case, body.role, body.message, [h.model_dump() for h in body.history])
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         if CASES.get(case_id) is case:  # a reset during the answer replaced the case: don't log into the new ledger
             chat.log_turn(case, body.role, body.message, result)
@@ -461,7 +479,7 @@ def _ingest_upload(case: Case, key: str, filename: str, raw: bytes) -> dict:
         raise HTTPException(422, "only .txt or .pdf files are accepted")
     if len(raw) > 1_000_000:
         raise HTTPException(422, "file is larger than 1 MB")
-    with LOCK:
+    with case_lock(case.id):
         case = _case(case.id)  # look it up again under the lock: a reset may have replaced it
         if not _pending(case.state(), key):
             raise HTTPException(422, "this document was not requested (or was already received)")
@@ -575,7 +593,7 @@ def post_message(case_id: str, body: MessageIn, x_staff_token: str | None = Head
     if body.role == "employee":
         _require_staff(x_staff_token)
     case = _case(case_id)
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = messages.post(case, body.role, body.text, body.author, body.refs)
@@ -598,7 +616,7 @@ def get_mentionables(case_id: str, role: Literal["client", "employee"] = "client
 @app.post("/api/cases/{case_id}/client-confirm")
 def client_confirm(case_id: str, body: Confirm):
     case = _case(case_id)
-    with LOCK:
+    with case_lock(case_id):
         case = _case(case_id)  # look it up again under the lock: a reset may have replaced it
         try:
             event = case.client_confirm(body.kind, body.answer)
@@ -665,9 +683,10 @@ def learning_promote(proposal_id: str, body: Promote, x_staff_token: str | None 
         except PermissionError as exc:
             raise HTTPException(409, str(exc))
         for case in cases:  # the promotion is recorded in every file whose ruling supported it
-            case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
-                      {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
-                      f"Learned check {check['id']} promoted by {check['promoted_by']}")
+            with case_lock(case.id):
+                case.emit("CHECK_PROMOTED", {"type": "employee", "id": check["promoted_by"]},
+                          {k: check[k] for k in ("id", "proposal_id", "description", "promoted_by", "support")},
+                          f"Learned check {check['id']} promoted by {check['promoted_by']}")
     return {"check": check}
 
 
