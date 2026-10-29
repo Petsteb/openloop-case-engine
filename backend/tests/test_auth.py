@@ -217,3 +217,39 @@ def test_totp_matches_rfc6238_vector():
     secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # base32 of "12345678901234567890" (RFC 6238 appendix B)
     assert auth.totp(secret, 59 // 30) == "287082"
     assert auth.totp(secret, 1111111109 // 30) == "081804"
+
+
+def test_two_screen_demo_with_login_on(fresh):
+    """The README demo with login on: one browser holds the analyst's and the client's cookies (bank screen and
+    portal side by side), compliance releases the hold, and the portal never shows internal words."""
+    browser = session(ANA)
+    aurora = auth.users().by_email(AURORA)
+    browser.cookies.set(auth.CLIENT_COOKIE, auth.sign({"k": "session", "u": aurora["id"], "v": aurora["session_version"],
+                                                       "exp": 9e9}))
+    post = lambda path, body=None: browser.post(f"/api/cases/demo-1/{path}", json=body or {})  # noqa: E731
+    assert browser.post("/api/demo/reset", json={}).status_code == 200
+    assert post("inbound", {"item_id": "day0-pack"}).status_code == 200
+    assert post("client-confirm", {"kind": "credit_check_consent", "answer": "yes"}).status_code == 200  # portal
+    assert post("upload-sample", {"key": "onrc_certificate", "variant": "wrong_company"}).status_code == 200
+    post("advance", {"days": 3})
+    b = post("inbound", {"item_id": "onrc-cert"}).json()
+    post("inbound", {"item_id": "client-email"})
+    cards = {x["kind"]: x["id"] for x in b["exceptions"] if x["status"] == "OPEN"}
+    post(f"exceptions/{cards['address_uncertain']}/resolve", {"action_id": "same_address"})
+    post(f"exceptions/{cards['ubo_discrepancy']}/resolve", {"action_id": "confirm_discrepancy"})
+    b = post("inbound", {"item_id": "updated-docs"}).json()
+    assert b["case"]["status"] == "READY_FOR_DECISION"
+    post("inbound", {"item_id": "staff-phone-change"})
+    assert post("client-confirm", {"kind": "contact_change", "answer": "no"}).status_code == 200  # "No, I didn't"
+    b = post("inbound", {"item_id": "staff-credit-check"}).json()
+    insider = next(x for x in b["exceptions"] if x["status"] == "OPEN" and x["kind"] == "sequence_insider")
+    b = post(f"exceptions/{insider['id']}/resolve", {"action_id": "escalate_compliance"}).json()
+    assert b["case"]["status"] == "ON_HOLD"
+    assert post("release-hold", {"by": "analyst-1", "note": "checked"}).status_code == 403  # an analyst cannot
+    b = session(VICTOR).post("/api/cases/demo-1/release-hold", json={"by": "analyst-1", "note": "checked"}).json()
+    released = next(e for e in reversed(b["events"]) if e["type"] == "CASE_STATUS" and e["actor"]["type"] == "compliance")
+    assert released["actor"]["id"] == "compliance-1" and b["case"]["status"] != "ON_HOLD"
+    view = browser.get("/api/cases/demo-1/client-view").text
+    for word in ("HR-0", "SR-0", "GATE-", "analyst-1", "E-0317", "judge", "insider"):
+        assert word not in view, word
+    assert browser.get("/api/cases/demo-1/verify").json()["ok"]
