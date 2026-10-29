@@ -70,6 +70,7 @@ export function SessionChip({ app, className = '' }: { app: SessionApp; classNam
       <span className="session-who" title={user.email}>
         <b>{user.name}</b><span>{sub}</span>
       </span>
+      {as === 'staff' && me?.perms.includes('users') ? <a className="btn quiet sm" href="/login/#/users">Users</a> : null}
       <button type="button" className="btn quiet sm" onClick={() => void signOut(as)}>Sign out</button>
     </span>
   )

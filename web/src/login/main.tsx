@@ -4,6 +4,7 @@ import '@/index.css'
 import './login.css'
 import { initialTheme } from '@/client/theme'
 import { Login } from './Login'
+import { Users } from './Users'
 
 document.documentElement.dataset.theme = initialTheme()
 
@@ -16,4 +17,7 @@ document.addEventListener('pointerover', (e) => {
   b.style.setProperty('--my', `${e.clientY - r.top}px`)
 })
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Login /></StrictMode>)
+// /login/#/users: user management (supervisor, admin); everything else: sign-in
+const page = window.location.hash.startsWith('#/users') ? <Users /> : <Login />
+window.addEventListener('hashchange', () => window.location.reload())
+createRoot(document.getElementById('root')!).render(<StrictMode>{page}</StrictMode>)

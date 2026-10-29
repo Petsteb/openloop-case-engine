@@ -43,3 +43,19 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); margin:
 .lg-acct-who span { font-size: .75rem; color: var(--muted); }
 .lg-acct-code { font-family: var(--mono); font-size: 1.0625rem; letter-spacing: .08em; flex: none; }
 
+
+/* /login/#/users */
+.lg-users { align-content: start; }
+@media (min-width: 980px) { .lg-users { grid-template-columns: minmax(0, 420px) minmax(0, 560px); } }
+.lg-users select.lg-input { appearance: auto; }
+.lg-users .case-back { display: inline-block; margin-bottom: 14px; }
+.lg-enrol { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); }
+.lg-enrol h2 { font-family: var(--display); font-weight: 500; font-size: 1.125rem; margin: 0 0 6px; }
+.lg-enrol p { color: var(--muted); font-size: .8125rem; line-height: 1.45; margin: 0 0 12px; overflow-wrap: anywhere; }
+.lg-enrol code { font-family: var(--mono); color: var(--ink); }
+.lg-enrol img { display: block; border-radius: 10px; background: #fff; }
+.lg-userlist ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.lg-userlist li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.lg-userlist li.is-off { opacity: .55; }
+.lg-user-tools { display: flex; gap: 6px; flex: none; }
+@media (max-width: 640px) { .lg-userlist li { flex-wrap: wrap; } }
