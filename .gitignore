@@ -12,3 +12,6 @@ data/ledger/*.jsonl
 data/*.db
 data/*.db-journal
 data/*.db-wal
+
+# internal session handoff notes (kept locally, not published)
+docs/handoff/
