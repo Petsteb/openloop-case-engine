@@ -25,7 +25,7 @@ Research date: 2026-10-28. Prepared for the NEXXT AI Hackathon 2026, "AI for Ope
   - Taktile's $54M Series B
   - Goldman's 6 months of embedded engineers
 
-**Event name:** No public source uses the name "VibeHack" for this event. The official name is **NEXXT AI Hackathon 2026**, part of NEXXT AI Summit, 28–29 Oct 2026, FACE Bucharest, organised by UNCHAIN Media with Raiffeisen Bank Romania. Sources: https://www.revistabiz.ro/summit-la-bucuresti-pentru-dezvoltarea-solutiilor-ai-pentru-probleme-reale-de-business/ and https://at.linkedin.com/in/ion-buracovski (LinkedIn post that lists the tracks).
+**Event name:** No public source uses the name "VibeHack" for this event. The official name is **NEXXT AI Hackathon 2026**, part of NEXXT AI Summit, 28–29 Oct 2026, FACE Bucharest, organised by UNCHAIN Media with Raiffeisen Bank Romania. Sources: https://www.revistabiz.ro/summit-la-bucuresti-pentru-dezvoltarea-solutiilor-ai-pentru-probleme-reale-de-business/.
 
 ---
 
@@ -44,7 +44,7 @@ Research date: 2026-10-28. Prepared for the NEXXT AI Hackathon 2026, "AI for Ope
    - BaFin says there is "no AI bonus" under DORA.
 
    The result is a governance vacuum for agents, where risk teams still need evidence.
-5. **The likely jurors are risk and operations people.** In 2025 the jury was the CRO, the COO, the Director of Advanced Analytics & EWS, and an AWS architect. In Aug 2026, Raiffeisen Romania's CEO said AI "can prepare a decision, it should not have the last word". The 2026 jury is unconfirmed.
+5. **Raiffeisen frames AI as preparing decisions, not taking them.** In Aug 2026, Raiffeisen Romania's CEO said AI "can prepare a decision, it should not have the last word".
 
 ---
 
@@ -227,11 +227,6 @@ These patterns recur at three or more banks or vendors:
 ### NEXXT AI Hackathon 2025 (2nd edition; UNCHAIN Media with Raiffeisen Bank România)
 
 - **Entries:** 69 teams and 32 individuals registered. 13 teams were invited and 7 reached the final. Mentors came from Raiffeisen.
-- **Jury:**
-  - Mircea Busuioceanu, **CRO**
-  - Bogdan Popa, **COO**
-  - Mihaela Văcaru, **Director Advanced Analytics & EWS**
-  - Radu Dobrinescu, AWS Senior Partner Solutions Architect
 - **Results:**
 
 | Place | Team | Project |
@@ -256,8 +251,7 @@ Held 9–10 Nov 2024 at Politehnica Bucharest. Winners not found. Source: https:
 - **Tracks:** AI for Scaling and Growth, **AI for Operational Efficiency** ("smarter processes and less repetitive work"), and Embodied AI.
 - **Format:** 24 h, €8,000 in prizes [LinkedIn post, 1 source].
 - **Raiffeisen's stated framing:** "applied education", implementing AI responsibly, building governance, and delivering measurable results.
-- **Jury:** not yet public, so unconfirmed.
-- **Sources:** https://at.linkedin.com/in/ion-buracovski ; https://www.revistabiz.ro/summit-la-bucuresti-pentru-dezvoltarea-solutiilor-ai-pentru-probleme-reale-de-business/
+- **Sources:** https://www.revistabiz.ro/summit-la-bucuresti-pentru-dezvoltarea-solutiilor-ai-pentru-probleme-reale-de-business/
 
 ### ING CTO Global Hackathon 2026 (Feb 2026)
 

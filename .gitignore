@@ -15,3 +15,12 @@ data/*.db-wal
 
 # internal session handoff notes (kept locally, not published)
 docs/handoff/
+
+# local-only
+.env.*
+!.env.example
+data/*.db-shm
+*.log
+.worktrees/
+.claude/
+docs/superpowers/

@@ -1,4 +1,4 @@
-/* Shapes of the client endpoints (docs/superpowers/specs/2026-10-28-client-portal-design.md, "API additions").
+/* Shapes of the client endpoints (the portal API in docs/design.md).
    Everything optional is either new on the backend or may be absent on an older server: the UI must cope. */
 
 export type PortalState = 'needs_you' | 'under_review' | 'complete' | 'in_progress'

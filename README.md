@@ -13,33 +13,13 @@ Demo case: an SME working-capital loan and KYB file for a fictional bakery. The 
 - a certificate that expires while the file waits;
 - a client email that arrives at the wrong moment.
 
-## Status for Theo (updated 29 Oct, 04:10)
-**Works on `main`** (132 backend tests pass; both apps browser-tested at 390 px to 2560 px):
-- **Bank app** (`/`):
-  - **Work queue** (`#/`): every file, needs-you first, filters, New case.
-  - **Case screen** (`#/case/<id>`): timeline, checklist, decision cards, agent reasoning, ledger, Messages, documents with history, notification bell.
-- **Client portal** (`/client/`):
-  - **My files:** with "Start a new application" and a "viewing as" picker for the 8 demo companies.
-  - **Each file:** status, uploads (incl. a wrong-company demo file), confirmations, Messages with the bank, documents, chat.
-  - **Live and responsive:** it updates live next to the bank app and works on a phone.
-- **Many cases** in a SQLite store (`data/openloop.db`, git-ignored; cases survive restarts).
-  - **8 synthetic companies:** each has one problem and realistic Romanian documents built from the real forms (`research/09-document-templates.md`).
-  - **2 templates:** "SME loan and KYB check" and "Annual business review".
-- **The whole demo script below**, browser-tested offline and live (Claude on Bedrock + Featherless judge).
-
-**Done tonight as well:** final code reviews (backend and web) with fixes, three browser QA passes, and the pitch deck plus video script in `docs/pitch/`.
-**Parked on purpose:** an admin editor for case templates. It comes last, after everything else.
-
-**Not done yet: what you can pick up** (details in `docs/TASKS.md`):
-1. **E2E tests** of the real UI with Playwright: the demo script, the portal upload, no console errors.
-2. **Model benchmark:** Opus vs Sonnet vs Haiku 5.5 as planner and chat (speed, correctness, leaks) → `docs/pitch/benchmark.md`.
-3. **Deploy** a public URL (Dockerfile + Render/Railway/Fly). Use `AGENT_MODE=scripted` unless the keys are platform secrets.
-4. **Tuning:** prompts in `agent.py`/`chat.py`; warm the Featherless cache before recording.
-5. **Backup video:** record one run in offline mode as insurance.
-
-**Resume where we left off:** the team's session handoff notes live in `docs/handoff/` on our machines; they are not part of the repository.
-
-**Rules:** never commit `.env` (keys come privately); run the tests before every push; feature freeze is at 08:00 and we submit by 10:30.
+## Status (29 Oct 2026)
+- **Live:** https://openloop-production.up.railway.app (sign-in with a password and a 2FA code; to try every role without an account, run it locally, below).
+- **Bank app** (`/`): the work queue (needs-you first, filters, New case) and a **Learned checks** tab; the case screen with timeline, checklist, decision cards, agent reasoning, ledger, messages, documents (View / Open the original) and notifications.
+- **Client portal** (`/client/`): **My cases**, "Start a new application", uploads, confirmations, chat with the bank and **Ask AI**. It updates live next to the bank app and works on a phone (tabs Pending / Documents / Chat / Ask AI).
+- **8 synthetic companies**, each built to show one rule, with documents modelled on the real Romanian forms (`research/09-document-templates.md`); **2 templates** (SME loan and KYB check, Annual business review); a SQLite event store.
+- **Tests:** 201 backend tests pass (`cd backend && python -m pytest -q`); a Playwright browser suite lives in `backend/tests/e2e/`.
+- **Not built:** an admin editor for case templates (templates are code in `backend/app/template.py`).
 
 ## Run it (one command, no API keys)
 ```bash
@@ -48,7 +28,7 @@ cd web && npm ci && npm run build && cd ..   # React UI; without it the older st
 python -m uvicorn app.main:app --app-dir backend --port 8000
 # bank app: http://localhost:8000    client portal: http://localhost:8000/client/    sign-in: /login/
 # sign in with the "Demo authenticator" on the login page (password demo + the live code); OPENLOOP_AUTH=off skips login
-# the deployed site hides that panel (DEMO_LOGINS=0): use an authenticator app; every demo account is in docs/auth.md
+# every demo account and what its case shows: docs/auth.md (the deployed site hides the demo authenticator)
 # reset every demo file: curl -X POST "localhost:8000/api/demo/reset?all=true"
 ```
 Tests: `cd backend && python -m pytest -q` (rules, ledger tamper detection, and the full demo scenario end to end).
@@ -128,6 +108,3 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 ## Domain evidence
 `research/` holds sourced findings: Raiffeisen fines, the AMLR/DORA/AI Act timelines, prior art, and 13 processes where the
 same engine applies (`research/07-impact-synthesis.md`).
-
-## Team workflow
-See `docs/TASKS.md` for the post-MVP task split.

@@ -1,5 +1,4 @@
-/* Mirrors the Bundle contract in docs/design.md plus the additions planned in
-   docs/superpowers/plans/2026-10-28-openloop-final-14h.md (Tasks 2, 4, 9).
+/* Mirrors the Bundle contract in docs/design.md.
    Every object tolerates unknown fields; optional fields may be missing on older servers. */
 
 export type ReqStatus = 'SATISFIED' | 'OPEN_WAITING' | 'CONTRADICTED' | 'NEEDS_REVIEW' | 'EXPIRED' | (string & {})

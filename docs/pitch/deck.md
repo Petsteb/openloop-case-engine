@@ -1,6 +1,8 @@
 # OpenLoop: pitch deck (content draft)
 
-12 slides, built around the jury weights:
+The built deck is `OpenLoop-deck.pdf` (11 slides, from `build_deck.py`); it supersedes this draft where they differ.
+
+Built around the jury weights:
 - agent design 25%;
 - completeness and testability 20%;
 - originality 15%;
@@ -62,7 +64,7 @@ Speaker note: "Every bank has AI that reads a document. Nobody owns the file bet
 - **Chat with citations:** "Ask the case" answers clients and employees from role-scoped tools, citing ledger events `[#seq]` and documents. The client role cannot reach internal data.
 
 ## 7. Proof (20%): tested, calibrated, measured
-- **132 automated tests,** offline. They cover the full demo, every rule path, tamper detection, role leaks, the reset race and the database round trip.
+- **201 backend tests,** offline. They cover the full demo, every rule path, tamper detection, role leaks, the reset race and the database round trip.
 - **8 synthetic companies, each built to exercise one rule:** clean file, tax debt, suspended company, DSCR 1.06, signatory ≠ administrator, expired certificate, annual review, plus the demo bakery. A test checks that each ends on its intended outcome.
 - **Judge calibration** on 150 labelled address/name pairs: the classifier alone auto-approved **7 wrong matches** (e.g. "Str. Gării" vs "Calea Gării" at p = 1.0); two-judge consensus gave **0**. Chart: `docs/pitch/calibration.png`.
 - **Learned check backtest** on 48 cases with small-town counterexamples: the naive rule made 8 false approvals; the refined rule makes 0.

@@ -11,11 +11,7 @@
 - checklist: **attention first**;
 - timeline: **swimlanes** with TradingView-style zoom.
 
-**Visual reference prototypes:**
-- **UI lab:** https://claude.ai/artifact/BiX7qVcdboebC2P3Ydykj7. Its source is `C:\Users\petst\AppData\Local\Temp\claude\C--Info-Hackathons-NexxtAI-2026\38a5346a-9645-4285-ab75-f8e552487176\scratchpad\openloop-ui-lab.html`. The timeline zoom, pan and navigator code there is the reference implementation to port.
-- **Design directions:** https://claude.ai/artifact/1owMkEscXXGF4oViWZhu3L. Its source is `…\scratchpad\openloop-design-directions.html`, which holds the component specimens.
-
-**Data:** the Bundle API (`docs/design.md`), plus the additions planned in `docs/superpowers/plans/2026-10-28-openloop-final-14h.md`:
+**Data:** the Bundle API (`docs/design.md`), plus these additions:
 - Task 2: `ON_HOLD`, `sequence_insider` exceptions;
 - Task 4: `POST /api/cases/{id}/chat`, `CHAT_TURN` events;
 - Task 9: `/api/learning*`, `bundle.learning`.
@@ -45,7 +41,6 @@ Dark first. Light is the alternative, chosen by `prefers-color-scheme: light` or
 - Every text pair passes **WCAG 2.2 AA**: 4.5:1 for text, 3:1 for large text, UI boundaries and the focus ring.
 - Every text pair also passes **APCA**: body text Lc ≥ 75; secondary text and status words Lc ≥ 60.
 - **Hairlines** are decorative, so the 3:1 requirement doesn't apply. **Input borders** use `--field`, which meets 3:1.
-- The audit script is `scratchpad/contrast.mjs`. Rerun it if a token changes.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|

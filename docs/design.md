@@ -26,7 +26,7 @@ backend/app/
   scenario.py    demo case documents and scripted inbound items
 backend/tests/   pytest
 frontend/        index.html, app.js, styles.css (no build step)
-docs/            design.md, TASKS.md
+docs/            design.md, auth.md, ui-design.md, security-audit.md, pitch/
 research/        domain evidence (sources for every claim in the pitch)
 ```
 
@@ -165,8 +165,7 @@ Base URL is the same origin, e.g. `http://localhost:8000`. All POST bodies are J
 - **`POST /api/demo/reset?all=true`** wipes the database and reseeds every synthetic file; without `all` only demo-1 resets.
 - **New event type:** `MESSAGE_POSTED` (bank timeline: shown; client timeline: shown in the thread instead).
 
-## Rulings made under time pressure (MVP, 80 min)
-- The controller (Claude) writes the backend inline; one subagent builds the frontend in parallel against this contract; one review at the end. Cost if wrong: less per-task review, so the bugs get caught later.
-- Commits go straight to `main` in a new repo; the user asked for one shared repo. Cost if wrong: switching to branches later is trivial.
-- The frontend is static HTML/JS with no build step, chosen for speed and one-command setup. Cost if wrong: porting to React later if needed.
-- Documents are synthetic Romanian text files standing in for PDFs, and the extractor is regex-based in scripted mode. Cost if wrong: PDF/LLM extraction is a follow-up task.
+## Early design decisions (MVP)
+- The first UI was static HTML/JS with no build step (still in `frontend/`), chosen for speed; the current UI is React (`web/`).
+- Documents are synthetic Romanian text files standing in for PDFs, and the scripted extractor is regex-based. Reading real PDFs (OCR) is a follow-up.
+
