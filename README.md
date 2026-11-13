@@ -1,5 +1,18 @@
 # OpenLoop: an AI case agent for bank back-office files
 
+OpenLoop runs a bank's business-loan and annual KYB review files from start to finish. It chases the client for missing documents, checks each one against the bank's rules, and hands a person every decision that needs judgement. It can't approve credit; a person does that.
+Built at the NEXXT AI Hackathon 2026 (Raiffeisen track), on synthetic data only.
+Live demo: https://openloop-production.up.railway.app. For what it doesn't do yet, see [Limits, plainly](#limits-plainly).
+
+![The analyst's work queue: 8 synthetic files, the ones that need a person first](docs/screenshots/work-queue.png)
+
+<p>
+  <img src="docs/screenshots/case-decision.png" width="73%" alt="An open file: the agent found an undeclared beneficial owner, started the 14-day AMLR clock and asks the analyst to decide, with the quoted evidence from both documents">
+  <img src="docs/screenshots/client-portal-phone.png" width="24%" alt="The same file on the client's phone: what the bank still needs and where the file stands">
+</p>
+
+*Above: the work queue; an open file where the agent found an undeclared beneficial owner and asks the analyst to decide; the same file on the client's phone. Screenshots from a local run on the synthetic demo data.*
+
 **NEXXT AI Hackathon 2026 · Raiffeisen Bank · AI for Operational Efficiency · Team 16 KratosMessi**
 
 *The agent runs the file; people make the decisions.*
@@ -135,3 +148,6 @@ See `docs/design.md` (principles, module map, API contract). Key guarantees:
 ## Domain evidence
 `research/` holds sourced findings: Raiffeisen fines, the AMLR/DORA/AI Act timelines, prior art, and 13 processes where the
 same engine applies (`research/07-impact-synthesis.md`).
+
+## Credits
+Built by Petru Popa and Theo at the NEXXT AI Hackathon 2026 (Team 16 KratosMessi).
