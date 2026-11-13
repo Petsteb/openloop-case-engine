@@ -6,11 +6,17 @@ Live demo: https://openloop-production.up.railway.app. For what it doesn't do ye
 
 ![The analyst's work queue: 8 synthetic files, the ones that need a person first](docs/screenshots/work-queue.png)
 
+**Employee main page: the work queue.** Bank staff see every open file, with the ones that need a person listed first.
+
 ![An open file: the signatory on the loan application doesn't match the administrator in the trade register, so the agent asks a person to decide, quoting both documents](docs/screenshots/case-decision.png)
+
+**Employee case page: a decision for a person.** The agent found that the signatory on the loan application doesn't match the administrator in the trade register, so it quotes both documents and asks the analyst to decide.
 
 <img src="docs/screenshots/client-portal-phone.png" width="40%" alt="The client portal on a phone: the client's cases with the bank and where each one stands">
 
-*Above: the analyst's work queue; an open file where the signatory doesn't match the administrator in the trade register, so the agent asks a person to decide and quotes both documents; the client portal on a phone. Screenshots of the live demo, synthetic data.*
+**Client main page (on a phone).** The client sees their cases with the bank, where each one stands, and whether the bank needs anything from them.
+
+*Screenshots of the live demo, synthetic data.*
 
 **NEXXT AI Hackathon 2026 · Raiffeisen Bank · AI for Operational Efficiency · Team 16 KratosMessi**
 
