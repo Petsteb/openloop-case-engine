@@ -16,6 +16,10 @@ Live demo: https://openloop-production.up.railway.app. For what it doesn't do ye
 
 **Client main page (on a phone).** The client sees their cases with the bank, where each one stands, and whether the bank needs anything from them.
 
+<img src="docs/screenshots/client-case-phone.png" width="40%" alt="Inside a case on a phone: the client's loan file is under review by the bank, with every document received, 5 of 6 checks done and the decision left to a bank officer">
+
+**Client case page (on a phone).** Inside a case, the client sees where the file stands: all documents received, 5 of 6 checks done, the bank's review in progress, and the decision left to a bank officer.
+
 *Screenshots of the live demo, synthetic data.*
 
 **NEXXT AI Hackathon 2026 · Raiffeisen Bank · AI for Operational Efficiency · Team 16 KratosMessi**
