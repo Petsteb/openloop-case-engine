@@ -7,11 +7,11 @@ Live demo: https://openloop-production.up.railway.app. For what it doesn't do ye
 ![The analyst's work queue: 8 synthetic files, the ones that need a person first](docs/screenshots/work-queue.png)
 
 <p>
-  <img src="docs/screenshots/case-decision.png" width="73%" alt="An open file: the agent found an undeclared beneficial owner, started the 14-day AMLR clock and asks the analyst to decide, with the quoted evidence from both documents">
-  <img src="docs/screenshots/client-portal-phone.png" width="24%" alt="The same file on the client's phone: what the bank still needs and where the file stands">
+  <img src="docs/screenshots/case-decision.png" width="49%" alt="An open file: the signatory on the loan application doesn't match the administrator in the trade register, so the agent asks a person to decide, quoting both documents">
+  <img src="docs/screenshots/client-portal.png" width="49%" alt="The client portal: the bank asks the client for two documents and shows where the file stands">
 </p>
 
-*Above: the work queue; an open file where the agent found an undeclared beneficial owner and asks the analyst to decide; the same file on the client's phone. Screenshots from a local run on the synthetic demo data.*
+*Above: the analyst's work queue; an open file where the signatory doesn't match the administrator in the trade register, so the agent asks a person to decide and quotes both documents; the client portal asking a client for two documents. Screenshots of the live demo, synthetic data.*
 
 **NEXXT AI Hackathon 2026 · Raiffeisen Bank · AI for Operational Efficiency · Team 16 KratosMessi**
 
