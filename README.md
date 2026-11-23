@@ -2,7 +2,7 @@
 
 OpenLoop runs a bank's business-loan and annual KYB review files from start to finish. It chases the client for missing documents, checks each one against the bank's rules, and hands a person every decision that needs judgement. It can't approve credit; a person does that.
 Built at the NEXXT AI Hackathon 2026 (Raiffeisen track), on synthetic data only.
-Live demo: https://openloop-production.up.railway.app. For what it doesn't do yet, see [Limits, plainly](#limits-plainly).
+Live demo: https://openloop-production-9a2ba786.up.railway.app (it sleeps when idle, so the first load can take a few seconds). For what it doesn't do yet, see [Limits, plainly](#limits-plainly).
 
 ![The analyst's work queue: 8 synthetic files, the ones that need a person first](docs/screenshots/work-queue.png)
 
@@ -28,7 +28,7 @@ Live demo: https://openloop-production.up.railway.app. For what it doesn't do ye
 
 | | |
 |---|---|
-| **Live demo** | https://openloop-production.up.railway.app: on the login page, pick an account in the **demo authenticator**, type the password `demo`, then the code it shows |
+| **Live demo** | https://openloop-production-9a2ba786.up.railway.app: on the login page, pick an account in the **demo authenticator**, type the password `demo`, then the code it shows |
 | **3-minute video** | https://drive.google.com/file/d/1TldtOLnffvt6xbBnOqmZmpFhg4NNvPxL/view (also [`docs/pitch/OpenLoop-demo.mp4`](docs/pitch/OpenLoop-demo.mp4)) |
 | **Deck** | [`docs/pitch/OpenLoop-deck.pdf`](docs/pitch/OpenLoop-deck.pdf), 11 slides |
 | **Tests** | 201 backend tests: `cd backend && python -m pytest -q`; browser tests in `backend/tests/e2e/` |
