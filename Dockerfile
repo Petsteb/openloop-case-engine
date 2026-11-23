@@ -4,7 +4,8 @@
 FROM node:22-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+# Exact versions and integrity hashes from the lockfile; no package install scripts run (supply-chain hardening).
+RUN npm ci --ignore-scripts
 COPY web/ ./
 RUN npm run build
 
@@ -17,8 +18,10 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.lock pins every package (transitive ones too) to an exact version and hash; wheels only, so no
+# package code runs at install time. Regenerate it with the command at the top of requirements.lock.
+COPY requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock
 
 RUN useradd --create-home --uid 10001 app \
  && mkdir -p /data \

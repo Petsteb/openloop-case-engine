@@ -4,6 +4,8 @@ One Docker image (`Dockerfile`) holds everything: stage 1 builds the React UI (`
 
 **Run exactly one instance with one worker.** Cases live in process memory behind a global write lock. A single writer keeps each case's hash chain linear. Two instances or two workers would each hold their own copy of the cases and fork the ledger.
 
+**Pinned dependencies.** The image installs `requirements.lock` (every Python package, transitive ones too, at an exact version with its hash; wheels only) and runs `npm ci --ignore-scripts` on the lockfile, so a build never picks up a newer, possibly compromised release and no package install script runs. After editing `requirements.txt`, regenerate the lock with the command in its header; `backend/tests/test_requirements.py` fails if they drift apart.
+
 ## Render (recommended: Blueprint)
 1. Render dashboard → **New → Blueprint** → connect the GitHub repo `Petsteb/openloop-case-engine`. Render reads `render.yaml`.
 2. Plan `starter` with a 1 GB disk at `/data`. Disks need a paid plan. On the free plan, delete the `disk:` block: the app still works, but cases reset on every deploy or restart.
@@ -41,7 +43,14 @@ Keep `AGENT_MODE=scripted`, `JUDGE_MODE=heuristic` and `EMAIL_MODE=outbox` (the 
 One instance with 512 MB of RAM is enough for the demo: Render `starter`, or Fly `shared-cpu-1x` with 512 MB. For measured memory and latency numbers, see `docs/pitch/performance.md`.
 
 ## Railway
-`railway.json` makes Railway build the Dockerfile, check `/api/health`, and keep **one replica** (cases live in one process).
+New Railway services no longer read `railway.json` (Railway retired Config as Code: no new services, and existing ones stop reading it on 2026-12-01). Railway still finds the root `Dockerfile` by itself; set the rest by hand:
+1. **New Project → Deploy from GitHub repo** → `Petsteb/openloop-case-engine` (redeploys on every push to `main`).
+2. Add a **volume** mounted at `/data`.
+3. **Variables → Raw Editor**: the `railway variables` line below (a fresh `SESSION_SECRET` per deployment; never copy one from another deployment).
+4. **Settings → Deploy**: healthcheck path `/api/health`; keep **one replica** (cases live in one process).
+5. **Settings → Networking → Generate Domain**.
+
+The same from the CLI (`railway up` uploads this folder instead of deploying from GitHub):
 ```bash
 npm i -g @railway/cli          # needs Node 18+
 railway login                  # or: railway login --browserless
