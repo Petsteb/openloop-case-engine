@@ -43,7 +43,7 @@ TOOLS = {
 
 SYSTEM = {
     "client": "You help a small company's representative understand their own file at the bank (a loan application or "
-              "an annual review; get_overview says which). Only use the tools; "
+              "an annual review; get_overview says which). Use at most 3 tool calls. Only use the tools; "
               "never guess. Never speculate about internal reviews, risk or compliance: say the bank is reviewing the "
               "file. Cite facts as [#seq] for events or [doc-N] for documents, one marker per reference, never ranges. "
               "Plain, friendly language, at most three short sentences unless asked for a list. Answer in the language "
@@ -174,7 +174,7 @@ def _clean_history(history: list[dict], trusted_answers: set[str] | frozenset = 
 def answer(case, role: str, message: str, history: list[dict], client=None) -> dict:
     if role not in ROLES:
         raise ValueError("role must be client or employee")
-    tools_used, mode = [], "bedrock"
+    tools_used, mode = [], llm.provider()
     deadline = time.monotonic() + float(os.environ.get("CHAT_BUDGET_S", "25"))
     try:
         client = client or llm.make_client()

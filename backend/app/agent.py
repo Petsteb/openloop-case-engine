@@ -4,8 +4,8 @@ Every incoming event first goes through the deterministic **pipeline** (code, al
 documents with verified quotes, query the registry, re-check the affected rules, and handle timers. Then a
 **planner** decides the next actions, once per batch of events (one UI click):
 - ScriptedAgent: deterministic planner (works offline, "LLM off" mode).
-- BedrockAgent: Claude on Amazon Bedrock. One planning loop per batch; email interpretation and escalation
-  wording are its judgment. Any failure falls back to the scripted planner, and a code safety net runs after it.
+- BedrockAgent: an LLM planner, Claude on Amazon Bedrock (AGENT_MODE=bedrock) or an open model on Featherless
+  (AGENT_MODE=featherless). One planning loop per batch; email interpretation and escalation wording are its judgment. Any failure falls back to the scripted planner, and a code safety net runs after it.
 Both act only through `Case.run_tool`, so both pass the same gate and leave the same trace.
 """
 import json
@@ -21,6 +21,7 @@ PIPELINE = {"type": "agent", "id": "pipeline"}
 PLANNER = {"type": "agent", "id": "planner"}
 SAFETY_NET = {"type": "agent", "id": "safety-net"}
 CLAUDE = {"type": "agent", "id": "claude"}
+LLM = {"type": "agent", "id": "llm"}  # an open model on Featherless: steps are not labelled as Claude's
 
 
 def _reason_for(action: dict, st: dict) -> str:
@@ -171,10 +172,11 @@ Requirements: {', '.join(r['id'] + ' ' + r['title'] for r in T.REQUIREMENTS)}.""
 
 
 class BedrockAgent(BaseAgent):
-    """Claude on Amazon Bedrock as the planner; see llm.py for the client."""
-    mode = "bedrock"
+    """The LLM planner: Claude on Amazon Bedrock, or an open model on Featherless; see llm.py for the client."""
 
     def __init__(self, client=None):
+        self.mode = llm.provider()
+        self.actor = LLM if self.mode == "featherless" else CLAUDE
         self.client = client or llm.make_client()
         self.status = "ok"
         self.scripted = ScriptedAgent()
@@ -229,7 +231,7 @@ class BedrockAgent(BaseAgent):
                 params = dict(u.input or {})
                 why = str(params.pop("reason", "(no reason given)"))[:300]
                 if u.name in TOOL_SPECS:
-                    out = case.run_tool(u.name, params, why, CLAUDE)
+                    out = case.run_tool(u.name, params, why, self.actor)
                 else:
                     out = {"ok": False, "output": {"error": "tool not available to the planner"}}
                 results.append({"type": "tool_result", "tool_use_id": u.id,  # tool output quotes client text
@@ -238,7 +240,7 @@ class BedrockAgent(BaseAgent):
 
 
 def make_agent():
-    if os.environ.get("AGENT_MODE", "scripted") == "bedrock":
+    if os.environ.get("AGENT_MODE", "scripted") in ("bedrock", "featherless"):
         try:
             return BedrockAgent()
         except Exception:

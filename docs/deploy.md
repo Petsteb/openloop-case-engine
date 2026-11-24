@@ -65,3 +65,8 @@ railway domain                 # a public https://<name>.up.railway.app URL
 `RAILWAY_RUN_UID=0`: Railway mounts volumes as root, so the non-root image user could not write `/data` otherwise.
 Live mode: also set `AGENT_MODE=bedrock`, `JUDGE_MODE=featherless`, `AWS_BEARER_TOKEN_BEDROCK`, `FEATHERLESS_API_KEY`
 (the `llm.Budget` breaker caps paid calls: `LLM_MAX_CALLS_PER_HOUR`, default 300).
+
+Open-model mode (the live demo since 2026-11-24): one Featherless key runs both the planner/chat and the judge:
+`AGENT_MODE=featherless`, `JUDGE_MODE=featherless`, `FEATHERLESS_API_KEY`, optionally `FEATHERLESS_CHAT_MODEL`
+(default `Qwen/Qwen3.8-2.4T-A95B`), plus `AGENT_BUDGET_S=30`, `CHAT_BUDGET_S=40` and a spend cap such as
+`LLM_MAX_CALLS_PER_DAY=300` (about $3 a day at most, at roughly $0.01 per chat answer or planner step).

@@ -350,8 +350,9 @@ export function whoLabel(e: { actor?: { type?: unknown; id?: unknown } }): strin
 const BY_LABEL: Record<string, { tag: string; title: string }> = {
   pipeline: { tag: 'code', title: 'Code that runs on every event' },
   claude: { tag: 'Claude', title: 'Planned by Claude on Amazon Bedrock' },
+  llm: { tag: 'AI model', title: 'Planned by an open model on Featherless' },
   planner: { tag: 'planner', title: 'Planned by the scripted planner' },
-  'safety-net': { tag: 'safety net', title: 'Code safety net that runs after Claude' },
+  'safety-net': { tag: 'safety net', title: 'Code safety net that runs after the AI planner' },
 }
 export function byTag(by: unknown): { tag: string; title: string } | null {
   if (by === null || by === undefined || by === '') return null

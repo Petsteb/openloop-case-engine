@@ -124,7 +124,7 @@ Open the bank app at `http://localhost:8000/#/case/demo-1`. The demo toolbar at 
 ## Modes
 | Env | Values | Notes |
 |---|---|---|
-| `AGENT_MODE` | `scripted` (default) / `bedrock` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **Claude (Bedrock, `us.anthropic.claude-opus-5-5`, `us-east-1`) plans once per click** over the allowed actions, interprets emails and words escalations. On any failure, or when the 20 s budget per click runs out (`AGENT_BUDGET_S`), it falls back to scripted, and a code safety net runs after it either way. |
+| `AGENT_MODE` | `scripted` (default) / `bedrock` / `featherless` | **Code always runs the document pipeline**: extraction with verified quotes, registry lookup, rule checks. **An LLM plans once per click**: Claude on Bedrock (`us.anthropic.claude-opus-5-5`, `us-east-1`; used at the hackathon) or, in `featherless` mode, an open model (default `Qwen/Qwen3.8-2.4T-A95B`, used by the live demo). It works over the allowed actions, interprets emails and words escalations. On any failure, or when the 20 s budget per click runs out (`AGENT_BUDGET_S`), it falls back to scripted, and a code safety net runs after it either way. |
 | `JUDGE_MODE` | `heuristic` (default) / `featherless` | `featherless` calls `/v1/classifier`; on error it falls back to heuristic and says so |
 | `EMAIL_MODE` | `outbox` (default) / `gmail` | `gmail` sends through SMTP with `GMAIL_USER` + `GMAIL_APP_PASSWORD`; `NOTIFY_TO` redirects all demo mail to a team inbox |
 
